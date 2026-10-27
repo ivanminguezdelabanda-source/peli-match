@@ -1,7 +1,7 @@
 // Descarga películas de TMDB y genera data/movies.json para la web.
 // Necesita la variable TMDB_API_KEY (clave v3). En GitHub se guarda como secreto del repositorio.
 // Uso local: TMDB_API_KEY=xxxx node scripts/sync-tmdb.mjs
-// Variables opcionales: PAGES (páginas de populares, 20 pelis cada una; 40 por defecto) y MIN_VOTES (300).
+// Variables opcionales: PAGES (páginas por lista, 20 pelis cada una; 300 por defecto, TMDB permite 500) y MIN_VOTES (80).
 
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "movies.json");
 const KEY = process.env.TMDB_API_KEY;
-const PAGES = Number(process.env.PAGES || 40);
-const MIN_VOTES = Number(process.env.MIN_VOTES || 300);
+const PAGES = Number(process.env.PAGES || 300);
+const MIN_VOTES = Number(process.env.MIN_VOTES || 80);
 const API = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
 
@@ -54,10 +54,9 @@ export function toMovie(d, genreNames) {
     cast: (d.credits?.cast || []).slice(0, 4).map((c) => c.name),
     runtime: d.runtime || 0,
     genres: (d.genres || []).map((g) => genreNames[g.id] || g.name).slice(0, 3),
-    desc: d.overview,
+    desc: d.overview && d.overview.length > 420 ? d.overview.slice(0, 417).replace(/\s+\S*$/, "") + "…" : d.overview,
     rating: d.vote_count ? Math.round(d.vote_average * 10) / 10 : null,
     poster: d.poster_path ? `${IMG}/w500${d.poster_path}` : null,
-    backdrop: d.backdrop_path ? `${IMG}/w780${d.backdrop_path}` : null,
     trailer: pickTrailer(d.videos?.results),
     providers: (es?.flatrate || []).map((p) => p.provider_name),
     providersLink: es?.link || null,
@@ -74,7 +73,8 @@ async function main() {
   const ids = new Set();
   const lists = [
     ["/discover/movie", { sort_by: "popularity.desc", "vote_count.gte": MIN_VOTES }],
-    ["/discover/movie", { sort_by: "vote_average.desc", "vote_count.gte": Math.max(MIN_VOTES, 2000) }],
+    ["/discover/movie", { sort_by: "vote_average.desc", "vote_count.gte": Math.max(MIN_VOTES, 500) }],
+    ["/discover/movie", { sort_by: "vote_count.desc", "vote_count.gte": MIN_VOTES }],
   ];
   for (const [path, params] of lists) {
     for (let page = 1; page <= PAGES; page++) {
