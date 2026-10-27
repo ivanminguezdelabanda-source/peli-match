@@ -26,6 +26,7 @@ function startApp(MOVIES) {
     order: [],    // orden del mazo
     library: [],  // [{ id, at, watched }] el más reciente al final
     passed: [],   // ids descartados
+    profile: null, // respuestas de la encuesta «Para ti»
     history: [],  // [{ id, action }] para deshacer
   };
   Object.assign(state, store.load() || {});
@@ -39,9 +40,11 @@ function startApp(MOVIES) {
 
   const inLibrary = (id) => state.library.some((l) => l.id === id);
   const entry = (id) => state.library.find((l) => l.id === id);
+  const FOR_YOU = "✨ Para ti";
   let mood = "Todo";
-  const matchesMood = (m) => mood === "Todo" || m.genres.includes(mood);
-  const queue = () => state.order.filter((id) => !inLibrary(id) && !state.passed.includes(id) && matchesMood(byId[id]));
+  const matchesMood = (m) => mood === "Todo" || mood === FOR_YOU || m.genres.includes(mood);
+  const queue = () => (mood === FOR_YOU ? forYou : state.order)
+    .filter((id) => !inLibrary(id) && !state.passed.includes(id) && matchesMood(byId[id]));
 
   // ---------- Utilidades ----------
   const $ = (sel) => document.querySelector(sel);
@@ -98,11 +101,17 @@ function startApp(MOVIES) {
   function renderMoods() {
     const box = $("#moods");
     box.replaceChildren();
-    MOODS.forEach((g) => {
+    (state.profile ? [FOR_YOU, ...MOODS] : MOODS).forEach((g) => {
       const b = el("button", "filter", esc(g));
       b.type = "button";
       b.setAttribute("aria-pressed", String(g === mood));
-      b.onclick = () => { mood = g; renderMoods(); deckEl.replaceChildren(); renderDeck(); };
+      b.onclick = () => {
+        mood = g;
+        if (g === FOR_YOU && !forYou.length) runMatch();
+        renderMoods();
+        deckEl.replaceChildren();
+        renderDeck();
+      };
       box.append(b);
     });
   }
@@ -147,7 +156,9 @@ function startApp(MOVIES) {
     deckEl.hidden = empty;
     $("#deck-empty-text").textContent = mood === "Todo"
       ? "Ya has visto todas. Gira la ruleta con tu biblioteca o vuelve a ver las que descartaste."
-      : `No quedan pelis de ${mood.toLowerCase()}. Prueba con otro género o vuelve a ver las descartadas.`;
+      : mood === FOR_YOU
+        ? "Ya has visto toda tu selección. Repite la encuesta en «Para ti» para conseguir más."
+        : `No quedan pelis de ${mood.toLowerCase()}. Prueba con otro género o vuelve a ver las descartadas.`;
     $("#btn-nope").disabled = $("#btn-like").disabled = $("#btn-info").disabled = empty;
     $("#btn-undo").disabled = state.history.length === 0;
     $("#reset-passed").hidden = state.passed.length === 0;
@@ -479,6 +490,320 @@ function startApp(MOVIES) {
   $("#wheel-spin").onclick = spin;
   window.addEventListener("resize", () => { if (!$("#view-ruleta").hidden) drawWheel(); });
 
+  // ---------- Para ti: encuesta y match personalizado ----------
+  const ALL_GENRES = genresOf(MOVIES);
+  const PROVIDERS = (() => {
+    const count = {};
+    MOVIES.forEach((m) => (m.providers || []).forEach((p) => (count[p] = (count[p] || 0) + 1)));
+    return Object.keys(count).sort((a, b) => count[b] - count[a]).slice(0, 12);
+  })();
+  const MOOD_GENRES = {
+    "Reírme": ["Comedia"],
+    "Emocionarme": ["Drama", "Romance"],
+    "Pasar miedo": ["Terror", "Suspense", "Thriller"],
+    "Adrenalina": ["Acción", "Aventura", "Suspense", "Thriller"],
+    "Pensar": ["Ciencia ficción", "Misterio", "Drama", "Documental"],
+    "Algo ligero": ["Comedia", "Animación", "Familia", "Familiar"],
+    "Misterio": ["Misterio", "Crimen", "Suspense", "Thriller"],
+    "Otro mundo": ["Fantasía", "Ciencia ficción", "Aventura", "Animación"],
+  };
+  const ERAS = {
+    "Me da igual": null,
+    "Recientes (2010 en adelante)": [2010, 3000],
+    "Años 90 y 2000": [1990, 2009],
+    "Clásicos (antes de 1990)": [0, 1989],
+  };
+  const STEPS = [
+    { key: "company", q: "¿Con quién la vas a ver?", type: "single", options: ["Solo", "En pareja", "Con amigos", "En familia"] },
+    { key: "moods", q: "¿Qué te apetece sentir?", hint: "Elige una o varias.", type: "multi", options: Object.keys(MOOD_GENRES) },
+    { key: "genres", q: "¿Tus géneros favoritos?", hint: "Elige los que más te gusten.", type: "multi", options: ALL_GENRES },
+    { key: "favs", q: "Dime hasta 3 pelis que te encanten", hint: "Busco otras parecidas: mismo director, reparto, géneros y época.", type: "search" },
+    { key: "time", q: "¿Cuánto tiempo tienes?", type: "single", options: TIMES.map((t) => t.label) },
+    { key: "era", q: "¿De qué época?", type: "single", options: Object.keys(ERAS) },
+    { key: "platforms", q: "¿Qué plataformas tienes?", hint: "Si marcas alguna, te priorizo lo que puedes ver ya. Si no, sáltalo.", type: "multi", options: PROVIDERS, skipIfEmpty: true },
+    { key: "avoid", q: "¿Algo que prefieras evitar?", hint: "Opcional.", type: "multi", options: ALL_GENRES },
+  ].filter((s) => !s.skipIfEmpty || s.options.length);
+
+  const emptyProfile = () => ({ company: null, moods: [], genres: [], favs: [], time: TIMES[0].label, era: "Me da igual", platforms: [], avoid: [] });
+  let draft = null;     // respuestas mientras se hace la encuesta
+  let stepIdx = 0;
+  let results = null;   // [{ m, score, reasons }]
+  let forYou = [];      // ids ordenados para el mazo «Para ti»
+
+  function scoreMovie(m, p, favs) {
+    const reasons = [];
+    const add = (pts, why) => { if (pts > 0 && why) reasons.push([pts, why]); return pts; };
+    let s = 0;
+    const g = m.genres;
+    const has = (list) => list.filter((x) => g.includes(x));
+
+    if (p.company === "En familia") {
+      if (g.includes("Terror")) return null;
+      s += add(has(["Animación", "Familia", "Familiar"]).length * 2, "Perfecta para ver en familia");
+    } else if (p.company === "En pareja") {
+      s += add(has(["Romance", "Comedia"]).length * 0.8, "Buena para ver en pareja");
+    } else if (p.company === "Con amigos") {
+      s += add(has(["Comedia", "Acción", "Terror"]).length * 0.8, "Funciona muy bien con amigos");
+    }
+
+    const moodHits = p.moods.filter((mood) => MOOD_GENRES[mood].some((x) => g.includes(x)));
+    s += add(Math.min(moodHits.length, 2) * 2.2, moodHits.length ? `Encaja con lo que te apetece: ${moodHits.join(", ").toLowerCase()}` : "");
+
+    const genreHits = has(p.genres);
+    s += add(Math.min(genreHits.length, 2) * 1.6, genreHits.length ? `Es de ${genreHits.join(" y ").toLowerCase()}, de tus géneros favoritos` : "");
+
+    for (const f of favs) {
+      if (f.id === m.id) return null;
+      let sim = 0;
+      const shared = f.genres.filter((x) => g.includes(x)).length;
+      sim += shared * 0.7;
+      if (f.director && f.director === m.director && m.director !== "Desconocido") {
+        sim += 3.5;
+        reasons.push([3.5, `Del mismo director que «${f.title}»: ${m.director}`]);
+      }
+      const castHits = (m.cast || []).filter((c) => (f.cast || []).includes(c));
+      if (castHits.length) {
+        sim += castHits.length * 1.4;
+        reasons.push([castHits.length * 1.4, `Sale ${castHits.slice(0, 2).join(" y ")}, como en «${f.title}»`]);
+      }
+      if (m.year && f.year && Math.abs(m.year - f.year) <= 6) sim += 0.6;
+      if (shared >= 2 && sim < 3.5) reasons.push([shared, `Parecida a «${f.title}»`]);
+      s += sim;
+    }
+
+    const era = ERAS[p.era];
+    if (era) s += m.year >= era[0] && m.year <= era[1] ? add(1.4, "") : -1;
+
+    if (m.rating != null) s += add((m.rating - 6.3) * 1.1, m.rating >= 7.8 ? `Muy bien valorada: ${m.rating.toFixed(1)}/10` : "");
+
+    if (p.platforms.length) {
+      const on = (m.providers || []).filter((x) => p.platforms.includes(x));
+      s += on.length ? add(2.2, `La tienes en ${on[0]}`) : -1.2;
+    }
+
+    s += Math.random() * 0.4; // algo de variedad entre una consulta y otra
+    reasons.sort((a, b) => b[0] - a[0]);
+    return { m, score: s, reasons: [...new Set(reasons.map((r) => r[1]))].slice(0, 3) };
+  }
+
+  function computeMatches(p) {
+    const favs = p.favs.map((id) => byId[id]).filter(Boolean);
+    const maxTime = (TIMES.find((t) => t.label === p.time) || TIMES[0]).max;
+    const skip = new Set([...state.library.map((l) => l.id), ...state.passed]);
+    const out = [];
+    for (const m of MOVIES) {
+      if (skip.has(m.id) || m.runtime > maxTime) continue;
+      if (p.avoid.some((x) => m.genres.includes(x))) continue;
+      const r = scoreMovie(m, p, favs);
+      if (r) out.push(r);
+    }
+    out.sort((a, b) => b.score - a.score);
+    return out;
+  }
+
+  function runMatch() {
+    const all = computeMatches(state.profile);
+    results = all.slice(0, 12);
+    forYou = all.slice(0, 300).map((r) => r.m.id);
+    renderMoods();
+  }
+
+  function renderMatch() {
+    const box = $("#match-body");
+    box.replaceChildren();
+    if (draft) return renderStep(box);
+    if (!state.profile) return renderIntro(box);
+    if (!results) runMatch();
+    renderResults(box);
+  }
+
+  function renderIntro(box) {
+    box.append(el("div", "match-intro", `
+      <h1 class="page-title">Tu match personalizado</h1>
+      <p>Responde 8 preguntas rápidas y elijo entre ${MOVIES.length.toLocaleString("es-ES")} películas las que mejor encajan contigo hoy, diciéndote por qué.</p>
+      <ul class="match-steps">${STEPS.map((s) => `<li>${esc(s.q.replace(/[¿?]/g, ""))}</li>`).join("")}</ul>`));
+    const start = el("button", "btn btn-red", "Empezar encuesta");
+    start.type = "button";
+    start.onclick = () => { draft = emptyProfile(); stepIdx = 0; renderMatch(); };
+    box.querySelector(".match-intro").append(start);
+  }
+
+  function renderStep(box) {
+    const step = STEPS[stepIdx];
+    box.append(el("div", "q-progress", `<span style="width:${((stepIdx + 1) / STEPS.length) * 100}%"></span>`));
+    box.append(el("p", "q-count", `Pregunta ${stepIdx + 1} de ${STEPS.length}`));
+    box.append(el("h2", "q-title", esc(step.q)));
+    if (step.hint) box.append(el("p", "q-hint", esc(step.hint)));
+
+    if (step.type === "search") {
+      renderFavSearch(box);
+    } else {
+      const opts = el("div", "opts");
+      opts.setAttribute("role", "group");
+      step.options.forEach((o) => {
+        const b = el("button", "opt", esc(o));
+        b.type = "button";
+        const on = step.type === "single" ? draft[step.key] === o : draft[step.key].includes(o);
+        b.setAttribute("aria-pressed", String(on));
+        b.onclick = () => {
+          if (step.type === "single") {
+            draft[step.key] = o;
+            return next();
+          }
+          const list = draft[step.key];
+          draft[step.key] = list.includes(o) ? list.filter((x) => x !== o) : [...list, o];
+          b.setAttribute("aria-pressed", String(draft[step.key].includes(o)));
+          updateNext();
+        };
+        opts.append(b);
+      });
+      box.append(opts);
+    }
+
+    const nav = el("div", "q-nav");
+    const back = el("button", "btn btn-ghost", stepIdx === 0 ? "Cancelar" : "Atrás");
+    back.type = "button";
+    back.onclick = () => {
+      if (stepIdx === 0) draft = null; else stepIdx--;
+      renderMatch();
+    };
+    const fwd = el("button", "btn btn-solid", "");
+    fwd.type = "button";
+    fwd.id = "q-next";
+    fwd.onclick = next;
+    nav.append(back, fwd);
+    box.append(nav);
+    updateNext();
+    $("#view-para-ti").scrollTop = 0;
+  }
+
+  function updateNext() {
+    const step = STEPS[stepIdx];
+    const b = $("#q-next");
+    if (!b) return;
+    const v = draft[step.key];
+    const empty = Array.isArray(v) ? v.length === 0 : !v;
+    const last = stepIdx === STEPS.length - 1;
+    b.textContent = last ? "Ver mi match" : empty ? "Saltar" : "Siguiente";
+  }
+
+  function next() {
+    if (stepIdx < STEPS.length - 1) { stepIdx++; return renderMatch(); }
+    state.profile = draft;
+    draft = null;
+    persist();
+    results = null;
+    renderMatch();
+  }
+
+  const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  function renderFavSearch(box) {
+    const chips = el("div", "fav-chips");
+    const input = el("input", "q-search");
+    input.type = "search";
+    input.id = "fav-search";
+    input.placeholder = "Escribe el título…";
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", "Buscar película favorita");
+    const list = el("ul", "sugg");
+
+    const drawChips = () => {
+      chips.replaceChildren();
+      draft.favs.forEach((id) => {
+        const c = el("button", "fav-chip", `${esc(byId[id].title)} ${ICON.x}`);
+        c.type = "button";
+        c.setAttribute("aria-label", `Quitar ${byId[id].title}`);
+        c.onclick = () => { draft.favs = draft.favs.filter((x) => x !== id); drawChips(); search(); updateNext(); };
+        chips.append(c);
+      });
+      input.hidden = draft.favs.length >= 3;
+    };
+    const search = () => {
+      list.replaceChildren();
+      const q = norm(input.value.trim());
+      if (q.length < 2 || draft.favs.length >= 3) return;
+      MOVIES
+        .filter((m) => !draft.favs.includes(m.id) && (norm(m.title).includes(q) || norm(m.original || "").includes(q)))
+        .sort((a, b) => (norm(a.title).startsWith(q) ? 0 : 1) - (norm(b.title).startsWith(q) ? 0 : 1) || (b.rating || 0) - (a.rating || 0))
+        .slice(0, 6)
+        .forEach((m) => {
+          const li = el("li");
+          const b = el("button", "", `${esc(m.title)} <span>${m.year}</span>`);
+          b.type = "button";
+          b.onclick = () => { draft.favs.push(m.id); input.value = ""; drawChips(); search(); updateNext(); if (!input.hidden) input.focus(); };
+          li.append(b);
+          list.append(li);
+        });
+    };
+    input.addEventListener("input", search);
+    box.append(chips, input, list);
+    drawChips();
+  }
+
+  function renderResults(box) {
+    const head = el("div", "list-head", `<h1 class="page-title">Tu match</h1>`);
+    box.append(head);
+    if (!results.length) {
+      box.append(el("div", "list-empty", `<p class="empty-title">Nada encaja</p><p class="empty-text">Con esas respuestas no queda ninguna peli. Prueba a quitar algo de «evitar» o a darte más tiempo.</p>`));
+    } else {
+      const [top, ...rest] = results;
+      const hero = el("div", "match-hero");
+      const pbtn = el("button", "tile-btn");
+      pbtn.type = "button";
+      pbtn.setAttribute("aria-label", `Ver ficha de ${top.m.title}`);
+      pbtn.append(poster(top.m));
+      pbtn.onclick = () => openSheet(top.m.id, "match");
+      const body = el("div", "result-body", `
+        <div>
+          <p class="result-label">Esta es para ti</p>
+          <p class="result-title">${esc(top.m.title)}</p>
+          <p class="tile-meta">${top.m.year} · ${fmtTime(top.m.runtime)}${top.m.rating != null ? ` · ${top.m.rating.toFixed(1)}/10` : ""}</p>
+        </div>
+        <ul class="reasons">${top.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`);
+      const actions = el("div", "match-actions");
+      const save = el("button", "btn btn-solid", `${ICON.save} La quiero ver`);
+      save.type = "button";
+      save.onclick = () => { addToLibrary(top.m.id); results = results.slice(1); renderMatch(); };
+      const another = el("button", "btn btn-ghost", "Otra");
+      another.type = "button";
+      another.onclick = () => { state.passed.push(top.m.id); persist(); results = results.slice(1); renderMatch(); };
+      actions.append(save, another);
+      body.append(actions);
+      hero.append(pbtn, body);
+      box.append(hero);
+
+      if (rest.length) {
+        box.append(el("h2", "section-title", "También te pueden encajar"));
+        const grid = el("ul", "grid");
+        rest.forEach((r) => {
+          const li = tileFor(r.m, "match");
+          if (r.reasons[0]) li.append(el("p", "tile-why", esc(r.reasons[0])));
+          grid.append(li);
+        });
+        box.append(grid);
+      }
+    }
+
+    const footer = el("div", "match-footer");
+    const deck = el("button", "btn btn-red", "Deslizar mi selección");
+    deck.type = "button";
+    deck.onclick = () => { mood = FOR_YOU; renderMoods(); deckEl.replaceChildren(); location.hash = "#descubrir"; };
+    const redo = el("button", "btn btn-ghost", "Repetir encuesta");
+    redo.type = "button";
+    redo.onclick = () => { draft = { ...emptyProfile(), ...state.profile }; stepIdx = 0; renderMatch(); };
+    footer.append(deck, redo);
+    box.append(footer);
+  }
+
+  function addToLibrary(id) {
+    if (inLibrary(id)) return;
+    state.library.push({ id, at: Date.now(), watched: false });
+    state.passed = state.passed.filter((x) => x !== id);
+    persist();
+    bumpCount();
+    toast(`Añadida: ${byId[id].title}`);
+  }
+
   // ---------- Ficha ----------
   const sheet = $("#sheet");
   const backdrop = $("#sheet-backdrop");
@@ -545,6 +870,12 @@ function startApp(MOVIES) {
       actions.append(
         button("btn btn-ghost", `${ICON.x} Paso`, () => decide("pass")),
         button("btn btn-solid", `${ICON.save} La quiero ver`, () => decide("like")),
+      );
+    } else if (from === "match" && !e) {
+      const drop = () => { results = (results || []).filter((r) => r.m.id !== id); renderMatch(); };
+      actions.append(
+        button("btn btn-ghost", `${ICON.x} Paso`, () => { state.passed.push(id); persist(); drop(); }),
+        button("btn btn-solid", `${ICON.save} La quiero ver`, () => { addToLibrary(id); drop(); }),
       );
     } else if (e) {
       actions.append(
@@ -614,7 +945,7 @@ function startApp(MOVIES) {
   }
 
   // ---------- Navegación (#descubrir, #biblioteca, #ruleta) ----------
-  const VIEWS = ["descubrir", "biblioteca", "ruleta"];
+  const VIEWS = ["descubrir", "biblioteca", "para-ti", "ruleta"];
   function route() {
     const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "descubrir";
     closeSheet();
@@ -625,6 +956,7 @@ function startApp(MOVIES) {
       if (on) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current");
     });
     if (view === "biblioteca") renderLibrary();
+    else if (view === "para-ti") renderMatch();
     else if (view === "ruleta") { $("#wheel-result").hidden = true; renderWheel(); }
     else renderDeck();
   }

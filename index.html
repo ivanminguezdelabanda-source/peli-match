@@ -90,6 +90,11 @@
         <a class="btn btn-solid" href="#descubrir">Descubrir pelis</a>
       </div>
     </section>
+
+    <!-- Para ti: encuesta y match personalizado -->
+    <section class="view view-match" id="view-para-ti" aria-label="Match personalizado" hidden>
+      <div id="match-body" class="match-body"></div>
+    </section>
   </main>
 
   <nav class="tabbar" aria-label="Secciones">
@@ -100,6 +105,10 @@
     <a class="tab" href="#biblioteca" data-view="biblioteca">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17l-7-4-7 4z"/></svg>
       <span>Biblioteca</span><span class="count" id="saved-count">0</span>
+    </a>
+    <a class="tab" href="#para-ti" data-view="para-ti">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.2 5.1 5.3.5-4 3.6 1.2 5.3L12 14.8 7.3 17.5l1.2-5.3-4-3.6 5.3-.5z"/></svg>
+      <span>Para ti</span>
     </a>
     <a class="tab" href="#ruleta" data-view="ruleta">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>
