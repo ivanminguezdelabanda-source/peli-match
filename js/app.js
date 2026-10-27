@@ -158,7 +158,7 @@ function startApp(MOVIES) {
     $("#deck-empty").hidden = !empty;
     deckEl.hidden = empty;
     $("#deck-empty-text").textContent = mood === "Todo"
-      ? "Ya has visto todas. Gira la ruleta con tu biblioteca o vuelve a ver las que descartaste."
+      ? "Ya has visto todas. Abre la caja con tu biblioteca o vuelve a ver las que descartaste."
       : mood === FOR_YOU
         ? "Ya has visto toda tu selección. Repite la encuesta en «Para ti» para conseguir más."
         : `No quedan pelis de ${mood.toLowerCase()}. Prueba con otro género o vuelve a ver las descartadas.`;
@@ -417,7 +417,7 @@ function startApp(MOVIES) {
   $("#seg-pending").onclick = () => { showWatched = false; renderLibrary(); };
   $("#seg-watched").onclick = () => { showWatched = true; renderLibrary(); };
 
-  // ---------- Ruleta ----------
+  // ---------- Caja: tira de carátulas que se desliza hasta parar en una al azar ----------
   const TIMES = [
     { label: "Sin prisa", max: Infinity },
     { label: "Menos de 2h 30", max: 150 },
@@ -429,11 +429,7 @@ function startApp(MOVIES) {
   let wheelProvider = "Cualquier sitio";
   let wheelList = null;
   let wheelItems = [];
-  let wheelAngle = 0;
   let spinning = false;
-  const MAX_SLICES = 12;
-  const SLICE_COLORS = ["#e0414b", "#f2d39b", "#2d2423", "#9a2b33", "#d9b77a", "#3d3130"];
-  const SLICE_TEXT = ["#fff", "#14100f", "#f6ece0", "#fff", "#14100f", "#f6ece0"];
 
   function wheelPool() {
     return state.library
@@ -478,94 +474,72 @@ function startApp(MOVIES) {
     if (tooFew) { $("#wheel-result").hidden = true; return; }
 
     const pool = wheelPool();
-    wheelItems = pool.length > MAX_SLICES ? shuffle(pool).slice(0, MAX_SLICES) : pool;
-    $("#wheel-spin").disabled = pool.length === 0;
+    wheelItems = pool;
+    $("#wheel-spin").disabled = pool.length === 0 || spinning;
     $("#wheel-note").textContent = pool.length === 0
       ? "Ninguna peli de tu biblioteca encaja con estos filtros."
-      : pool.length > MAX_SLICES
-        ? `${pool.length} pelis encajan; en la ruleta entran ${MAX_SLICES} al azar cada vez.`
-        : `${pool.length} ${pool.length === 1 ? "peli encaja" : "pelis encajan"} con tus filtros.`;
-    drawWheel();
+      : `${pool.length} ${pool.length === 1 ? "peli entra" : "pelis entran"} en la caja.`;
+    if (!spinning) drawReel(shuffle(pool));
   }
 
-  function drawWheel() {
-    const canvas = $("#wheel");
-    const size = canvas.clientWidth || 340;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const r = size / 2;
-    ctx.clearRect(0, 0, size, size);
-    ctx.save();
-    ctx.translate(r, r);
-    ctx.rotate(wheelAngle);
-    const n = Math.max(wheelItems.length, 1);
-    const step = (Math.PI * 2) / n;
-    for (let i = 0; i < n; i++) {
-      const m = wheelItems[i];
-      const ci = n % SLICE_COLORS.length === 1 && i === n - 1 ? 2 : i % SLICE_COLORS.length;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, r - 4, i * step - Math.PI / 2, (i + 1) * step - Math.PI / 2);
-      ctx.closePath();
-      ctx.fillStyle = m ? SLICE_COLORS[ci] : "#2d2423";
-      ctx.fill();
-      ctx.strokeStyle = "#14100f";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      if (!m) continue;
-      ctx.save();
-      ctx.rotate(i * step + step / 2 - Math.PI / 2);
-      ctx.fillStyle = SLICE_TEXT[ci];
-      ctx.font = `700 ${n > 8 ? 11 : 13}px Figtree, system-ui, sans-serif`;
-      ctx.textAlign = "right";
-      ctx.textBaseline = "middle";
-      const maxW = r * 0.62;
-      let label = m.title;
-      while (ctx.measureText(label).width > maxW && label.length > 4) label = label.slice(0, -2);
-      if (label !== m.title) label = label.trimEnd() + "…";
-      ctx.fillText(label, r - 16, 0);
-      ctx.restore();
-    }
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(r, r, r - 3, 0, Math.PI * 2);
-    ctx.strokeStyle = "#f2d39b";
-    ctx.lineWidth = 3;
-    ctx.stroke();
+  // Color de «rareza» según la nota, como en las cajas de los juegos
+  const rarity = (m) => (m.rating == null ? "r1" : m.rating >= 8 ? "r5" : m.rating >= 7.5 ? "r4" : m.rating >= 7 ? "r3" : m.rating >= 6.5 ? "r2" : "r1");
+  const reelEl = $("#reel");
+  function drawReel(items) {
+    reelEl.style.transition = "none";
+    reelEl.style.transform = "translateX(0)";
+    reelEl.replaceChildren();
+    if (!items.length) return;
+    let list = items;
+    while (list.length < 12) list = list.concat(items);
+    list.forEach((m) => {
+      const li = el("li", "reel-item " + rarity(m));
+      li.append(poster(m));
+      reelEl.append(li);
+    });
+    // la primera carátula centrada bajo la marca
+    const first = reelEl.firstElementChild;
+    const win = reelEl.parentElement.clientWidth;
+    reelEl.style.transform = `translateX(${win / 2 - first.offsetLeft - first.offsetWidth / 2}px)`;
   }
 
+  const REEL_LEN = 56;
+  const WIN_AT = 48;
   function spin() {
     if (spinning || wheelItems.length === 0) return;
     spinning = true;
     $("#wheel-spin").disabled = true;
     $("#wheel-result").hidden = true;
-    const n = wheelItems.length;
-    const step = (Math.PI * 2) / n;
-    const winner = Math.floor(Math.random() * n);
-    // El puntero está arriba: el centro del gajo ganador tiene que acabar en ángulo 0
-    const jitter = (Math.random() - 0.5) * step * 0.6;
-    const target = -(winner * step + step / 2) + jitter;
-    const base = wheelAngle - (wheelAngle % (Math.PI * 2));
-    const end = base + Math.PI * 2 * 6 + ((target - base) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-    const from = wheelAngle;
+    const pool = wheelItems;
+    const winner = pool[Math.floor(Math.random() * pool.length)];
+    // Tira aleatoria sin dos carátulas iguales seguidas (si se puede), con la ganadora en WIN_AT
+    const strip = [];
+    for (let i = 0; i < REEL_LEN; i++) {
+      if (i === WIN_AT) { strip.push(winner); continue; }
+      let m = pool[Math.floor(Math.random() * pool.length)];
+      for (let k = 0; k < 4 && pool.length > 1 && (m === strip[i - 1] || (i === WIN_AT - 1 && m === winner)); k++) {
+        m = pool[Math.floor(Math.random() * pool.length)];
+      }
+      strip.push(m);
+    }
+    drawReel(strip);
+    const target = reelEl.children[WIN_AT];
+    const win = reelEl.parentElement.clientWidth;
+    const jitter = (Math.random() - 0.5) * target.offsetWidth * 0.7;
+    const x = win / 2 - target.offsetLeft - target.offsetWidth / 2 + jitter;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const duration = reduce ? 1 : 4200;
-    const t0 = performance.now();
-    const ease = (t) => 1 - Math.pow(1 - t, 4);
-    const frame = (now) => {
-      const t = Math.min(1, (now - t0) / duration);
-      wheelAngle = from + (end - from) * ease(t);
-      drawWheel();
-      if (t < 1) return requestAnimationFrame(frame);
-      wheelAngle %= Math.PI * 2;
+    const duration = reduce ? 300 : 6500;
+    void reelEl.offsetWidth; // fija la posición inicial antes de animar
+    reelEl.style.transition = `transform ${duration}ms cubic-bezier(.08, .72, .16, 1)`;
+    reelEl.style.transform = `translateX(${x}px)`;
+    reelEl.addEventListener("transitionend", function done() {
+      reelEl.removeEventListener("transitionend", done);
+      target.classList.add("won");
       spinning = false;
       $("#wheel-spin").disabled = false;
-      showResult(wheelItems[winner]);
-    };
-    requestAnimationFrame(frame);
+      $("#wheel-spin").textContent = "Abrir otra";
+      showResult(winner);
+    });
   }
 
   function showResult(m) {
@@ -587,7 +561,7 @@ function startApp(MOVIES) {
     where.href = whereUrl(m);
     where.target = "_blank";
     where.rel = "noopener";
-    const again = el("button", "btn btn-ghost", "Otra vez");
+    const again = el("button", "btn btn-ghost", "Abrir otra");
     again.type = "button";
     again.onclick = spin;
     actions.append(where, again);
@@ -597,7 +571,7 @@ function startApp(MOVIES) {
     box.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
   $("#wheel-spin").onclick = spin;
-  window.addEventListener("resize", () => { if (!$("#view-ruleta").hidden) drawWheel(); });
+  window.addEventListener("resize", () => { if (!$("#view-ruleta").hidden && !spinning) drawReel(shuffle(wheelItems)); });
 
   // ---------- Para ti: encuesta y match personalizado ----------
   const ALL_GENRES = genresOf(MOVIES);

@@ -32,7 +32,7 @@
         <p class="empty-title">No quedan pelis aquí</p>
         <p class="empty-text" id="deck-empty-text">Prueba con otro género o vuelve a ver las que descartaste.</p>
         <div class="empty-actions">
-          <a class="btn btn-solid" href="#ruleta">Ir a la ruleta</a>
+          <a class="btn btn-solid" href="#ruleta">Abrir la caja</a>
           <button class="btn btn-ghost" id="reset-passed" type="button">Volver a ver descartadas</button>
         </div>
       </div>
@@ -72,10 +72,10 @@
       </div>
     </section>
 
-    <!-- Ruleta -->
-    <section class="view view-wheel" id="view-ruleta" aria-label="Ruleta" hidden>
+    <!-- Caja: sorteo entre las pelis por ver -->
+    <section class="view view-wheel" id="view-ruleta" aria-label="Caja sorpresa" hidden>
       <div class="list-head">
-        <h1 class="page-title">¿Indeciso? Gira</h1>
+        <h1 class="page-title">¿Indeciso? Abre la caja</h1>
       </div>
       <div class="wheel-filters">
         <div class="filters" id="wheel-lists" role="group" aria-label="Lista" hidden></div>
@@ -83,16 +83,16 @@
         <div class="filters" id="wheel-time" role="group" aria-label="Tiempo disponible"></div>
         <div class="filters" id="wheel-providers" role="group" aria-label="Plataforma" hidden></div>
       </div>
-      <div class="wheel-wrap" id="wheel-wrap">
-        <div class="wheel-pointer" aria-hidden="true"></div>
-        <canvas id="wheel" width="340" height="340" role="img" aria-label="Ruleta de películas"></canvas>
-        <button class="wheel-spin" id="wheel-spin" type="button">GIRAR</button>
+      <div class="reel-wrap" id="wheel-wrap">
+        <div class="reel-window" aria-hidden="true"><ul class="reel" id="reel"></ul></div>
+        <div class="reel-marker" aria-hidden="true"></div>
       </div>
+      <button class="btn btn-red reel-open" id="wheel-spin" type="button">Abrir caja</button>
       <p class="wheel-note" id="wheel-note"></p>
       <div class="wheel-result" id="wheel-result" hidden></div>
       <div class="list-empty" id="wheel-empty" hidden>
         <p class="empty-title">Necesitas al menos 2 pelis</p>
-        <p class="empty-text" id="wheel-empty-text">Añade pelis a tu biblioteca deslizando a la derecha y la ruleta elegirá por ti.</p>
+        <p class="empty-text" id="wheel-empty-text">Añade pelis a tu biblioteca deslizando a la derecha y la caja elegirá una por ti.</p>
         <a class="btn btn-solid" href="#descubrir">Descubrir pelis</a>
       </div>
     </section>
@@ -126,8 +126,8 @@
       <span>Para ti</span>
     </a>
     <a class="tab" href="#ruleta" data-view="ruleta">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>
-      <span>Ruleta</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8 12 4l8.5 4v8.5L12 20.5l-8.5-4z"/><path d="M3.5 8 12 12l8.5-4M12 12v8.5"/></svg>
+      <span>Caja</span>
     </a>
   </nav>
 </div>
