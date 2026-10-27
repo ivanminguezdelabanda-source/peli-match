@@ -18,6 +18,9 @@
       <span class="brand-mark" aria-hidden="true"></span>
       <span class="brand-name">PELI<b>MATCH</b></span>
     </div>
+    <a class="icon-btn" href="#buscar" aria-label="Buscar película" title="Buscar película">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+    </a>
   </header>
 
   <main>
@@ -53,6 +56,8 @@
     <section class="view view-list" id="view-biblioteca" aria-label="Mi biblioteca" hidden>
       <div class="list-head">
         <h1 class="page-title">Mi biblioteca</h1>
+        <div class="filters" id="lib-lists" role="group" aria-label="Mis listas"></div>
+        <div class="list-tools" id="lib-list-tools"></div>
         <div class="seg" role="tablist" aria-label="Estado">
           <button class="seg-btn" id="seg-pending" type="button" role="tab" data-watched="false">Por ver <span class="seg-n" id="n-pending">0</span></button>
           <button class="seg-btn" id="seg-watched" type="button" role="tab" data-watched="true">Vistas <span class="seg-n" id="n-watched">0</span></button>
@@ -73,6 +78,7 @@
         <h1 class="page-title">¿Indeciso? Gira</h1>
       </div>
       <div class="wheel-filters">
+        <div class="filters" id="wheel-lists" role="group" aria-label="Lista" hidden></div>
         <div class="filters" id="wheel-genres" role="group" aria-label="Género"></div>
         <div class="filters" id="wheel-time" role="group" aria-label="Tiempo disponible"></div>
         <div class="filters" id="wheel-providers" role="group" aria-label="Plataforma" hidden></div>
@@ -94,6 +100,15 @@
     <!-- Para ti: encuesta y match personalizado -->
     <section class="view view-match" id="view-para-ti" aria-label="Match personalizado" hidden>
       <div id="match-body" class="match-body"></div>
+    </section>
+    <!-- Buscar -->
+    <section class="view view-list" id="view-buscar" aria-label="Buscar película" hidden>
+      <div class="list-head">
+        <h1 class="page-title">Buscar</h1>
+        <input class="q-search" id="search-input" type="search" placeholder="Título, director o actor…" autocomplete="off" aria-label="Buscar película">
+        <p class="search-note" id="search-note" role="status"></p>
+      </div>
+      <ul class="grid" id="search-grid"></ul>
     </section>
   </main>
 

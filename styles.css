@@ -359,3 +359,24 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .thinking-dot { animation-duration: 3s; } }
 @media (max-width: 360px) { .opts { grid-template-columns: 1fr; } .match-hero { grid-template-columns: 96px minmax(0, 1fr); } }
+
+/* Buscar y listas propias */
+.icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: var(--text); background: var(--panel);
+  box-shadow: 0 0 0 1px var(--line) inset; }
+.icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.icon-btn:focus-visible { outline: 2px solid var(--ticket); outline-offset: 2px; }
+#view-buscar .list-head { flex-direction: column; align-items: stretch; }
+.search-note { margin: 0; color: var(--muted); font-size: 13.5px; }
+#lib-lists { flex-basis: 100%; }
+.filter svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; vertical-align: -2px; }
+.filter-add { color: var(--ticket); box-shadow: 0 0 0 1px var(--ticket) inset; background: transparent; }
+.filters.wrap { flex-wrap: wrap; overflow: visible; }
+.list-tools { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.list-tools:empty { display: none; }
+.list-hint { color: var(--muted); font-size: 13px; margin-right: auto; }
+.link-btn { border: 0; background: none; padding: 4px 0; color: var(--ticket); font-weight: 700; font-size: 13.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.link-btn.danger { color: var(--muted); }
+.name-editor { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+.name-editor .q-search { flex: 1 1 200px; }
+.name-editor .btn { padding: 10px 16px; }
+.sheet-lists { display: flex; flex-direction: column; gap: 6px; }
