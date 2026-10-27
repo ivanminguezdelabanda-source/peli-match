@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Peli Match</title>
+<meta name="theme-color" content="#14100f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Figtree:wght@400;500;700;800&family=DM+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">PELI<b>MATCH</b></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Descubrir -->
+    <section class="view view-discover" id="view-descubrir" aria-label="Descubrir películas">
+      <div class="moods" id="moods" role="group" aria-label="¿Qué te apetece?"></div>
+      <div class="deck" id="deck" aria-live="polite"></div>
+      <div class="deck-empty" id="deck-empty" hidden>
+        <p class="empty-title">No quedan pelis aquí</p>
+        <p class="empty-text" id="deck-empty-text">Prueba con otro género o vuelve a ver las que descartaste.</p>
+        <div class="empty-actions">
+          <a class="btn btn-solid" href="#ruleta">Ir a la ruleta</a>
+          <button class="btn btn-ghost" id="reset-passed" type="button">Volver a ver descartadas</button>
+        </div>
+      </div>
+      <div class="controls" id="controls">
+        <button class="ctl ctl-undo" id="btn-undo" type="button" aria-label="Deshacer la última" title="Deshacer (Z)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        </button>
+        <button class="ctl ctl-nope" id="btn-nope" type="button" aria-label="Paso de esta" title="Paso (←)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+        <button class="ctl ctl-like" id="btn-like" type="button" aria-label="Añadir a mi biblioteca" title="La quiero ver (→)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17l-7-4-7 4z"/></svg>
+        </button>
+        <button class="ctl ctl-info" id="btn-info" type="button" aria-label="Ver ficha" title="Ficha (↑)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- Biblioteca -->
+    <section class="view view-list" id="view-biblioteca" aria-label="Mi biblioteca" hidden>
+      <div class="list-head">
+        <h1 class="page-title">Mi biblioteca</h1>
+        <div class="seg" role="tablist" aria-label="Estado">
+          <button class="seg-btn" id="seg-pending" type="button" role="tab" data-watched="false">Por ver <span class="seg-n" id="n-pending">0</span></button>
+          <button class="seg-btn" id="seg-watched" type="button" role="tab" data-watched="true">Vistas <span class="seg-n" id="n-watched">0</span></button>
+        </div>
+      </div>
+      <div class="filters" id="lib-filters" role="group" aria-label="Filtrar por género"></div>
+      <ul class="grid" id="lib-grid"></ul>
+      <div class="list-empty" id="lib-empty" hidden>
+        <p class="empty-title" id="lib-empty-title">Tu biblioteca está vacía</p>
+        <p class="empty-text" id="lib-empty-text">Desliza a la derecha las pelis que te apetezca ver y aparecerán aquí.</p>
+        <a class="btn btn-solid" href="#descubrir" id="lib-empty-cta">Descubrir pelis</a>
+      </div>
+    </section>
+
+    <!-- Ruleta -->
+    <section class="view view-wheel" id="view-ruleta" aria-label="Ruleta" hidden>
+      <div class="list-head">
+        <h1 class="page-title">¿Indeciso? Gira</h1>
+      </div>
+      <div class="wheel-filters">
+        <div class="filters" id="wheel-genres" role="group" aria-label="Género"></div>
+        <div class="filters" id="wheel-time" role="group" aria-label="Tiempo disponible"></div>
+        <div class="filters" id="wheel-providers" role="group" aria-label="Plataforma" hidden></div>
+      </div>
+      <div class="wheel-wrap" id="wheel-wrap">
+        <div class="wheel-pointer" aria-hidden="true"></div>
+        <canvas id="wheel" width="340" height="340" role="img" aria-label="Ruleta de películas"></canvas>
+        <button class="wheel-spin" id="wheel-spin" type="button">GIRAR</button>
+      </div>
+      <p class="wheel-note" id="wheel-note"></p>
+      <div class="wheel-result" id="wheel-result" hidden></div>
+      <div class="list-empty" id="wheel-empty" hidden>
+        <p class="empty-title">Necesitas al menos 2 pelis</p>
+        <p class="empty-text" id="wheel-empty-text">Añade pelis a tu biblioteca deslizando a la derecha y la ruleta elegirá por ti.</p>
+        <a class="btn btn-solid" href="#descubrir">Descubrir pelis</a>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Secciones">
+    <a class="tab" href="#descubrir" data-view="descubrir">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18M15 3v18" opacity=".35"/></svg>
+      <span>Descubrir</span>
+    </a>
+    <a class="tab" href="#biblioteca" data-view="biblioteca">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17l-7-4-7 4z"/></svg>
+      <span>Biblioteca</span><span class="count" id="saved-count">0</span>
+    </a>
+    <a class="tab" href="#ruleta" data-view="ruleta">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>
+      <span>Ruleta</span>
+    </a>
+  </nav>
+</div>
+
+<!-- Ficha -->
+<div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+<article class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+  <button class="sheet-close" id="sheet-close" type="button" aria-label="Cerrar ficha">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <div class="sheet-body" id="sheet-body"></div>
+</article>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="js/movies.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
