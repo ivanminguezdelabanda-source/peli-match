@@ -52,23 +52,40 @@
       </div>
     </section>
 
-    <!-- Biblioteca -->
+    <!-- Biblioteca: matches (lo que guardas deslizando) y listas propias -->
     <section class="view view-list" id="view-biblioteca" aria-label="Mi biblioteca" hidden>
-      <div class="list-head">
-        <h1 class="page-title">Mi biblioteca</h1>
-        <div class="filters" id="lib-lists" role="group" aria-label="Mis listas"></div>
-        <div class="list-tools" id="lib-list-tools"></div>
-        <div class="seg" role="tablist" aria-label="Estado">
-          <button class="seg-btn" id="seg-pending" type="button" role="tab" data-watched="false">Por ver <span class="seg-n" id="n-pending">0</span></button>
-          <button class="seg-btn" id="seg-watched" type="button" role="tab" data-watched="true">Vistas <span class="seg-n" id="n-watched">0</span></button>
+      <div class="lib-tabs" role="tablist" aria-label="Apartados de la biblioteca">
+        <button class="lib-tab" id="tab-matches" type="button" role="tab">Matches <span class="seg-n" id="n-matches">0</span></button>
+        <button class="lib-tab" id="tab-lists" type="button" role="tab">Mis listas <span class="seg-n" id="n-lists">0</span></button>
+      </div>
+
+      <div class="lib-pane" id="lib-matches">
+        <div class="list-head">
+          <h1 class="page-title">Mis matches</h1>
+          <div class="seg" role="tablist" aria-label="Estado">
+            <button class="seg-btn" id="seg-pending" type="button" role="tab" data-watched="false">Por ver <span class="seg-n" id="n-pending">0</span></button>
+            <button class="seg-btn" id="seg-watched" type="button" role="tab" data-watched="true">Vistas <span class="seg-n" id="n-watched">0</span></button>
+          </div>
+        </div>
+        <div class="filters" id="lib-filters" role="group" aria-label="Filtrar por género"></div>
+        <ul class="grid" id="lib-grid"></ul>
+        <div class="list-empty" id="lib-empty" hidden>
+          <p class="empty-title" id="lib-empty-title">Tu biblioteca está vacía</p>
+          <p class="empty-text" id="lib-empty-text">Desliza a la derecha las pelis que te apetezca ver y aparecerán aquí.</p>
+          <a class="btn btn-solid" href="#descubrir" id="lib-empty-cta">Descubrir pelis</a>
         </div>
       </div>
-      <div class="filters" id="lib-filters" role="group" aria-label="Filtrar por género"></div>
-      <ul class="grid" id="lib-grid"></ul>
-      <div class="list-empty" id="lib-empty" hidden>
-        <p class="empty-title" id="lib-empty-title">Tu biblioteca está vacía</p>
-        <p class="empty-text" id="lib-empty-text">Desliza a la derecha las pelis que te apetezca ver y aparecerán aquí.</p>
-        <a class="btn btn-solid" href="#descubrir" id="lib-empty-cta">Descubrir pelis</a>
+
+      <div class="lib-pane" id="lib-custom" hidden>
+        <div class="list-head" id="custom-head"></div>
+        <div class="list-tools" id="lib-list-tools"></div>
+        <ul class="list-cards" id="list-cards"></ul>
+        <ul class="grid" id="list-grid"></ul>
+        <div class="list-empty" id="list-empty" hidden>
+          <p class="empty-title">Esta lista está vacía</p>
+          <p class="empty-text">Busca una peli con la lupa, abre su ficha y márcala en «Mis listas».</p>
+          <a class="btn btn-solid" href="#buscar">Buscar pelis</a>
+        </div>
       </div>
     </section>
 

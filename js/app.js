@@ -267,7 +267,6 @@ function startApp(MOVIES) {
   let libGenre = "Todos";
   let libList = null; // id de la lista abierta, o null = toda la biblioteca
   const listById = (id) => state.lists.find((l) => l.id === id);
-  const listsOf = (movieId) => state.lists.filter((l) => l.ids.includes(movieId));
 
   // Campo en línea para poner nombre a una lista (sin ventanas emergentes)
   function nameEditor(box, initial, saveLabel, onSave, onCancel) {
@@ -309,37 +308,44 @@ function startApp(MOVIES) {
       toast(`Quitada de «${list.name}»`);
     } else {
       list.ids.push(movieId);
-      if (!inLibrary(movieId)) {
-        state.library.push({ id: movieId, at: Date.now(), watched: false });
-        state.passed = state.passed.filter((x) => x !== movieId);
-        bumpCount();
-      }
       toast(`Añadida a «${list.name}»`);
     }
     persist();
     refreshViews();
   }
 
-  function renderListBar() {
-    const bar = $("#lib-lists");
-    bar.replaceChildren();
-    const chip = (label, on, fn, cls = "") => {
-      const b = el("button", "filter " + cls, label);
-      b.type = "button";
-      b.setAttribute("aria-pressed", String(on));
-      b.onclick = fn;
-      bar.append(b);
-    };
-    chip("Toda la biblioteca", libList === null, () => { libList = null; renderLibrary(); });
-    state.lists.forEach((l) => chip(`${esc(l.name)} <span class="seg-n">${l.ids.filter(inLibrary).length}</span>`, libList === l.id, () => { libList = l.id; renderLibrary(); }));
-    chip(`${ICON.plus} Nueva lista`, false, () => {
-      nameEditor($("#lib-list-tools"), "", "Crear", (name) => { libList = createList(name).id; renderLibrary(); }, renderLibrary);
-    }, "filter-add");
-
-    const tools = $("#lib-list-tools");
-    tools.replaceChildren();
+  let libSection = "matches"; // "matches" | "lists"
+  function renderCustom() {
+    const head = $("#custom-head"), tools = $("#lib-list-tools"), cards = $("#list-cards"), grid = $("#list-grid");
+    head.replaceChildren(); tools.replaceChildren(); cards.replaceChildren(); grid.replaceChildren();
     const list = listById(libList);
-    if (!list) return;
+    if (!list) {
+      head.append(el("h1", "page-title", "Mis listas"));
+      state.lists.forEach((l) => {
+        const li = el("li");
+        const b = el("button", "list-card");
+        b.type = "button";
+        const stack = el("div", "list-stack");
+        l.ids.slice(-3).reverse().forEach((id) => { const f = el("div", "list-stack-item"); f.append(poster(byId[id])); stack.append(f); });
+        if (!l.ids.length) stack.append(el("div", "list-stack-item empty"));
+        b.append(stack, el("span", "list-card-name", esc(l.name)), el("span", "list-card-n", `${l.ids.length} ${l.ids.length === 1 ? "peli" : "pelis"}`));
+        b.onclick = () => { libList = l.id; renderLibrary(); $("#view-biblioteca").scrollTop = 0; };
+        li.append(b);
+        cards.append(li);
+      });
+      const li = el("li");
+      const add = el("button", "list-card list-card-new", `<span class="list-stack">${ICON.plus}</span><span class="list-card-name">Nueva lista</span><span class="list-card-n">Para ver en pareja, clásicos…</span>`);
+      add.type = "button";
+      add.onclick = () => nameEditor(tools, "", "Crear", (name) => { libList = createList(name).id; renderLibrary(); }, renderLibrary);
+      li.append(add);
+      cards.append(li);
+      $("#list-empty").hidden = true;
+      return;
+    }
+    const back = el("button", "link-btn back-btn", "← Mis listas");
+    back.type = "button";
+    back.onclick = () => { libList = null; renderLibrary(); };
+    head.append(back, el("h1", "page-title", esc(list.name)));
     const rename = el("button", "link-btn", "Renombrar");
     rename.type = "button";
     rename.onclick = () => nameEditor(tools, list.name, "Guardar", (name) => { list.name = name; persist(); renderLibrary(); }, renderLibrary);
@@ -353,7 +359,9 @@ function startApp(MOVIES) {
       renderLibrary();
       toast(`Lista «${list.name}» borrada`, "Deshacer", () => { state.lists.splice(idx, 0, list); libList = list.id; persist(); renderLibrary(); }, 6000);
     };
-    tools.append(el("span", "list-hint", "Añade pelis desde su ficha."), rename, del);
+    tools.append(el("span", "list-hint", `${list.ids.length} ${list.ids.length === 1 ? "peli" : "pelis"}`), rename, del);
+    list.ids.slice().reverse().forEach((id) => grid.append(tileFor(byId[id], "list")));
+    $("#list-empty").hidden = list.ids.length > 0;
   }
 
   function tileFor(m, from) {
@@ -382,10 +390,16 @@ function startApp(MOVIES) {
 
   function renderLibrary() {
     if (libList && !listById(libList)) libList = null;
-    renderListBar();
-    const inList = libList ? (l) => listById(libList).ids.includes(l.id) : () => true;
-    const pending = state.library.filter((l) => !l.watched && inList(l));
-    const watched = state.library.filter((l) => l.watched && inList(l));
+    const onLists = libSection === "lists";
+    $("#tab-matches").setAttribute("aria-selected", String(!onLists));
+    $("#tab-lists").setAttribute("aria-selected", String(onLists));
+    $("#n-matches").textContent = state.library.length;
+    $("#n-lists").textContent = state.lists.length;
+    $("#lib-matches").hidden = onLists;
+    $("#lib-custom").hidden = !onLists;
+    if (onLists) return renderCustom();
+    const pending = state.library.filter((l) => !l.watched);
+    const watched = state.library.filter((l) => l.watched);
     $("#n-pending").textContent = pending.length;
     $("#n-watched").textContent = watched.length;
     $("#seg-pending").setAttribute("aria-selected", String(!showWatched));
@@ -405,15 +419,15 @@ function startApp(MOVIES) {
     const empty = items.length === 0;
     $("#lib-empty").hidden = !empty;
     if (empty) {
-      $("#lib-empty-title").textContent = libList && !showWatched ? "Esta lista está vacía" : showWatched ? "Aún no has marcado ninguna" : "Nada pendiente";
-      $("#lib-empty-text").textContent = libList && !showWatched
-        ? "Abre la ficha de cualquier peli y elige esta lista en «Mis listas». También puedes buscarlas con la lupa."
-        : showWatched
+      $("#lib-empty-title").textContent = showWatched ? "Aún no has marcado ninguna" : "Nada pendiente";
+      $("#lib-empty-text").textContent = showWatched
         ? "Cuando veas una peli de tu biblioteca, márcala como vista desde su ficha."
         : "Desliza a la derecha las pelis que te apetezca ver y aparecerán aquí.";
       $("#lib-empty-cta").hidden = showWatched;
     }
   }
+  $("#tab-matches").onclick = () => { libSection = "matches"; renderLibrary(); };
+  $("#tab-lists").onclick = () => { libSection = "lists"; renderLibrary(); };
   $("#seg-pending").onclick = () => { showWatched = false; renderLibrary(); };
   $("#seg-watched").onclick = () => { showWatched = true; renderLibrary(); };
 
@@ -431,16 +445,22 @@ function startApp(MOVIES) {
   let wheelItems = [];
   let spinning = false;
 
+  // Pelis base de la caja: las de la lista elegida, o los matches por ver
+  function wheelBase() {
+    const list = listById(wheelList);
+    return list
+      ? list.ids.filter((id) => !entry(id)?.watched).map((id) => byId[id])
+      : state.library.filter((l) => !l.watched).map((l) => byId[l.id]);
+  }
   function wheelPool() {
-    return state.library
-      .filter((l) => !l.watched && (!wheelList || listById(wheelList)?.ids.includes(l.id)))
-      .map((l) => byId[l.id])
+    return wheelBase()
       .filter((m) => (wheelGenre === "Todas" || m.genres.includes(wheelGenre)) && m.runtime <= wheelTime.max)
       .filter((m) => wheelProvider === "Cualquier sitio" || (m.providers || []).includes(wheelProvider));
   }
 
   function renderWheel() {
-    const pendingMovies = state.library.filter((l) => !l.watched).map((l) => byId[l.id]);
+    if (wheelList && !listById(wheelList)) wheelList = null;
+    const pendingMovies = wheelBase();
     const genres = genresOf(pendingMovies);
     if (wheelGenre !== "Todas" && !genres.includes(wheelGenre)) wheelGenre = "Todas";
     chipRow($("#wheel-genres"), ["Todas", ...genres], wheelGenre, (g) => { wheelGenre = g; $("#wheel-result").hidden = true; renderWheel(); });
@@ -450,11 +470,10 @@ function startApp(MOVIES) {
       renderWheel();
     });
 
-    if (wheelList && !listById(wheelList)) wheelList = null;
     const listBox = $("#wheel-lists");
     listBox.hidden = state.lists.length === 0;
-    const listNames = ["Toda la biblioteca", ...state.lists.map((l) => l.name)];
-    chipRow(listBox, listNames, listById(wheelList)?.name || "Toda la biblioteca", (name) => {
+    const listNames = ["Mis matches", ...state.lists.map((l) => l.name)];
+    chipRow(listBox, listNames, listById(wheelList)?.name || "Mis matches", (name) => {
       wheelList = state.lists.find((l) => l.name === name)?.id || null;
       $("#wheel-result").hidden = true;
       renderWheel();
@@ -466,7 +485,7 @@ function startApp(MOVIES) {
     provBox.hidden = providers.length === 0;
     chipRow(provBox, ["Cualquier sitio", ...providers], wheelProvider, (p) => { wheelProvider = p; $("#wheel-result").hidden = true; renderWheel(); });
 
-    const tooFew = pendingMovies.length < 2;
+    const tooFew = pendingMovies.length < 2 && !wheelList && !state.lists.some((l) => l.ids.length >= 2);
     $("#wheel-empty").hidden = !tooFew;
     $(".wheel-filters").hidden = tooFew;
     $("#wheel-wrap").hidden = tooFew;
@@ -1131,8 +1150,6 @@ function startApp(MOVIES) {
     const idx = state.library.findIndex((l) => l.id === id);
     if (idx < 0) return;
     const [removed] = state.library.splice(idx, 1);
-    const inLists = listsOf(id);
-    inLists.forEach((l) => (l.ids = l.ids.filter((x) => x !== id)));
     state.passed.push(id);
     state.history = state.history.filter((h) => h.id !== id);
     persist();
@@ -1140,7 +1157,6 @@ function startApp(MOVIES) {
     toast(`Quitada: ${byId[id].title}`, "Deshacer", () => {
       state.passed = state.passed.filter((x) => x !== id);
       state.library.splice(idx, 0, removed);
-      inLists.forEach((l) => l.ids.push(id));
       persist();
       refreshViews();
     });
@@ -1186,7 +1202,7 @@ function startApp(MOVIES) {
     // Al volver a Descubrir, ofrece empezar de cero con la biblioteca
     if (view === "descubrir" && lastView !== "descubrir" && state.library.length) {
       const n = state.library.length;
-      toast(`Tienes ${n} ${n === 1 ? "peli" : "pelis"} en tu biblioteca`, "Vaciar biblioteca", emptyLibrary, 6000);
+      toast(`Tienes ${n} ${n === 1 ? "match guardado" : "matches guardados"}`, "Vaciar biblioteca", emptyLibrary, 6000);
     }
     lastView = view;
     closeSheet();

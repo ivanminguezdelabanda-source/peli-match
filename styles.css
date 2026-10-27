@@ -370,7 +370,6 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .icon-btn:focus-visible { outline: 2px solid var(--ticket); outline-offset: 2px; }
 #view-buscar .list-head { flex-direction: column; align-items: stretch; }
 .search-note { margin: 0; color: var(--muted); font-size: 13.5px; }
-#lib-lists { flex-basis: 100%; }
 .filter svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; vertical-align: -2px; }
 .filter-add { color: var(--ticket); box-shadow: 0 0 0 1px var(--ticket) inset; background: transparent; }
 .filters.wrap { flex-wrap: wrap; overflow: visible; }
@@ -383,3 +382,30 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .name-editor .q-search { flex: 1 1 200px; }
 .name-editor .btn { padding: 10px 16px; }
 .sheet-lists { display: flex; flex-direction: column; gap: 6px; }
+
+/* Biblioteca en dos apartados */
+.lib-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 16px; background: var(--panel); flex: none; }
+.lib-tab { border: 0; cursor: pointer; padding: 10px 8px; border-radius: 12px; background: none; color: var(--muted);
+  font-family: var(--f-display); font-size: 18px; letter-spacing: .03em; text-transform: uppercase; display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+.lib-tab[aria-selected="true"] { background: var(--ticket); color: var(--ink); }
+.lib-tab .seg-n { font-size: 12px; }
+.lib-pane { display: flex; flex-direction: column; gap: 14px; }
+.lib-pane[hidden] { display: none; }
+#custom-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+.back-btn { text-decoration: none; }
+.list-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.list-cards:empty { display: none; }
+.list-card { width: 100%; border: 0; cursor: pointer; text-align: left; padding: 12px; border-radius: 16px; background: var(--panel); color: var(--text);
+  box-shadow: 0 0 0 1px var(--line) inset; display: flex; flex-direction: column; gap: 2px; }
+.list-card:focus-visible { outline: 2px solid var(--ticket); outline-offset: 2px; }
+.list-stack { position: relative; height: 120px; margin-bottom: 8px; display: grid; place-items: center; color: var(--ticket); }
+.list-stack svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.list-stack-item { position: absolute; top: 0; left: calc(50% - 38px); width: 76px; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--panel-2);
+  box-shadow: 0 6px 14px rgba(0,0,0,.45); }
+.list-stack-item:nth-child(1) { z-index: 3; }
+.list-stack-item:nth-child(2) { z-index: 2; transform: translateX(-30px) rotate(-7deg) scale(.92); }
+.list-stack-item:nth-child(3) { z-index: 1; transform: translateX(30px) rotate(7deg) scale(.92); }
+.list-stack-item.empty { box-shadow: 0 0 0 1px var(--line) inset; }
+.list-card-name { font-weight: 800; font-size: 15px; overflow-wrap: anywhere; }
+.list-card-n { color: var(--muted); font-size: 12.5px; }
+.list-card-new { background: transparent; box-shadow: 0 0 0 1px var(--ticket) inset; }
