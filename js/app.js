@@ -492,6 +492,9 @@ function startApp(MOVIES) {
 
   // ---------- Para ti: encuesta y match personalizado ----------
   const ALL_GENRES = genresOf(MOVIES);
+  // URL del Worker de Cloudflare que consulta a Claude (js/config.js, lo genera el despliegue).
+  // Sin URL, «Para ti» funciona igual con el recomendador local.
+  const AI_URL = String(window.PELIMATCH_AI_URL || "").trim();
   const PROVIDERS = (() => {
     const count = {};
     MOVIES.forEach((m) => (m.providers || []).forEach((p) => (count[p] = (count[p] || 0) + 1)));
@@ -518,17 +521,20 @@ function startApp(MOVIES) {
     { key: "moods", q: "¿Qué te apetece sentir?", hint: "Elige una o varias.", type: "multi", options: Object.keys(MOOD_GENRES) },
     { key: "genres", q: "¿Tus géneros favoritos?", hint: "Elige los que más te gusten.", type: "multi", options: ALL_GENRES },
     { key: "favs", q: "Dime hasta 3 pelis que te encanten", hint: "Busco otras parecidas: mismo director, reparto, géneros y época.", type: "search" },
+    { key: "note", q: "¿Algo más que deba saber?", hint: "Opcional. Escríbelo con tus palabras: «algo que me deje pensando», «nada de finales tristes», «como Amélie pero más moderna»…", type: "text", aiOnly: true },
     { key: "time", q: "¿Cuánto tiempo tienes?", type: "single", options: TIMES.map((t) => t.label) },
     { key: "era", q: "¿De qué época?", type: "single", options: Object.keys(ERAS) },
     { key: "platforms", q: "¿Qué plataformas tienes?", hint: "Si marcas alguna, te priorizo lo que puedes ver ya. Si no, sáltalo.", type: "multi", options: PROVIDERS, skipIfEmpty: true },
     { key: "avoid", q: "¿Algo que prefieras evitar?", hint: "Opcional.", type: "multi", options: ALL_GENRES },
-  ].filter((s) => !s.skipIfEmpty || s.options.length);
+  ].filter((s) => (!s.skipIfEmpty || s.options.length) && (!s.aiOnly || AI_URL));
 
-  const emptyProfile = () => ({ company: null, moods: [], genres: [], favs: [], time: TIMES[0].label, era: "Me da igual", platforms: [], avoid: [] });
+  const emptyProfile = () => ({ company: null, moods: [], genres: [], favs: [], time: TIMES[0].label, era: "Me da igual", platforms: [], avoid: [], note: "" });
   let draft = null;     // respuestas mientras se hace la encuesta
   let stepIdx = 0;
   let results = null;   // [{ m, score, reasons }]
   let forYou = [];      // ids ordenados para el mazo «Para ti»
+  let aiStatus = null;  // null | "loading" | "ok" | "error"
+  let aiRun = 0;        // descarta respuestas de consultas anteriores
 
   function scoreMovie(m, p, favs) {
     const reasons = [];
@@ -605,7 +611,45 @@ function startApp(MOVIES) {
     const all = computeMatches(state.profile);
     results = all.slice(0, 12);
     forYou = all.slice(0, 300).map((r) => r.m.id);
+    aiStatus = null;
     renderMoods();
+    if (AI_URL && all.length >= 2) askAI(all);
+  }
+
+  // Manda la encuesta y las 40 mejores candidatas locales al Worker; Claude elige y explica.
+  async function askAI(all) {
+    const run = ++aiRun;
+    aiStatus = "loading";
+    const p = state.profile;
+    const slim = (m) => ({ id: m.id, title: m.title, year: m.year, director: m.director, cast: m.cast, genres: m.genres,
+      runtime: m.runtime, rating: m.rating, providers: m.providers, desc: m.desc });
+    const payload = {
+      profile: p,
+      favs: p.favs.map((id) => byId[id]).filter(Boolean).map(slim),
+      liked: state.library.slice(-15).map((l) => byId[l.id] && `${byId[l.id].title} (${byId[l.id].year})`).filter(Boolean),
+      candidates: all.slice(0, 40).map((r) => slim(r.m)),
+    };
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 60000);
+      const res = await fetch(AI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`IA ${res.status}`);
+      const { picks } = await res.json();
+      if (run !== aiRun) return;
+      const fresh = (id) => byId[id] && !inLibrary(id) && !state.passed.includes(id);
+      const chosen = (picks || []).filter((x) => fresh(x.id)).map((x) => ({ m: byId[x.id], reasons: [x.reason], ai: true }));
+      if (!chosen.length) throw new Error("IA sin elecciones");
+      const ids = new Set(chosen.map((c) => c.m.id));
+      results = [...chosen, ...all.filter((r) => !ids.has(r.m.id) && fresh(r.m.id)).slice(0, Math.max(0, 12 - chosen.length))];
+      forYou = [...ids, ...forYou.filter((id) => !ids.has(id))];
+      aiStatus = "ok";
+    } catch (e) {
+      if (run !== aiRun) return;
+      console.warn("Para ti: sin IA,", e);
+      aiStatus = "error";
+    }
+    if (!$("#view-para-ti").hidden && !draft) renderMatch();
   }
 
   function renderMatch() {
@@ -614,13 +658,26 @@ function startApp(MOVIES) {
     if (draft) return renderStep(box);
     if (!state.profile) return renderIntro(box);
     if (!results) runMatch();
+    if (aiStatus === "loading") return renderThinking(box);
     renderResults(box);
+  }
+
+  function renderThinking(box) {
+    box.append(el("div", "match-thinking", `
+      <span class="thinking-dot" aria-hidden="true"></span>
+      <h1 class="page-title">Pensando tu match…</h1>
+      <p>Claude está leyendo tus respuestas y comparando ${MOVIES.length.toLocaleString("es-ES")} películas. Tarda unos segundos.</p>`));
+    const skip = el("button", "btn btn-ghost", "Ver ya la selección rápida");
+    skip.type = "button";
+    skip.onclick = () => { aiRun++; aiStatus = null; renderMatch(); };
+    box.querySelector(".match-thinking").append(skip);
+    box.querySelector(".match-thinking").setAttribute("role", "status");
   }
 
   function renderIntro(box) {
     box.append(el("div", "match-intro", `
       <h1 class="page-title">Tu match personalizado</h1>
-      <p>Responde 8 preguntas rápidas y elijo entre ${MOVIES.length.toLocaleString("es-ES")} películas las que mejor encajan contigo hoy, diciéndote por qué.</p>
+      <p>Responde ${STEPS.length} preguntas rápidas y ${AI_URL ? "Claude elige" : "elijo"} entre ${MOVIES.length.toLocaleString("es-ES")} películas las que mejor encajan contigo hoy, diciéndote por qué.</p>
       <ul class="match-steps">${STEPS.map((s) => `<li>${esc(s.q.replace(/[¿?]/g, ""))}</li>`).join("")}</ul>`));
     const start = el("button", "btn btn-red", "Empezar encuesta");
     start.type = "button";
@@ -637,6 +694,16 @@ function startApp(MOVIES) {
 
     if (step.type === "search") {
       renderFavSearch(box);
+    } else if (step.type === "text") {
+      const ta = el("textarea", "q-search q-note");
+      ta.id = "q-note";
+      ta.rows = 3;
+      ta.maxLength = 400;
+      ta.placeholder = "Escribe lo que quieras (opcional)";
+      ta.setAttribute("aria-label", step.q);
+      ta.value = draft[step.key] || "";
+      ta.addEventListener("input", () => { draft[step.key] = ta.value; updateNext(); });
+      box.append(ta);
     } else {
       const opts = el("div", "opts");
       opts.setAttribute("role", "group");
@@ -682,7 +749,7 @@ function startApp(MOVIES) {
     const b = $("#q-next");
     if (!b) return;
     const v = draft[step.key];
-    const empty = Array.isArray(v) ? v.length === 0 : !v;
+    const empty = Array.isArray(v) ? v.length === 0 : !String(v || "").trim();
     const last = stepIdx === STEPS.length - 1;
     b.textContent = last ? "Ver mi match" : empty ? "Saltar" : "Siguiente";
   }
@@ -743,6 +810,7 @@ function startApp(MOVIES) {
   function renderResults(box) {
     const head = el("div", "list-head", `<h1 class="page-title">Tu match</h1>`);
     box.append(head);
+    if (aiStatus === "error") box.append(el("p", "match-note", "No he podido consultar a la IA ahora mismo, así que te enseño mi selección rápida."));
     if (!results.length) {
       box.append(el("div", "list-empty", `<p class="empty-title">Nada encaja</p><p class="empty-text">Con esas respuestas no queda ninguna peli. Prueba a quitar algo de «evitar» o a darte más tiempo.</p>`));
     } else {
@@ -755,7 +823,7 @@ function startApp(MOVIES) {
       pbtn.onclick = () => openSheet(top.m.id, "match");
       const body = el("div", "result-body", `
         <div>
-          <p class="result-label">Esta es para ti</p>
+          <p class="result-label">${top.ai ? "Claude cree que esta es para ti" : "Esta es para ti"}</p>
           <p class="result-title">${esc(top.m.title)}</p>
           <p class="tile-meta">${top.m.year} · ${fmtTime(top.m.runtime)}${top.m.rating != null ? ` · ${top.m.rating.toFixed(1)}/10` : ""}</p>
         </div>
@@ -928,9 +996,25 @@ function startApp(MOVIES) {
     });
   }
 
+  function emptyLibrary() {
+    const before = { library: state.library, passed: state.passed, history: state.history };
+    const ids = new Set(state.library.map((l) => l.id));
+    const n = ids.size;
+    state.library = [];
+    state.passed = [...state.passed, ...ids];
+    state.history = state.history.filter((h) => !ids.has(h.id));
+    persist();
+    refreshViews();
+    toast(`Biblioteca vaciada (${n} ${n === 1 ? "peli" : "pelis"})`, "Deshacer", () => {
+      Object.assign(state, before);
+      persist();
+      refreshViews();
+    }, 7000);
+  }
+
   // ---------- Aviso ----------
   let toastTimer;
-  function toast(msg, actionLabel, onAction) {
+  function toast(msg, actionLabel, onAction, ms = 4000) {
     const t = $("#toast");
     t.replaceChildren(el("span", "", esc(msg)));
     if (actionLabel) {
@@ -941,13 +1025,20 @@ function startApp(MOVIES) {
     }
     t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (t.hidden = true), 4000);
+    toastTimer = setTimeout(() => (t.hidden = true), ms);
   }
 
   // ---------- Navegación (#descubrir, #biblioteca, #ruleta) ----------
   const VIEWS = ["descubrir", "biblioteca", "para-ti", "ruleta"];
+  let lastView = null;
   function route() {
     const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "descubrir";
+    // Al volver a Descubrir, ofrece empezar de cero con la biblioteca
+    if (view === "descubrir" && lastView !== "descubrir" && state.library.length) {
+      const n = state.library.length;
+      toast(`Tienes ${n} ${n === 1 ? "peli" : "pelis"} en tu biblioteca`, "Vaciar biblioteca", emptyLibrary, 6000);
+    }
+    lastView = view;
     closeSheet();
     VIEWS.forEach((v) => ($("#view-" + v).hidden = v !== view));
     document.querySelectorAll(".tab").forEach((t) => {

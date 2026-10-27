@@ -21,3 +21,15 @@ npx serve .
 La biblioteca se guarda en el `localStorage` del navegador, con la clave `pelimatch:v1`.
 
 Este producto usa la API de TMDB, pero no está respaldado ni certificado por TMDB. Los datos de plataformas vienen de JustWatch.
+
+## IA en «Para ti» (opcional)
+
+La carpeta `worker/` es un Cloudflare Worker que recibe la encuesta y las 40 mejores candidatas del recomendador local, y le pide a Claude (`claude-opus-5-5`) que elija las 8 mejores y explique por qué. La clave de Anthropic se guarda como secreto del Worker y nunca llega al navegador; el Worker solo acepta peticiones desde la web publicada.
+
+Para activarla, añade estos secretos en GitHub (Settings → Secrets and variables → Actions):
+
+- `ANTHROPIC_API_KEY`: clave de console.anthropic.com
+- `CLOUDFLARE_API_TOKEN`: token de Cloudflare con la plantilla «Edit Cloudflare Workers»
+- `CLOUDFLARE_ACCOUNT_ID`: el Account ID de tu cuenta de Cloudflare
+
+El siguiente despliegue publica el Worker y escribe su dirección en `js/config.js`. Si falta algún secreto o la IA falla, «Para ti» usa el recomendador local.

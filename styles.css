@@ -351,4 +351,11 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .tile-why { font-size: 12px; color: var(--ticket); margin: 0; }
 .match-footer { display: flex; flex-wrap: wrap; gap: 10px; }
 .match-footer .btn { flex: 1 1 160px; }
+.q-note { resize: vertical; min-height: 88px; line-height: 1.4; }
+.match-note { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); color: var(--muted); font-size: 13px; }
+.match-thinking { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 48px 8px; }
+.match-thinking p { margin: 0; color: var(--muted); max-width: 32ch; }
+.thinking-dot { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--panel-2); border-top-color: var(--ticket); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .thinking-dot { animation-duration: 3s; } }
 @media (max-width: 360px) { .opts { grid-template-columns: 1fr; } .match-hero { grid-template-columns: 96px minmax(0, 1fr); } }
