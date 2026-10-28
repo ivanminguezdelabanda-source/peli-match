@@ -6,8 +6,20 @@ function startApp(MOVIES, NEWS) {
   // ---------- Persistencia local (en la app móvil se cambiaría por almacenamiento nativo) ----------
   const KEY = "pelimatch:v1";
   // Modo pruebas: cada recarga empieza de cero (bienvenida y encuesta). Poner a false para guardar entre visitas.
-  const RESET_ON_LOAD = true;
+  const RESET_ON_LOAD = false;
   if (RESET_ON_LOAD) { try { localStorage.removeItem(KEY); } catch (e) { /* sin almacenamiento */ } }
+  // Al subir este número, la próxima vez que se abra Cinder se cierra la sesión y se empieza de cero
+  // en todos los dispositivos (una sola vez). Sirve para actualizaciones que cambian cómo se guarda la cuenta.
+  const SESSION_VERSION = 2;
+  const SESSION_KEY = "cinder:session";
+  let forceSignOut = false;
+  const sessionDone = () => { try { localStorage.setItem(SESSION_KEY, String(SESSION_VERSION)); } catch (e) { /* sin almacenamiento */ } };
+  try {
+    if (localStorage.getItem(SESSION_KEY) !== String(SESSION_VERSION)) {
+      localStorage.removeItem(KEY);
+      forceSignOut = true;
+    }
+  } catch (e) { /* sin almacenamiento */ }
   const store = {
     load() {
       try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) { /* sin almacenamiento */ }
@@ -1249,8 +1261,10 @@ function startApp(MOVIES, NEWS) {
     { view: "descubrir", target: "#controls", title: "O usa los botones", text: "Deshacer, paso, la quiero ver, ya la vi y ficha. Lo mismo que deslizar." },
     { view: "descubrir", target: "#moods", title: "¿Qué te apetece?", text: "Filtra las cartas por género. «✨ Para ti» te enseña primero las que más encajan con tu encuesta." },
     { view: "descubrir", target: ".icon-btn", title: "Busca cualquier peli", text: "Por título, director o actor. Desde su ficha la guardas o la metes en tus listas." },
+    { view: "novedades", target: ".news-hero", title: "Novedades", text: "La peli destacada de la semana, lo que está en cines, los próximos estrenos, lo que más se ve y noticias de cine. Se actualiza varias veces al día." },
     { view: "biblioteca", target: ".lib-tabs", title: "Tu biblioteca", text: "En «Matches» está lo que guardas deslizando, separado en Por ver y Vistas. En «Mis listas» creas tus propias colecciones." },
-    { view: "ruleta", target: ".view-wheel .list-head", title: "¿No sabes cuál ver?", text: "Abre la caja: las carátulas de tus pelis por ver pasan rápido hasta pararse en una al azar. El color indica la nota." },
+    { view: "ruleta", target: ".view-wheel .list-head", title: "¿No sabes cuál ver?", text: "Abre la caja: las carátulas de tus pelis por ver pasan rápido hasta pararse en una al azar. El color indica la nota. Con «🎲 Cualquier peli» elige entre todo el catálogo." },
+    { view: "descubrir", target: "#account-btn", title: "Tu cuenta", text: "Tu foto, tu nombre, la seguridad y lo que Cinder sabe de tus gustos. Todo se guarda en tu cuenta y la sesión sigue abierta aunque cierres la web. En cada ficha puedes leer y escribir reseñas." },
   ];
   let tourIdx = -1;
   let tourBox = null;
@@ -1363,13 +1377,19 @@ function startApp(MOVIES, NEWS) {
   const cloudReady = window.CINDER_FIREBASE
     ? import("./cloud.js?v=dev")
       .then((m) => { cloudError = m.errorText; MAX_USERS = m.MAX_USERS || MAX_USERS; return m.connect(window.CINDER_FIREBASE); })
-      .then((c) => {
+      .then(async (c) => {
+        if (forceSignOut) {
+          // Cierre de sesión único de esta actualización: antes de que la app use la sesión guardada
+          await c.ready;
+          if (c.user) await c.signOut().catch((e) => console.warn("No se pudo cerrar la sesión:", e));
+        }
         cloud = c;
         c.onUser(onUserChange);
         onUserChange(c.user);
       })
       .catch((e) => console.warn("Firebase no disponible:", e))
-    : Promise.resolve();
+      .then(sessionDone)
+    : Promise.resolve().then(sessionDone);
   const userName = (u) => u.name || "Tú";
   // Foto de perfil o, si no hay, la inicial del nombre
   function avatar(u, cls = "") {
