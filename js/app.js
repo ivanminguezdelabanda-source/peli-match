@@ -741,8 +741,11 @@ function startApp(MOVIES) {
     const redo = el("button", "btn btn-ghost", "Repetir encuesta");
     redo.type = "button";
     redo.onclick = () => { draft = { ...emptyProfile(), ...state.profile }; stepIdx = 0; renderMatch(); };
+    const tour = el("button", "btn btn-ghost", "Ver tutorial");
+    tour.type = "button";
+    tour.onclick = startTour;
     const footer = el("div", "match-footer");
-    footer.append(redo);
+    footer.append(redo, tour);
     box.append(footer);
   }
 
@@ -974,10 +977,12 @@ function startApp(MOVIES) {
     state.profile = draft;
     state.weekly = null; // la peli de la semana se recalcula con las nuevas respuestas
     draft = null;
+    const wasFirst = firstRun;
     firstRun = false;
     persist();
     results = null;
     renderMatch();
+    if (wasFirst) setTimeout(startTour, 500);
   }
 
   const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -1031,6 +1036,74 @@ function startApp(MOVIES) {
     persist();
     bumpCount();
     toast(`Añadida: ${byId[id].title}`);
+  }
+
+  // ---------- Tutorial guiado: resalta cada parte de la app con una explicación ----------
+  const TOUR = [
+    { view: "para-ti", target: ".weekly", title: "Tu peli de la semana", text: "Cada lunes te recomiendo una peli según tu encuesta y lo que guardas. Si te convence, guárdala con «La quiero ver»." },
+    { view: "descubrir", target: "#deck", title: "Desliza para decidir", text: "Derecha: la quieres ver. Izquierda: pasas. Arriba: ya la has visto. Toca la carátula para ver su ficha, tráiler y dónde verla." },
+    { view: "descubrir", target: "#controls", title: "O usa los botones", text: "Deshacer, paso, la quiero ver, ya la vi y ficha. Lo mismo que deslizar." },
+    { view: "descubrir", target: "#moods", title: "¿Qué te apetece?", text: "Filtra las cartas por género. «✨ Para ti» te enseña primero las que más encajan con tu encuesta." },
+    { view: "descubrir", target: ".icon-btn", title: "Busca cualquier peli", text: "Por título, director o actor. Desde su ficha la guardas o la metes en tus listas." },
+    { view: "biblioteca", target: ".lib-tabs", title: "Tu biblioteca", text: "En «Matches» está lo que guardas deslizando, separado en Por ver y Vistas. En «Mis listas» creas tus propias colecciones." },
+    { view: "ruleta", target: ".view-wheel .list-head", title: "¿No sabes cuál ver?", text: "Abre la caja: las carátulas de tus pelis por ver pasan rápido hasta pararse en una al azar. El color indica la nota." },
+  ];
+  let tourIdx = -1;
+  let tourBox = null;
+  function startTour() {
+    tourIdx = 0;
+    if (!tourBox) {
+      tourBox = el("div", "tour");
+      tourBox.innerHTML = `<div class="tour-hole"></div>
+        <div class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+          <p class="tour-count"></p><h2 class="tour-title" id="tour-title"></h2><p class="tour-text"></p>
+          <div class="tour-nav"><button type="button" class="btn btn-ghost tour-skip">Saltar</button><button type="button" class="btn btn-solid tour-next"></button></div>
+        </div>`;
+      tourBox.querySelector(".tour-skip").onclick = endTour;
+      tourBox.querySelector(".tour-next").onclick = () => { tourIdx++; tourIdx < TOUR.length ? showTourStep() : endTour(true); };
+      document.body.append(tourBox);
+      window.addEventListener("resize", () => { if (tourIdx >= 0) placeTour(); });
+    }
+    tourBox.hidden = false;
+    showTourStep();
+  }
+  function endTour(done) {
+    tourIdx = -1;
+    tourBox.hidden = true;
+    location.hash = done === true ? "#descubrir" : "#para-ti";
+  }
+  function showTourStep() {
+    const step = TOUR[tourIdx];
+    if (location.hash !== "#" + step.view) location.hash = "#" + step.view;
+    tourBox.querySelector(".tour-count").textContent = `${tourIdx + 1} de ${TOUR.length}`;
+    tourBox.querySelector(".tour-title").textContent = step.title;
+    tourBox.querySelector(".tour-text").textContent = step.text;
+    tourBox.querySelector(".tour-next").textContent = tourIdx === TOUR.length - 1 ? "¡A ver pelis!" : "Siguiente";
+    tourBox.classList.add("moving");
+    setTimeout(() => { placeTour(); tourBox.classList.remove("moving"); tourBox.querySelector(".tour-next").focus(); }, 250);
+  }
+  function placeTour() {
+    const step = TOUR[tourIdx];
+    const target = $(step.target);
+    const hole = tourBox.querySelector(".tour-hole");
+    const card = tourBox.querySelector(".tour-card");
+    const vh = window.innerHeight;
+    if (!target || !target.getClientRects().length) {
+      hole.style.cssText = `left:50%;top:40%;width:0;height:0`;
+      card.style.top = "30%";
+      return;
+    }
+    target.scrollIntoView({ block: "nearest" });
+    const r = target.getBoundingClientRect();
+    const pad = 6;
+    const top = Math.max(r.top - pad, 4), bottom = Math.min(r.bottom + pad, vh - 4);
+    hole.style.cssText = `left:${r.left - pad}px;top:${top}px;width:${r.width + pad * 2}px;height:${bottom - top}px`;
+    const ch = card.offsetHeight;
+    // la tarjeta va debajo del elemento si cabe; si no, encima; si tampoco, abajo del todo
+    let y = bottom + 12;
+    if (y + ch > vh - 8) y = top - ch - 12;
+    if (y < 8) y = vh - ch - 90;
+    card.style.top = `${y}px`;
   }
 
   // ---------- Buscar ----------

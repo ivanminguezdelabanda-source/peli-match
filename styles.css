@@ -425,3 +425,19 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .welcome { padding: 14px 16px; border-radius: 16px; background: var(--panel); box-shadow: 0 0 0 1px rgba(242,211,155,.45) inset; }
 .welcome .result-label { color: var(--ticket); }
 .welcome p:last-child { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
+
+/* Tutorial guiado */
+.tour { position: fixed; inset: 0; z-index: 40; }
+.tour[hidden] { display: none; }
+.tour-hole { position: fixed; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(5,3,3,.78), 0 0 0 2px var(--ticket);
+  transition: all .3s cubic-bezier(.2,.8,.2,1); pointer-events: none; }
+.tour-card { position: fixed; left: 50%; transform: translateX(-50%); width: min(calc(100% - 32px), 380px); padding: 16px;
+  border-radius: 18px; background: var(--panel); box-shadow: 0 0 0 1px var(--line) inset, 0 18px 40px rgba(0,0,0,.6);
+  transition: top .3s cubic-bezier(.2,.8,.2,1), opacity .2s; }
+.tour.moving .tour-card { opacity: 0; }
+.tour-count { margin: 0; font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ticket); }
+.tour-title { margin: 4px 0 6px; font-family: var(--f-display); font-weight: 400; font-size: 24px; text-transform: uppercase; line-height: 1.05; }
+.tour-text { margin: 0 0 14px; color: var(--muted); font-size: 14.5px; line-height: 1.45; }
+.tour-nav { display: flex; gap: 10px; }
+.tour-nav .btn { flex: 1; padding: 11px 14px; }
+@media (prefers-reduced-motion: reduce) { .tour-hole, .tour-card { transition: none; } }
