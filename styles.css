@@ -509,3 +509,24 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .account-warn p { margin: 0; flex-basis: 100%; }
 .danger-zone summary { color: #ff8a8a; }
 .booting main, .booting .tabbar { visibility: hidden; }
+
+/* Perfil al crear la cuenta y nombre de usuario */
+.setup-photo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--panel); border-radius: 18px; padding: 16px; }
+.setup-photo > div { flex: 1 1 140px; }
+.setup-photo .account-sub { margin: 0; }
+.setup-photo .empty-text { font-size: 13.5px; }
+.username-field { display: grid; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--muted); }
+.at-input { position: relative; display: block; }
+.at-input > span { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 800; pointer-events: none; }
+.at-input input { padding-left: 32px; }
+.username-state { font-weight: 600; min-height: 1.2em; }
+.username-state.good { color: #7ddc9a; }
+.username-state.bad { color: #ff8a8a; }
+.verify-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 0 0 8px; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; background: color-mix(in srgb, var(--ticket) 16%, var(--panel)); }
+.verify-banner[hidden] { display: none; }
+.verify-banner span { flex: 1 1 100%; }
+.onboarding .verify-banner { display: none; }
+
+/* Motor de gustos */
+.card-why { margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--ticket); }
+.taste-row .chips { margin-top: 6px; }

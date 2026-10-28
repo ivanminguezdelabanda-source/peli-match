@@ -22,9 +22,13 @@ La biblioteca se guarda en el `localStorage` del navegador, con la clave `pelima
 
 Este producto usa la API de TMDB, pero no está respaldado ni certificado por TMDB. Los datos de plataformas vienen de JustWatch.
 
+## Recomendador personal
+
+`js/taste.js` es el motor de gustos de cada cuenta. Describe cada peli con rasgos (géneros, director, reparto, temas sacados de la sinopsis con TF-IDF, década y duración) y aprende de cada gesto: «La veré», «Ya la vi», «Paso», añadir a una lista, abrir la ficha, las estrellas de tus reseñas y la encuesta. La evidencia caduca con una vida media de 90 días. Con eso ordena Descubrir (con algo de exploración y variedad), el match de «Para ti» y la peli de la semana, y explica en cada carta por qué te la propone. El modelo se guarda en la cuenta (`tastes/{uid}`) y se ve en «Mi cuenta → Tus gustos».
+
 ## Cuentas y reseñas (Firebase)
 
-Cada persona puede crear su cuenta con correo y contraseña o con Google. Desde «Mi cuenta» (botón de arriba a la derecha) cambia su nombre y su foto, su contraseña y su correo, y puede borrar la cuenta. Con la cuenta se publican reseñas (de 1 a 5 estrellas y un texto) que ve todo el mundo en la ficha de cada peli.
+Al abrir la app, lo primero es entrar o crear la cuenta, con correo y contraseña o con Google. Justo después se elige un nombre de usuario único y una foto. Las cuentas con correo tienen 24 horas para verificarlo: la app muestra la cuenta atrás y `.github/workflows/purge-unverified.yml` borra cada hora las que caducan (necesita el secreto `FIREBASE_SERVICE_ACCOUNT`, la clave JSON de una cuenta de servicio del proyecto). Desde «Mi cuenta» (botón de arriba a la derecha) cambia su nombre y su foto, su contraseña y su correo, y puede borrar la cuenta. Con la cuenta se publican reseñas (de 1 a 5 estrellas y un texto) que ve todo el mundo en la ficha de cada peli.
 
 - `js/cloud.js` usa Firebase Authentication y Cloud Firestore (SDK web 13.1.0 desde gstatic). Solo se carga si hay configuración.
 - `js/firebase-config.js` guarda la configuración web del proyecto de Firebase. No es secreta. Si está vacía, la app funciona sin cuentas y cada reseña se queda en el móvil.

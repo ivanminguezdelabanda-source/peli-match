@@ -1,0 +1,34 @@
+name: Borrar cuentas sin verificar
+
+# Cada hora: borra las cuentas con correo y contraseña que llevan más de 24 h sin verificar el correo.
+# Necesita el secreto FIREBASE_SERVICE_ACCOUNT (Firebase → Configuración del proyecto → Cuentas de servicio
+# → Generar nueva clave privada; se pega el JSON entero). Sin él, no hace nada.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: purge-unverified
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar
+        working-directory: scripts/purge
+        run: npm ci --no-audit --no-fund
+      - name: Borrar cuentas caducadas
+        working-directory: scripts/purge
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node purge-unverified.mjs

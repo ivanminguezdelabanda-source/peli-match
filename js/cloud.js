@@ -2,8 +2,14 @@
 // app.js lo carga con import() solo si hay configuración en js/firebase-config.js.
 //
 // Datos en Firestore:
-//   users/{uid}                    perfil: name, photo (foto pequeña en data:URL o URL de Google), reviewed (ids de pelis)
+//   users/{uid}                    perfil: name (nombre de usuario), photo (data:URL pequeña o URL de Google),
+//                                  reviewed (ids de pelis con reseña), ready (ya eligió nombre de usuario)
+//   usernames/{nombre}             { uid }: reserva cada nombre de usuario para que sea único
+//   tastes/{uid}                   modelo de gustos de js/taste.js
 //   movies/{peli}/reviews/{uid}    una reseña por cuenta y peli, con copia del nombre y la foto del autor
+// Las cuentas con correo sin verificar se borran a las 24 h (scripts/purge-unverified.mjs, cada hora en GitHub Actions).
+export const VERIFY_HOURS = 24;
+export const USERNAME_RE = /^(?![.])[a-z0-9_.]{3,20}(?<![.])$/;
 const V = "13.1.0";
 const SDK = `https://www.gstatic.com/firebasejs/${V}`;
 
@@ -22,6 +28,8 @@ export async function connect(config) {
   const listeners = new Set();
 
   const userDoc = (uid) => F.doc(db, "users", uid);
+  const nameDoc = (name) => F.doc(db, "usernames", name);
+  const tasteDoc = (uid) => F.doc(db, "tastes", uid);
   const reviewsOf = (movieId) => F.collection(db, "movies", String(movieId), "reviews");
   const toReview = (d) => {
     const r = d.data();
@@ -33,22 +41,26 @@ export async function connect(config) {
     uid: user.uid,
     email: user.email || "",
     emailVerified: user.emailVerified,
-    name: profile?.name || user.displayName || (user.email || "").split("@")[0] || "Tú",
+    name: profile?.name || "",
+    ready: Boolean(profile?.ready),
     photo: profile?.photo ?? user.photoURL ?? "",
+    created: Date.parse(user.metadata.creationTime) || Date.now(),
     google: user.providerData.some((p) => p.providerId === "google.com"),
     password: user.providerData.some((p) => p.providerId === "password"),
   };
   const emit = () => listeners.forEach((fn) => fn(view()));
 
-  async function loadProfile(u, name) {
+  // Perfil nuevo: sin nombre de usuario todavía (ready = false); la app pide elegirlo justo después
+  async function loadProfile(u) {
     const snap = await F.getDoc(userDoc(u.uid));
     if (snap.exists()) {
       profile = snap.data();
     } else {
-      profile = { name: (name || u.displayName || (u.email || "").split("@")[0] || "Cinéfilo").slice(0, 30), photo: u.photoURL || "", reviewed: [] };
+      profile = { name: "", photo: u.photoURL || "", reviewed: [], ready: false };
       await F.setDoc(userDoc(u.uid), profile);
     }
   }
+  const reviewDocs = () => (profile?.reviewed || []).slice(0, 400).map((id) => F.doc(reviewsOf(id), user.uid));
 
   // ready: se resuelve cuando Firebase ya sabe si hay sesión iniciada
   let markReady;
@@ -77,12 +89,9 @@ export async function connect(config) {
     get user() { return view(); },
     onUser(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
-    async signUp(name, email, password) {
+    async signUp(email, password) {
       const { user: u } = await A.createUserWithEmailAndPassword(auth, email, password);
-      await A.updateProfile(u, { displayName: name });
-      await loadProfile(u, name);
       A.sendEmailVerification(u).catch(() => {});
-      emit();
     },
     signIn: (email, password) => A.signInWithEmailAndPassword(auth, email, password),
     async signInGoogle() {
@@ -102,24 +111,35 @@ export async function connect(config) {
     signOut: () => A.signOut(auth),
 
     // ---------- Perfil ----------
-    // Guarda nombre y/o foto, y los copia a las reseñas ya publicadas
-    async updateProfile(changes) {
-      const next = { ...profile, ...changes };
-      const batch = F.writeBatch(db);
-      batch.set(userDoc(user.uid), { name: next.name, photo: next.photo || "", reviewed: next.reviewed || [] });
-      (next.reviewed || []).slice(0, 400).forEach((movieId) =>
-        batch.update(F.doc(reviewsOf(movieId), user.uid), { name: next.name, photo: next.photo || "" }));
-      try {
-        await batch.commit();
-      } catch (e) {
-        // Si alguna reseña ya no existe, al menos se guarda el perfil
-        if (e.code !== "not-found") throw e;
-        await F.setDoc(userDoc(user.uid), { name: next.name, photo: next.photo || "", reviewed: next.reviewed || [] });
-      }
-      profile = next;
-      if (changes.name) A.updateProfile(user, { displayName: next.name }).catch(() => {});
+    async usernameFree(name) {
+      const snap = await F.getDoc(nameDoc(name));
+      return !snap.exists() || snap.data().uid === user.uid;
+    },
+    // Reserva el nombre de usuario (y suelta el anterior) y guarda el perfil, todo en una transacción.
+    // También copia el nombre y la foto a las reseñas ya publicadas.
+    async saveProfile({ username, photo }) {
+      const name = username ?? profile.name;
+      const pic = photo ?? profile.photo ?? "";
+      if (!USERNAME_RE.test(name)) throw Object.assign(new Error("bad"), { code: "username-invalid" });
+      await F.runTransaction(db, async (tx) => {
+        const snap = await tx.get(nameDoc(name));
+        if (snap.exists() && snap.data().uid !== user.uid) throw Object.assign(new Error("taken"), { code: "username-taken" });
+        if (!snap.exists()) tx.set(nameDoc(name), { uid: user.uid });
+        if (profile.ready && profile.name && profile.name !== name) tx.delete(nameDoc(profile.name));
+        tx.set(userDoc(user.uid), { name, photo: pic, reviewed: profile.reviewed || [], ready: true });
+        reviewDocs().forEach((ref) => tx.update(ref, { name, photo: pic }));
+      });
+      profile = { ...profile, name, photo: pic, ready: true };
+      A.updateProfile(user, { displayName: name }).catch(() => {});
       emit();
     },
+
+    // ---------- Gustos ----------
+    async loadTaste() {
+      const snap = await F.getDoc(tasteDoc(user.uid));
+      return snap.exists() ? snap.data() : null;
+    },
+    saveTaste: (model) => F.setDoc(tasteDoc(user.uid), { v: 1, n: model.n, f: model.f, at: F.serverTimestamp() }),
 
     // ---------- Seguridad ----------
     async changePassword(current, next) {
@@ -133,10 +153,14 @@ export async function connect(config) {
     },
     sendVerification: () => A.sendEmailVerification(user),
     async refresh() { await A.reload(user); emit(); },
-    async deleteAccount(current) {
-      await reauth(current);
+    // Borra reseñas, perfil, nombre de usuario y gustos, y después la cuenta.
+    // skipReauth: justo después de entrar no hace falta volver a pedir la contraseña.
+    async deleteAccount(current, skipReauth = false) {
+      if (!skipReauth) await reauth(current);
       const batch = F.writeBatch(db);
-      (profile?.reviewed || []).slice(0, 400).forEach((movieId) => batch.delete(F.doc(reviewsOf(movieId), user.uid)));
+      reviewDocs().forEach((ref) => batch.delete(ref));
+      if (profile?.ready && profile.name) batch.delete(nameDoc(profile.name));
+      batch.delete(tasteDoc(user.uid));
       batch.delete(userDoc(user.uid));
       await batch.commit();
       await A.deleteUser(user);
@@ -187,5 +211,7 @@ export function errorText(e) {
     "auth/unauthorized-domain": "Este dominio no está autorizado en Firebase.",
     "auth/operation-not-allowed": "Este modo de entrar no está activado en Firebase.",
     "permission-denied": "No tienes permiso para hacer eso.",
+    "username-taken": "Ese nombre de usuario ya está cogido. Prueba otro.",
+    "username-invalid": "Usa de 3 a 20 letras minúsculas, números, puntos o guiones bajos.",
   })[e?.code] || "Algo ha fallado. Inténtalo otra vez.";
 }

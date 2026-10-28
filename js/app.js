@@ -49,8 +49,35 @@ function startApp(MOVIES) {
   const FOR_YOU = "✨ Para ti";
   let mood = "Todo";
   const matchesMood = (m) => mood === "Todo" || mood === FOR_YOU || m.genres.includes(mood);
-  const queue = () => (mood === FOR_YOU ? forYou : state.order)
-    .filter((id) => !inLibrary(id) && !state.passed.includes(id) && matchesMood(byId[id]));
+  // Motor de gustos de la cuenta (js/taste.js): aprende de cada gesto y ordena Descubrir
+  const taste = createTaste(MOVIES);
+  if (state.taste) taste.importModel(state.taste);
+  let tasteTimer = null;
+  taste.onChange(() => {
+    clearTimeout(tasteTimer);
+    tasteTimer = setTimeout(() => {
+      state.taste = taste.exportModel();
+      persist();
+      syncTaste();
+    }, 1500);
+  });
+  // Orden personal: se recalcula cada 4 gestos; las cartas que ya se ven no cambian de sitio
+  const PERSONAL_FROM = 3;
+  let personal = null, personalAt = -1, pinned = [];
+  function personalOrder() {
+    if (!personal || Math.abs(taste.events - personalAt) >= 4) {
+      personal = taste.rank(MOVIES, { fresh: true }).map((x) => x.m.id);
+      personalAt = taste.events;
+    }
+    return personal;
+  }
+  const baseOrder = () => (mood === FOR_YOU ? forYou : taste.events >= PERSONAL_FROM ? personalOrder() : state.order);
+  const queue = () => {
+    const ok = (id) => byId[id] && !inLibrary(id) && !state.passed.includes(id) && matchesMood(byId[id]);
+    const head = pinned.filter(ok);
+    const seen = new Set(head);
+    return head.concat(baseOrder().filter((id) => !seen.has(id) && ok(id)));
+  };
 
   // ---------- Utilidades ----------
   const $ = (sel) => document.querySelector(sel);
@@ -146,11 +173,16 @@ function startApp(MOVIES) {
       <h2 class="card-title">${esc(m.title)}</h2>
       <p class="card-desc">${esc(m.desc)}</p>
       <ul class="chips">${m.genres.map((g) => `<li class="chip">${esc(g)}</li>`).join("")}</ul>`));
+    if (taste.events >= PERSONAL_FROM) {
+      const why = taste.score(m, { explore: 0 }).reasons[0];
+      if (why) c.querySelector(".card-info").prepend(el("p", "card-why", "✨ " + esc(taste.reasonText(why))));
+    }
     return c;
   }
 
   function renderDeck() {
     const ids = queue().slice(0, DEPTH);
+    pinned = ids;
     const existing = new Map([...deckEl.children].map((n) => [n.dataset.id, n]));
     const leaving = [...deckEl.children].filter((n) => n.dataset.leaving);
     deckEl.replaceChildren();
@@ -177,6 +209,7 @@ function startApp(MOVIES) {
     if (topCard()) bindDrag(topCard());
   }
 
+  const SIGNAL = { like: 1, seen: 0.6, pass: -0.45 };
   function decide(action, card = topCard()) {
     if (!card || card.dataset.leaving) return;
     card.dataset.leaving = "1";
@@ -201,6 +234,7 @@ function startApp(MOVIES) {
     } else {
       state.passed.push(id);
     }
+    taste.learn(byId[id], SIGNAL[action]);
     state.history = [...state.history, { id, action }].slice(-30);
     persist();
     const next = queue().slice(0, DEPTH);
@@ -214,6 +248,7 @@ function startApp(MOVIES) {
   function undo() {
     const last = state.history.pop();
     if (!last) return;
+    taste.learn(byId[last.id], SIGNAL[last.action], true);
     if (last.action === "like" || last.action === "seen") state.library = state.library.filter((l) => l.id !== last.id);
     else state.passed = state.passed.filter((id) => id !== last.id);
     state.order = [last.id, ...state.order.filter((id) => id !== last.id)];
@@ -329,6 +364,7 @@ function startApp(MOVIES) {
       toast(`Quitada de «${list.name}»`);
     } else {
       list.ids.push(movieId);
+      taste.learn(byId[movieId], 0.8);
       toast(`Añadida a «${list.name}»`);
     }
     persist();
@@ -803,7 +839,12 @@ function startApp(MOVIES) {
       if (skip.has(m.id) || m.runtime > maxTime) continue;
       if (p.avoid.some((x) => m.genres.includes(x))) continue;
       const r = scoreMovie(m, p, favs);
-      if (r) out.push(r);
+      if (r) {
+        const t = taste.score(m, { explore: 0.15 });
+        r.score += t.s * 1.2;
+        r.reasons = [...new Set([...t.reasons.slice(0, 1).map(taste.reasonText), ...r.reasons])].slice(0, 3);
+        out.push(r);
+      }
     }
     out.sort((a, b) => b.score - a.score);
     return out;
@@ -854,7 +895,7 @@ function startApp(MOVIES) {
   let weeklyBusy = false;
 
   function tasteSignal() {
-    return state.library.length + state.lists.reduce((n, l) => n + l.ids.length, 0) + (state.profile ? 3 : 0);
+    return taste.events + state.library.length + state.lists.reduce((n, l) => n + l.ids.length, 0) + (state.profile ? 3 : 0);
   }
 
   // Gustos a partir de matches, vistas, listas, descartes y encuesta
@@ -883,12 +924,15 @@ function startApp(MOVIES) {
       s += Math.min(dir[m.director] || 0, 4) * 1.2;
       s += (m.cast || []).reduce((a, c) => a + Math.min(cast[c] || 0, 3) * 0.5, 0);
       s += (m.rating - 7) * 1.5;
+      s += taste.score(m, { explore: 0 }).s * 1.5;
       out.push({ m, s });
     }
     return out.sort((a, b) => b.s - a.s);
   }
 
   function localWeeklyReason(m) {
+    const why = taste.score(m, { explore: 0 }).reasons;
+    if (why.length) return `${taste.reasonText(why[0])}${why[1] ? ", y además " + taste.reasonText(why[1]).charAt(0).toLowerCase() + taste.reasonText(why[1]).slice(1) : ""}. Tiene un ${m.rating.toFixed(1)}/10.`;
     const p = state.profile;
     const liked = [...(p ? p.favs.map((id) => byId[id]).filter(Boolean) : []), ...state.library.map((l) => byId[l.id])];
     const sameDir = liked.find((x) => x.director === m.director && m.director !== "Desconocido");
@@ -1069,9 +1113,18 @@ function startApp(MOVIES) {
     b.textContent = blocked ? (step.type === "single" ? "Elige una opción" : "Elige al menos una") : last ? "Ver mi match" : empty ? "Saltar" : "Siguiente";
   }
 
+  // La encuesta da al motor un punto de partida: favoritas, géneros, lo que te apetece y lo que evitas
+  function learnFromSurvey(p) {
+    p.favs.forEach((id) => taste.learn(byId[id], 2.5));
+    p.genres.forEach((g) => taste.learnFeatures(["g:" + g], 1.5));
+    p.moods.forEach((md) => taste.learnFeatures((MOOD_GENRES[md] || []).map((g) => "g:" + g), 0.6));
+    p.avoid.forEach((g) => taste.learnFeatures(["g:" + g], -3));
+  }
+
   function next() {
     if (stepIdx < STEPS.length - 1) { stepIdx++; return renderMatch(); }
     state.profile = draft;
+    learnFromSurvey(draft);
     state.weekly = null; // la peli de la semana se recalcula con las nuevas respuestas
     draft = null;
     const wasFirst = firstRun;
@@ -1275,14 +1328,36 @@ function startApp(MOVIES) {
     return a;
   }
 
+  // Los gustos viajan con la cuenta: se cargan al entrar y se guardan unos segundos después de cada cambio
+  let tasteSyncTimer = null;
+  function syncTaste() {
+    if (!cloud?.user) return;
+    clearTimeout(tasteSyncTimer);
+    tasteSyncTimer = setTimeout(() => cloud.saveTaste(taste.exportModel()).catch((e) => console.warn("Gustos sin guardar:", e)), 4000);
+  }
+  async function loadAccountTaste() {
+    try {
+      const remote = await cloud.loadTaste();
+      if (remote && remote.n >= taste.events) {
+        taste.importModel(remote);
+        state.taste = taste.exportModel();
+        personal = null;
+        persist();
+      } else if (taste.events) syncTaste();
+    } catch (e) { console.warn("Gustos de la cuenta no disponibles:", e); }
+  }
+
   // Con Firebase activo, lo primero es entrar o crear la cuenta
-  const needLogin = () => Boolean(cloud && !cloud.user);
+  const needLogin = () => Boolean(cloud && (!cloud.user || !cloud.user.ready));
+  let gated = false;
   let booted = false;
   let signedIn = false;
 
   function onUserChange(u) {
     const wasSigned = signedIn;
     signedIn = Boolean(u);
+    if (u && !wasSigned) loadAccountTaste();
+    if (!u && wasSigned) { taste.reset(); state.taste = null; personal = null; persist(); } // otra cuenta no hereda tus gustos
     const btn = $("#account-btn");
     btn.classList.toggle("signed", Boolean(u));
     btn.querySelector(".avatar")?.remove();
@@ -1295,9 +1370,12 @@ function startApp(MOVIES) {
       setTimeout(() => openSheet(id), 250);
       return;
     }
-    if (booted && wasSigned !== signedIn) {
-      // Al entrar desde la pantalla de inicio se sigue con la encuesta (o Descubrir); al salir, vuelve a pedir la cuenta
-      if (u && location.hash === "#cuenta") location.hash = state.profile ? "#descubrir" : "#para-ti";
+    if (u && verifyExpired(u)) return purgeExpired();
+    renderVerifyBanner();
+    const gate = needLogin();
+    if (booted && gate !== gated) {
+      // Al terminar de entrar (y elegir nombre) se sigue con la encuesta o Descubrir; al salir, vuelve a pedir la cuenta
+      if (!gate && location.hash === "#cuenta") location.hash = state.profile ? "#descubrir" : "#para-ti";
       else route();
       return;
     }
@@ -1352,6 +1430,166 @@ function startApp(MOVIES) {
     return d;
   }
 
+  // ---------- Correo sin verificar: 24 horas de plazo ----------
+  const VERIFY_MS = 24 * 3600000;
+  const verifyPending = (u) => u && u.password && !u.emailVerified;
+  const verifyLeft = (u) => u.created + VERIFY_MS - Date.now();
+  const verifyExpired = (u) => verifyPending(u) && verifyLeft(u) <= 0;
+  const hoursText = (ms) => {
+    const h = Math.floor(ms / 3600000), m = Math.max(1, Math.floor((ms % 3600000) / 60000));
+    return h ? `${h} h ${m} min` : `${m} min`;
+  };
+  async function purgeExpired() {
+    try { await cloud.deleteAccount(null, true); } catch (e) { await cloud.signOut(); }
+    toast("Tu cuenta se ha borrado porque no confirmaste el correo en 24 horas. Puedes crear otra.", "", null, 9000);
+  }
+  function renderVerifyBanner() {
+    const bar = $("#verify-banner");
+    const u = cloud?.user;
+    bar.hidden = !(u && u.ready && verifyPending(u));
+    if (bar.hidden) return;
+    bar.replaceChildren(el("span", "", `📧 Confirma tu correo en <b>${hoursText(verifyLeft(u))}</b> o tu cuenta se borrará.`));
+    const again = el("button", "link-btn", "Reenviar");
+    again.type = "button";
+    again.onclick = async () => { try { await cloud.sendVerification(); toast(`Te he reenviado el correo a ${u.email}`); } catch (e) { toast(cloudError(e)); } };
+    const done = el("button", "link-btn", "Ya lo confirmé");
+    done.type = "button";
+    done.onclick = async () => {
+      await cloud.refresh();
+      toast(cloud.user.emailVerified ? "¡Correo confirmado!" : "Todavía no aparece confirmado. Pulsa el enlace del correo.");
+    };
+    bar.append(again, done);
+  }
+  setInterval(() => cloud?.user && renderVerifyBanner(), 60000);
+
+  // ---------- Nombre de usuario ----------
+  const USERNAME_RE = /^(?![.])[a-z0-9_.]{3,20}(?<![.])$/;
+  const cleanUsername = (v) => norm(v).replace(/\s+/g, "_").replace(/[^a-z0-9_.]/g, "").slice(0, 20);
+  // Campo con comprobación en directo de si el nombre está libre
+  function usernameField(initial) {
+    const wrap = el("label", "username-field", `Nombre de usuario<span class="at-input"><span aria-hidden="true">@</span><input class="q-search" name="username" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false"></span><span class="username-state" role="status"></span>`);
+    const input = wrap.querySelector("input");
+    const state_ = wrap.querySelector(".username-state");
+    input.value = initial || "";
+    let timer = null, okName = null;
+    const check = () => {
+      const v = cleanUsername(input.value);
+      if (v !== input.value) input.value = v;
+      okName = null;
+      clearTimeout(timer);
+      if (!v) { state_.textContent = ""; state_.className = "username-state"; return; }
+      if (!USERNAME_RE.test(v)) { state_.textContent = "De 3 a 20: letras, números, «.» o «_»"; state_.className = "username-state bad"; return; }
+      if (cloud.user.ready && v === cloud.user.name) { okName = v; state_.textContent = "Es tu nombre actual"; state_.className = "username-state"; return; }
+      state_.textContent = "Comprobando…";
+      state_.className = "username-state";
+      timer = setTimeout(async () => {
+        try {
+          const free = await cloud.usernameFree(v);
+          if (input.value !== v) return;
+          okName = free ? v : null;
+          state_.textContent = free ? "✓ Está libre" : "✗ Ya está cogido";
+          state_.className = "username-state " + (free ? "good" : "bad");
+        } catch (e) { state_.textContent = ""; }
+      }, 350);
+    };
+    input.addEventListener("input", check);
+    check();
+    return { wrap, input, get value() { return cleanUsername(input.value); }, get ok() { return okName === cleanUsername(input.value); } };
+  }
+
+  // Selector de foto con vista previa; la foto se guarda al pulsar el botón del formulario
+  function photoPicker(u, onPick) {
+    const pick = el("label", "photo-pick");
+    pick.title = "Elegir foto";
+    const file = el("input");
+    file.type = "file";
+    file.accept = "image/*";
+    file.className = "visually-hidden";
+    file.setAttribute("aria-label", "Elegir foto de perfil");
+    const draw = (photo) => { pick.querySelector(".avatar")?.remove(); pick.prepend(avatar({ ...u, photo }, "big")); };
+    file.onchange = async () => {
+      if (!file.files[0]) return;
+      try {
+        const photo = await photoFromFile(file.files[0]);
+        draw(photo);
+        onPick(photo);
+      } catch (e) { toast("No he podido usar esa foto. Prueba con otra."); }
+      file.value = "";
+    };
+    pick.append(el("span", "photo-edit", `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`), file);
+    draw(u.photo);
+    return { pick, open: () => file.click() };
+  }
+
+  // Justo después de crear la cuenta: nombre de usuario y foto
+  function renderSetup(box, u) {
+    box.append(el("h1", "page-title", "Crea tu perfil"),
+      el("p", "empty-text", "Elige cómo te verán los demás en Cinder. Tu nombre de usuario es único y sale en tus reseñas."));
+    let photo = u.photo || "";
+    const picker = photoPicker(u, (p) => { photo = p; });
+    const name = usernameField(cleanUsername((u.email || "").split("@")[0]));
+    const photoRow = el("div", "setup-photo");
+    const choose = el("button", "btn btn-ghost", "Elegir foto");
+    choose.type = "button";
+    choose.onclick = picker.open;
+    photoRow.append(picker.pick, el("div", "", "<p class=\"account-sub\">Foto de perfil</p><p class=\"empty-text\">Opcional. Puedes cambiarla cuando quieras.</p>"), choose);
+    const form = el("form", "account-form");
+    form.noValidate = true;
+    const err = el("p", "account-error");
+    err.setAttribute("role", "alert");
+    const go = el("button", "btn btn-solid", "Guardar y continuar");
+    go.type = "submit";
+    form.append(name.wrap, err, go);
+    form.onsubmit = async (ev) => {
+      ev.preventDefault();
+      if (!USERNAME_RE.test(name.value)) return (err.textContent = cloudError({ code: "username-invalid" }));
+      go.disabled = true;
+      err.textContent = "";
+      try {
+        await cloud.saveProfile({ username: name.value, photo });
+        toast(`¡Bienvenido a Cinder, @${name.value}!`);
+      } catch (e) {
+        go.disabled = false;
+        err.textContent = cloudError(e);
+      }
+    };
+    const out = el("button", "link-btn danger", "Salir y usar otra cuenta");
+    out.type = "button";
+    out.onclick = () => cloud.signOut();
+    box.append(photoRow, form, out);
+  }
+
+  // Lo que el motor ha aprendido de ti, en palabras
+  function tasteSection() {
+    const sec = accountSection("Tus gustos");
+    const t = taste.summary();
+    if (t.events < 3) {
+      sec.append(el("p", "empty-text", "Aún te conozco poco. Desliza unas cuantas pelis en Descubrir y aquí verás lo que he aprendido."));
+      return sec;
+    }
+    const row = (label, items) => items.length && sec.append(el("div", "taste-row", `<p class="account-sub">${label}</p><ul class="chips">${items.map((x) => `<li class="chip">${esc(x)}</li>`).join("")}</ul>`));
+    sec.append(el("p", "empty-text", `Aprendo de cada gesto: lo que guardas, lo que ves, tus listas y tus reseñas. Llevo ${t.events} ${t.events === 1 ? "gesto" : "gestos"}.`));
+    row("Géneros que te gustan", t.genres);
+    row("Directores", t.directors);
+    row("Actores y actrices", t.actors);
+    row("Temas", t.themes);
+    row("Lo que sueles saltarte", t.dislikes);
+    const reset = el("button", "btn btn-ghost", "Empezar de cero");
+    reset.type = "button";
+    reset.onclick = () => {
+      const saved = taste.exportModel();
+      taste.reset();
+      personal = null;
+      state.taste = taste.exportModel();
+      persist();
+      syncTaste();
+      renderAccount();
+      toast("He olvidado tus gustos", "Deshacer", () => { taste.importModel(saved); personal = null; state.taste = saved; persist(); syncTaste(); renderAccount(); }, 7000);
+    };
+    sec.append(reset);
+    return sec;
+  }
+
   let accountMode = "entrar";
   async function renderAccount() {
     const box = $("#account-body");
@@ -1363,32 +1601,19 @@ function startApp(MOVIES) {
       return;
     }
     const u = cloud.user;
+    if (u && !u.ready) return renderSetup(box, u);
     if (u) {
       box.append(el("h1", "page-title", "Mi cuenta"));
 
-      // Tarjeta con foto, nombre y correo
+      // Tarjeta con foto, nombre de usuario y correo
       const card = el("div", "account-card");
-      const photoBtn = el("label", "photo-pick");
-      photoBtn.title = "Cambiar foto";
-      const file = el("input");
-      file.type = "file";
-      file.accept = "image/*";
-      file.className = "visually-hidden";
-      file.setAttribute("aria-label", "Cambiar foto de perfil");
-      file.onchange = async () => {
-        if (!file.files[0]) return;
-        try {
-          const photo = await photoFromFile(file.files[0]);
-          await cloud.updateProfile({ photo });
-          toast("Foto actualizada");
-        } catch (e) { toast(e.code ? cloudError(e) : "No he podido usar esa foto. Prueba con otra."); }
-      };
-      photoBtn.append(avatar(u, "big"), el("span", "photo-edit", `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`), file);
-      card.append(photoBtn, el("div", "", `<p class="account-name">${esc(userName(u))}</p><p class="account-mail">${esc(u.email)}</p>`));
+      const picker = photoPicker(u, async (photo) => {
+        try { await cloud.saveProfile({ photo }); toast("Foto actualizada"); } catch (e) { toast(cloudError(e)); renderAccount(); }
+      });
+      card.append(picker.pick, el("div", "", `<p class="account-name">@${esc(u.name)}</p><p class="account-mail">${esc(u.email)}${u.emailVerified ? " · verificado ✓" : ""}</p>`));
       box.append(card);
-
-      if (u.password && !u.emailVerified) {
-        const warn = el("div", "account-warn", "<p>Confirma tu correo con el enlace que te enviamos.</p>");
+      if (verifyPending(u)) {
+        const warn = el("div", "account-warn", `<p>Confirma tu correo con el enlace que te enviamos a <b>${esc(u.email)}</b>. Te quedan <b>${hoursText(verifyLeft(u))}</b>; si no, la cuenta se borra sola.</p>`);
         const again = el("button", "link-btn", "Reenviar correo");
         again.type = "button";
         again.onclick = async () => { try { await cloud.sendVerification(); toast("Te he vuelto a enviar el correo"); } catch (e) { toast(cloudError(e)); } };
@@ -1401,29 +1626,36 @@ function startApp(MOVIES) {
 
       // Perfil
       const prof = accountSection("Perfil", true);
-      prof.append(miniForm({
-        fields: [{ name: "name", label: "Nombre (sale en tus reseñas)", value: u.name, max: 30, auto: "nickname" }],
-        submit: "Guardar nombre",
-        onSubmit: async ({ name }, fail) => {
-          name = name.trim();
-          if (!name) fail("Escribe un nombre.");
-          await cloud.updateProfile({ name });
-          toast("Nombre guardado");
-        },
-      }));
+      const name = usernameField(u.name);
+      const form = el("form", "account-form");
+      form.noValidate = true;
+      const err = el("p", "account-error");
+      err.setAttribute("role", "alert");
+      const save = el("button", "btn btn-solid", "Guardar nombre");
+      save.type = "submit";
+      form.append(name.wrap, err, save);
+      form.onsubmit = async (ev) => {
+        ev.preventDefault();
+        if (name.value === u.name) return;
+        if (!USERNAME_RE.test(name.value)) return (err.textContent = cloudError({ code: "username-invalid" }));
+        save.disabled = true;
+        try { await cloud.saveProfile({ username: name.value }); toast(`Ahora eres @${name.value}`); } catch (e) { err.textContent = cloudError(e); }
+        save.disabled = false;
+      };
+      prof.append(form);
       const photoRow = el("div", "account-actions");
       const change = el("button", "btn btn-ghost", u.photo ? "Cambiar foto" : "Subir foto");
       change.type = "button";
-      change.onclick = () => file.click();
+      change.onclick = picker.open;
       photoRow.append(change);
       if (u.photo) {
         const rm = el("button", "btn btn-ghost", "Quitar foto");
         rm.type = "button";
-        rm.onclick = async () => { try { await cloud.updateProfile({ photo: "" }); toast("Foto quitada"); } catch (e) { toast(cloudError(e)); } };
+        rm.onclick = async () => { try { await cloud.saveProfile({ photo: "" }); toast("Foto quitada"); } catch (e) { toast(cloudError(e)); } };
         photoRow.append(rm);
       }
       prof.append(photoRow);
-      box.append(prof);
+      box.append(prof, tasteSection());
 
       // Seguridad
       const sec = accountSection("Seguridad");
@@ -1473,7 +1705,7 @@ function startApp(MOVIES) {
 
       const del = accountSection("Borrar mi cuenta");
       del.classList.add("danger-zone");
-      del.append(el("p", "empty-text", "Se borran tu perfil y todas tus reseñas. No se puede deshacer."));
+      del.append(el("p", "empty-text", "Se borran tu perfil, tus gustos y todas tus reseñas. No se puede deshacer."));
       del.append(miniForm({
         fields: u.password ? [{ name: "current", label: "Escribe tu contraseña para confirmar", type: "password", auto: "current-password" }] : [],
         submit: u.password ? "Borrar mi cuenta para siempre" : "Confirmar con Google y borrar",
@@ -1491,7 +1723,7 @@ function startApp(MOVIES) {
 
     const signup = accountMode === "crear";
     box.append(el("h1", "page-title", signup ? "Crea tu cuenta" : "Bienvenido a Cinder"),
-      el("p", "empty-text", signup ? "Elige cómo quieres entrar. Con tu cuenta guardas tu perfil y publicas reseñas." : "Entra o crea tu cuenta para empezar a descubrir pelis."));
+      el("p", "empty-text", signup ? "Con tu cuenta, Cinder aprende tus gustos y puedes publicar reseñas. Tendrás 24 horas para confirmar tu correo." : "Entra o crea tu cuenta para empezar a descubrir pelis."));
     const google = el("button", "btn btn-google", `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10c.9-2.7 3.3-4.6 6.2-4.6z"/></svg> Continuar con Google`);
     google.type = "button";
     google.onclick = async () => {
@@ -1500,7 +1732,6 @@ function startApp(MOVIES) {
     const form = el("form", "account-form");
     form.noValidate = true;
     form.innerHTML = `
-      ${signup ? `<label>Tu nombre<input class="q-search" id="acc-name" maxlength="30" autocomplete="nickname" placeholder="Así firmarás tus reseñas"></label>` : ""}
       <label>Correo<input class="q-search" id="acc-email" type="email" autocomplete="email" inputmode="email" placeholder="tu@correo.com"></label>
       <label>Contraseña<input class="q-search" id="acc-pass" type="password" minlength="6" autocomplete="${signup ? "new-password" : "current-password"}" placeholder="${signup ? "Mínimo 6 caracteres" : "Tu contraseña"}"></label>
       <p class="account-error" id="acc-error" role="alert"></p>
@@ -1510,14 +1741,12 @@ function startApp(MOVIES) {
       ev.preventDefault();
       const email = $("#acc-email").value.trim();
       const pass = $("#acc-pass").value;
-      const name = signup ? $("#acc-name").value.trim() : "";
-      if (signup && !name) return showError("Escribe tu nombre.");
       const btn = form.querySelector("button[type=submit]");
       btn.disabled = true;
       try {
-        if (signup) await cloud.signUp(name, email, pass);
+        if (signup) await cloud.signUp(email, pass);
         else await cloud.signIn(email, pass);
-        toast(signup ? `¡Bienvenido a Cinder, ${name}!` : "Has entrado");
+        if (!signup) toast("Has entrado");
       } catch (e) {
         btn.disabled = false;
         showError(cloudError(e));
@@ -1655,6 +1884,13 @@ function startApp(MOVIES) {
         send.disabled = false;
         return toast(cloudError(e));
       }
+      // Lo que opinas enseña mucho al motor: 5★ suma fuerte, 1★ resta fuerte. Si cambias la reseña, se sustituye.
+      state.reviewSignals = state.reviewSignals || {};
+      const before = state.reviewSignals[movieId];
+      if (before) taste.learn(byId[movieId], before, true);
+      state.reviewSignals[movieId] = (stars - 3) * 0.75 || 0.1;
+      taste.learn(byId[movieId], state.reviewSignals[movieId]);
+      persist();
       toast(cloud ? "Reseña publicada" : "Reseña guardada en este móvil");
       renderReviews(movieId);
     };
@@ -1701,8 +1937,10 @@ function startApp(MOVIES) {
   const backdrop = $("#sheet-backdrop");
   let lastFocus = null;
 
+  const opened = new Set();
   function openSheet(id, from) {
     const m = byId[id];
+    if (!opened.has(id)) { opened.add(id); taste.learn(m, 0.15); }
     const e = entry(id);
     lastFocus = document.activeElement;
     const body = $("#sheet-body");
@@ -1889,7 +2127,8 @@ function startApp(MOVIES) {
   let lastView = null;
   function route() {
     document.body.classList.remove("booting");
-    if (needLogin()) {
+    gated = needLogin();
+    if (gated) {
       document.body.classList.add("onboarding");
       if (location.hash !== "#cuenta") history.replaceState(null, "", "#cuenta");
       closeSheet();
