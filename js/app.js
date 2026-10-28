@@ -1513,6 +1513,43 @@ function startApp(MOVIES, NEWS) {
     guest.onclick = async () => { guest.disabled = true; await onGuest(); };
     box.append(guest, el("p", "account-note", `Más información en los ${termsLink()}.`));
   }
+  // ---------- Botón oficial «Continuar con Google» (Google Identity Services) ----------
+  const GOOGLE_CLIENT_ID = String(window.CINDER_GOOGLE_CLIENT_ID || "").trim();
+  let gsiReady = null;
+  const loadGsi = () => (gsiReady ||= new Promise((ok, fail) => {
+    const sc = document.createElement("script");
+    sc.src = "https://accounts.google.com/gsi/client";
+    sc.async = true;
+    sc.onload = () => {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        ux_mode: "popup",
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        callback: async (r) => {
+          try { await cloud.signInGoogleToken(r.credential); } catch (e) { toast(cloudError(e)); }
+        },
+      });
+      ok(window.google.accounts.id);
+    };
+    sc.onerror = () => { gsiReady = null; fail(new Error("Google no carga")); };
+    document.head.append(sc);
+  }));
+  async function googleButton(box) {
+    try {
+      const gsi = await Promise.race([loadGsi(), new Promise((_, no) => setTimeout(() => no(new Error("lento")), 6000))]);
+      if (!box.isConnected) return false;
+      const holder = el("div", "gsi-button");
+      box.append(holder);
+      gsi.renderButton(holder, { type: "standard", theme: "filled_black", size: "large", shape: "pill", text: "continue_with", locale: "es",
+        width: Math.max(220, Math.min(400, Math.round(box.getBoundingClientRect().width || 320))) });
+      return true;
+    } catch (e) {
+      console.warn("Botón de Google no disponible:", e);
+      return false;
+    }
+  }
+
   let gated = false;
   let booted = false;
   let signedIn = false;
@@ -1954,6 +1991,14 @@ function startApp(MOVIES, NEWS) {
     google.onclick = async () => {
       try { await cloud.signInGoogle(); } catch (e) { toast(cloudError(e)); }
     };
+    // Con el ID de cliente de Google se usa el botón oficial de Google: su ventana es de accounts.google.com
+    // y no pasa por firebaseapp.com, que en Safari y algunos móviles abre pestañas o redirige mal.
+    let googleBox = google;
+    if (GOOGLE_CLIENT_ID) {
+      googleBox = el("div", "gsi-box");
+      googleBox.append(google); // mientras carga el botón oficial (o si no carga), el de siempre
+      googleButton(googleBox).then((ok) => { if (ok) google.remove(); });
+    }
     const form = el("form", "account-form");
     form.noValidate = true;
     form.innerHTML = `
@@ -2001,7 +2046,7 @@ function startApp(MOVIES, NEWS) {
       };
       links.append(forgot);
     }
-    box.append(google, el("p", "account-or", "o con tu correo"), form, links,
+    box.append(googleBox, el("p", "account-or", "o con tu correo"), form, links,
       el("p", "account-note", signup ? `Si creas la cuenta con Google también aceptas los ${termsLink()}.` : termsLink("Términos y condiciones")));
     if (gated) {
       const guest = el("button", "btn btn-ghost", "Seguir como invitado");

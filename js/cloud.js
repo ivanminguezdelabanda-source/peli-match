@@ -101,19 +101,14 @@ export async function connect(config) {
       A.sendEmailVerification(u, BACK).catch(() => {});
     },
     signIn: (email, password) => A.signInWithEmailAndPassword(auth, email, password),
+    // Ventana de Google de Firebase (sin redirección: en Safari la redirección se pierde y lleva a páginas raras)
     async signInGoogle() {
       const provider = new A.GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
-      try {
-        return await A.signInWithPopup(auth, provider);
-      } catch (e) {
-        // En algunos móviles el navegador bloquea la ventana: se entra con redirección
-        if (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment") {
-          return A.signInWithRedirect(auth, provider);
-        }
-        throw e;
-      }
+      return A.signInWithPopup(auth, provider);
     },
+    // Con el botón oficial de Google: llega un token de Google y se entra con él, sin ventanas de Firebase
+    signInGoogleToken: (idToken) => A.signInWithCredential(auth, A.GoogleAuthProvider.credential(idToken)),
     resetPassword: (email) => A.sendPasswordResetEmail(auth, email, BACK),
     signOut: () => A.signOut(auth),
 

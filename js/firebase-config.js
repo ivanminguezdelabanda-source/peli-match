@@ -9,3 +9,8 @@ window.CINDER_FIREBASE = {
   messagingSenderId: "663858927238",
   appId: "1:663858927238:web:7b9bb5f7986acf0046e307",
 };
+
+// ID de cliente web de Google (Firebase → Authentication → Método de inicio de sesión → Google →
+// Configuración del SDK web). No es secreto. Con él, «Continuar con Google» usa el botón oficial de Google,
+// que funciona bien en Safari y en móviles. Vacío: se usa la ventana de Firebase.
+window.CINDER_GOOGLE_CLIENT_ID = "";
