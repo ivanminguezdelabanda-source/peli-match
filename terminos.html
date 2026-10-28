@@ -12,6 +12,8 @@
 <link rel="stylesheet" href="styles.css?v=dev">
 <style>
   /* Términos y condiciones: texto largo, fácil de leer en el móvil */
+  html, body { height: auto; min-height: 100%; }
+  body { overflow: auto; } /* la app fija la pantalla; esta página se desplaza normal */
   .terms { width: min(100%, 720px); margin: 0 auto; padding: 24px 16px 64px; line-height: 1.6; }
   .terms a.terms-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
   .terms-logo svg { width: 40px; height: 40px; }

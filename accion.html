@@ -13,6 +13,8 @@
 <link rel="stylesheet" href="styles.css?v=dev">
 <style>
   /* Página de los enlaces de los correos de Firebase (verificar correo, cambiar contraseña…) */
+  html, body { height: auto; min-height: 100%; }
+  body { overflow: auto; } /* la app fija la pantalla; esta página se desplaza normal */
   .action-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
   .action-card { width: min(100%, 420px); display: grid; gap: 16px; text-align: center; }
   .action-logo { display: flex; align-items: center; justify-content: center; gap: 10px; }
