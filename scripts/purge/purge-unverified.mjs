@@ -12,7 +12,7 @@ const DRY_RUN = process.argv.includes("--dry-run");
 
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!raw) {
-  console.log("Falta FIREBASE_SERVICE_ACCOUNT: no se revisa nada.");
+  console.log("::warning::Falta FIREBASE_SERVICE_ACCOUNT: no se revisa nada.");
   process.exit(0);
 }
 const app = initializeApp({ credential: cert(JSON.parse(raw)) });
@@ -51,4 +51,5 @@ do {
   }
   token = page.pageToken;
 } while (token);
-console.log(`Revisadas ${checked} cuentas; borradas ${purged}.`);
+// Como aviso del workflow, para verlo en el resumen de la ejecución sin abrir el registro
+console.log(`::notice::Revisadas ${checked} cuentas; borradas ${purged}.`);
