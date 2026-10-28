@@ -41,8 +41,15 @@ function pickTrailer(videos = []) {
   return best ? `https://www.youtube.com/watch?v=${best.key}` : null;
 }
 
+// Logos de las plataformas que van saliendo (nombre → ruta en TMDB); se guardan una vez en el JSON
+export const LOGOS = {};
+const names = (list = []) => list.map((p) => { if (p.logo_path) LOGOS[p.provider_name] = p.logo_path; return p.provider_name; });
+
 export function toMovie(d, genreNames) {
   const es = d["watch/providers"]?.results?.ES;
+  const flatrate = names(es?.flatrate);
+  // Alquiler o compra (sin repetir las de suscripción)
+  const pay = [...new Set([...names(es?.rent), ...names(es?.buy)])].filter((p) => !flatrate.includes(p)).slice(0, 6);
   const year = Number((d.release_date || "").slice(0, 4)) || null;
   return {
     id: `tmdb-${d.id}`,
@@ -58,7 +65,8 @@ export function toMovie(d, genreNames) {
     rating: d.vote_count ? Math.round(d.vote_average * 10) / 10 : null,
     poster: d.poster_path ? `${IMG}/w500${d.poster_path}` : null,
     trailer: pickTrailer(d.videos?.results),
-    providers: (es?.flatrate || []).map((p) => p.provider_name),
+    providers: flatrate,
+    ...(pay.length ? { pay } : {}),
     providersLink: es?.link || null,
     c: colorsFor(d.title),
   };
@@ -107,6 +115,7 @@ async function main() {
   await mkdir(dirname(OUT), { recursive: true });
   await writeFile(OUT, JSON.stringify({
     updatedAt: new Date().toISOString(),
+    logos: LOGOS,
     attribution: "Este producto usa la API de TMDB, pero no está respaldado ni certificado por TMDB. Datos de plataformas: JustWatch.",
     movies,
   }));

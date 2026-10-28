@@ -1,6 +1,7 @@
 # Genera la APK de Android de Cinder (android-app/, Capacitor) y la publica en las releases de GitHub.
 # La app abre la web publicada, así que los cambios de la web llegan a la app sin hacer otra APK.
 # Solo hace falta una APK nueva si cambia algo de android-app/ (icono, nombre, permisos…).
+# También genera cinder.aab, el archivo que se sube a Google Play (necesita la clave fija de los secretos).
 # Descarga: https://github.com/ivanminguezdelabanda-source/peli-match/releases/latest/download/cinder.apk
 name: APK de Android
 
@@ -60,7 +61,7 @@ jobs:
           echo "::add-mask::$pw"
           echo "KEYSTORE_PASSWORD=$pw" >> "$GITHUB_ENV"
 
-      - name: Compilar la APK
+      - name: Compilar la APK y el AAB de Play Store
         env:
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: 1.${{ github.run_number }}
@@ -68,15 +69,17 @@ jobs:
           cd android
           chmod +x gradlew
           # Si falla, las últimas líneas salen como aviso en el resumen del workflow
-          ./gradlew --no-daemon assembleRelease > build.log 2>&1 || { grep -E "error|FAILURE|wrong|What went" build.log | tail -15 | while read -r l; do echo "::error::$l"; done; exit 1; }
+          ./gradlew --no-daemon assembleRelease bundleRelease > build.log 2>&1 || { grep -E "error|FAILURE|wrong|What went" build.log | tail -15 | while read -r l; do echo "::error::$l"; done; exit 1; }
           cp app/build/outputs/apk/release/app-release.apk ../cinder.apk
+          # El AAB es el formato que pide Google Play (la APK es para instalarla a mano)
+          cp app/build/outputs/bundle/release/app-release.aab ../cinder.aab
 
       - name: Publicar en las releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="android-1.${{ github.run_number }}"
-          gh release create "$tag" cinder.apk --latest --target "$GITHUB_SHA" \
+          gh release create "$tag" cinder.apk cinder.aab --latest --target "$GITHUB_SHA" \
             --title "Cinder para Android 1.${{ github.run_number }}" \
             --notes "Descarga **cinder.apk** e instálala en tu Android (tendrás que permitir instalar apps de fuentes desconocidas). La app abre Cinder y se actualiza sola con la web; tu cuenta es la misma."
           echo "::notice::APK publicada: https://github.com/${{ github.repository }}/releases/latest/download/cinder.apk"
@@ -84,4 +87,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cinder-apk
-          path: android-app/cinder.apk
+          path: |
+            android-app/cinder.apk
+            android-app/cinder.aab

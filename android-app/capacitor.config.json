@@ -22,6 +22,10 @@
       "backgroundColor": "#14100f",
       "style": "DARK",
       "overlaysWebView": false
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_cinder",
+      "iconColor": "#E0414B"
     }
   }
 }

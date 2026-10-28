@@ -8,7 +8,7 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { toMovie } from "./sync-tmdb.mjs";
+import { toMovie, LOGOS } from "./sync-tmdb.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "news.json");
@@ -156,7 +156,7 @@ async function main() {
   if (!KEY) throw new Error("Falta TMDB_API_KEY");
   const { genres } = await tmdb("/genre/movie/list", { language: "es-ES" });
   const genreNames = Object.fromEntries(genres.map((g) => [g.id, g.name]));
-  const data = { updatedAt: new Date().toISOString(), ...(await movies(genreNames)), news: await news() };
+  const data = { updatedAt: new Date().toISOString(), ...(await movies(genreNames)), news: await news(), logos: LOGOS };
   await mkdir(dirname(OUT), { recursive: true });
   await writeFile(OUT, JSON.stringify(data));
   console.log(`::notice::Novedades: ${data.nowPlaying.length} en cines, ${data.upcoming.length} próximas, ${data.trending.length} en tendencia, ${data.news.length} noticias.`);

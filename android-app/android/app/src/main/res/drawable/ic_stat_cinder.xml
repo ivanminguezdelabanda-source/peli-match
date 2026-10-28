@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono pequeño de las notificaciones (blanco sobre transparente, como pide Android) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="64" android:viewportHeight="64">
+    <group android:rotation="10" android:pivotX="36" android:pivotY="34">
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M27,14h18a5,5 0 0 1 5,5v30a5,5 0 0 1 -5,5h-18a5,5 0 0 1 -5,-5v-30a5,5 0 0 1 5,-5zM32,27v14l11,-7z"
+            android:fillType="evenOdd"/>
+    </group>
+</vector>

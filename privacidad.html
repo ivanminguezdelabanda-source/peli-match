@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cinder · Política de privacidad</title>
+<meta name="theme-color" content="#14100f">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Figtree:wght@400;500;700;800&family=DM+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css?v=dev">
+<style>
+  /* Páginas legales: texto largo, fácil de leer en el móvil (mismo estilo que los términos) */
+  /* La app fija la pantalla (body sin scroll); esta página se desplaza dentro de su propia capa */
+  .page-scroll { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .terms { width: min(100%, 720px); margin: 0 auto; padding: 24px 16px 64px; padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); line-height: 1.6; }
+  .terms a.terms-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
+  .terms-logo svg { width: 40px; height: 40px; }
+  .terms-logo .brand-name { font-size: 26px; }
+  .terms h1 { margin: 28px 0 4px; }
+  .terms .updated { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  .terms h2 { margin: 32px 0 8px; font-size: 19px; font-weight: 800; }
+  .terms p, .terms li { color: var(--text); font-size: 15.5px; }
+  .terms p { margin: 0 0 12px; }
+  .terms ul { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; }
+  .terms a { color: var(--ticket); font-weight: 700; }
+  .terms .summary { padding: 16px 18px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+  .terms .summary ul { margin: 0; }
+  .terms .back { margin-top: 36px; display: inline-flex; }
+  .terms a.btn-solid { color: var(--ink); text-decoration: none; } /* que el enlace amarillo no tape el texto del botón */
+  .terms nav ol { margin: 0; padding-left: 20px; columns: 2 220px; font-size: 14.5px; }
+</style>
+</head>
+<body>
+<div class="page-scroll"><main class="terms">
+  <a class="terms-logo" href="./" aria-label="Volver a Cinder">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="10" width="28" height="40" rx="5" fill="none" stroke="#f2d39b" stroke-width="3" transform="rotate(-12 28 30)"/><rect x="22" y="14" width="28" height="40" rx="5" fill="#e0414b" transform="rotate(10 36 34)"/><path fill="#14100f" d="M32 27v14l11-7z" transform="rotate(10 36 34)"/></svg>
+    <span class="brand-name">CIN<b>DER</b></span>
+  </a>
+
+  <h1 class="page-title">Política de privacidad</h1>
+  <p class="updated">Última actualización: 28 de octubre de 2026</p>
+
+  <div class="summary">
+    <p><b>En corto:</b> Cinder es un proyecto de estudiantes, gratis y sin anuncios. Solo guardamos lo necesario para que tu cuenta funcione y para recomendarte películas. No vendemos ni compartimos tus datos para publicidad. Puedes borrar tu cuenta y todos sus datos cuando quieras.</p>
+  </div>
+
+  <h2 id="quien">1. Quién es responsable</h2>
+  <p>Cinder (web y app de Android) es el Proyecto Intermodular de 2.º de Desarrollo de Aplicaciones Multiplataforma del centro FP José Ramón Otero (curso 2026-2027), hecho por Ivan Minguez y Adam Serroukh. Para cualquier cosa sobre tus datos, escríbenos por el <a href="#contacto">contacto</a>.</p>
+
+  <h2 id="que">2. Qué datos tratamos</h2>
+  <p><b>Si creas una cuenta:</b></p>
+  <ul>
+    <li>Correo electrónico y contraseña (la contraseña se guarda cifrada y nadie del proyecto puede verla). Si entras con Google, Google nos pasa tu nombre, tu correo y tu foto.</li>
+    <li>Nombre de usuario y foto de perfil (si la subes, reducida a 192 × 192 píxeles).</li>
+    <li>Tu actividad en la app: películas que guardas, descartas o marcas como vistas, tus listas, tus respuestas a la encuesta y un modelo de tus gustos calculado a partir de eso.</li>
+    <li>Tus reseñas, que son públicas (nombre de usuario, foto, puntuación y texto).</li>
+  </ul>
+  <p><b>Solo en tu dispositivo (no se envían a ningún servidor):</b> lo que haces como invitado, los avisos de estreno que activas y las preferencias de la app (por ejemplo, el sonido).</p>
+  <p><b>Lo que no recogemos:</b> ubicación, contactos, fotos de tu galería (salvo la foto de perfil que eliges), identificadores de publicidad ni datos de pago.</p>
+
+  <h2 id="para-que">3. Para qué los usamos</h2>
+  <ul>
+    <li>Para que tu cuenta funcione y se sincronice entre dispositivos.</li>
+    <li>Para recomendarte películas (Descubrir, Para ti y la Peli de la semana).</li>
+    <li>Para mostrar tus reseñas a los demás.</li>
+    <li>Para avisarte, si lo activas, del estreno de las películas que guardas. En la app de Android se usan las notificaciones del teléfono, que puedes desactivar cuando quieras en los ajustes de Android.</li>
+  </ul>
+  <p>La base legal es tu consentimiento y la prestación del servicio que pides al crear la cuenta. No usamos tus datos para publicidad ni para tomar decisiones automatizadas con efectos legales sobre ti.</p>
+
+  <h2 id="servicios">4. Servicios de terceros</h2>
+  <ul>
+    <li><b>Google Firebase</b> (Authentication y Cloud Firestore): guarda tu cuenta y tus datos en servidores de Google.</li>
+    <li><b>Inicio de sesión con Google</b>: solo si lo eliges.</li>
+    <li><b>Anthropic (Claude)</b>: si está activada la Peli de la semana con inteligencia artificial, se envían tus respuestas a la encuesta y los títulos que has guardado, sin tu nombre ni tu correo.</li>
+    <li><b>TMDB</b>: las carátulas e imágenes se cargan desde sus servidores, que reciben tu dirección IP como cualquier web.</li>
+    <li><b>YouTube</b>: los tráileres se ven con el reproductor de YouTube en modo de privacidad mejorada (youtube-nocookie.com) y solo se cargan cuando pulsas «Tráiler».</li>
+    <li><b>GitHub Pages</b>: aloja la web de Cinder.</li>
+  </ul>
+  <p>Al abrir enlaces externos (noticias, dónde verla, YouTube) se aplican las políticas de esas webs.</p>
+
+  <h2 id="tiempo">5. Cuánto tiempo los guardamos</h2>
+  <ul>
+    <li>Mientras tengas la cuenta.</li>
+    <li>Si creas la cuenta con correo y no lo confirmas en 24 horas, se borra con todos sus datos.</li>
+    <li>Si pasas 3 meses sin usar Cinder, la cuenta y todos sus datos se borran solos.</li>
+    <li>Si borras la cuenta, se borra todo al momento. Mira <a href="borrar-cuenta.html">cómo borrar tu cuenta</a>.</li>
+  </ul>
+
+  <h2 id="seguridad">6. Seguridad</h2>
+  <p>Toda la comunicación va cifrada (HTTPS). Las reglas de la base de datos impiden que nadie lea o cambie los datos privados de otra cuenta. Las contraseñas las gestiona Firebase y no se guardan en texto plano.</p>
+
+  <h2 id="derechos">7. Tus derechos</h2>
+  <p>Puedes ver y cambiar tus datos desde «Mi cuenta», borrar tus gustos con «Empezar de cero» y borrar la cuenta entera con «Borrar mi cuenta». También puedes pedirnos el acceso, la rectificación, la supresión, la oposición, la limitación o la portabilidad de tus datos (Reglamento General de Protección de Datos) por el <a href="#contacto">contacto</a>, y reclamar ante la Agencia Española de Protección de Datos (aepd.es).</p>
+
+  <h2 id="menores">8. Menores</h2>
+  <p>Para crear una cuenta hay que tener al menos 14 años. Si eres menor de 14, necesitas el permiso de tu padre, madre o tutor. Si sabemos que una cuenta es de un menor de 14 años sin permiso, la borramos.</p>
+
+  <h2 id="cambios">9. Cambios</h2>
+  <p>Si cambiamos esta política de forma importante, lo avisaremos en la app. La fecha de arriba indica la última versión. Las condiciones de uso están en los <a href="terminos.html">términos y condiciones</a>.</p>
+
+  <h2 id="contacto">10. Contacto</h2>
+  <p>Abre una incidencia en el <a href="https://github.com/ivanminguezdelabanda-source/peli-match/issues" target="_blank" rel="noopener">repositorio del proyecto en GitHub</a>.</p>
+
+  <a class="btn btn-solid back" href="./">Volver a Cinder</a>
+</main></div>
+</body>
+</html>

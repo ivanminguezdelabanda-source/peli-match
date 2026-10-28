@@ -1,7 +1,18 @@
-function startApp(MOVIES, NEWS) {
+function startApp(MOVIES, NEWS, LOGOS) {
   "use strict";
+  LOGOS = LOGOS || {};
 
   const byId = Object.fromEntries(MOVIES.map((m) => [m.id, m]));
+  // Enlace compartido (#peli/<id>): se abre su ficha en cuanto se pueda (tras entrar y la encuesta)
+  let pendingOpen = null;
+  const takeSharedLink = () => {
+    const hit = location.hash.match(/^#peli\/([^/?#]+)/);
+    if (!hit) return;
+    const id = decodeURIComponent(hit[1]);
+    if (byId[id]) pendingOpen = id;
+    history.replaceState(null, "", "#descubrir");
+  };
+  takeSharedLink();
 
   // ---------- Persistencia local (en la app móvil se cambiaría por almacenamiento nativo) ----------
   const KEY = "pelimatch:v1";
@@ -45,6 +56,8 @@ function startApp(MOVIES, NEWS) {
     history: [],  // [{ id, action }] para deshacer
     lists: [],    // [{ id, name, ids }] bibliotecas propias, independientes de los matches
     weekly: null, // { week, id, reason, ai } peli de la semana
+    alerts: {},   // { id: true | false } avisos de estreno (sin marcar: se avisa de las guardadas)
+    alerted: [],  // estrenos de los que ya se ha avisado dentro de la app
   };
   Object.assign(state, store.load() || {});
   const known = state.order.filter((id) => byId[id]);
@@ -53,8 +66,11 @@ function startApp(MOVIES, NEWS) {
   state.library = state.library.filter((l) => byId[l.id]);
   state.passed = state.passed.filter((id) => byId[id]);
   state.lists = (state.lists || []).map((l) => ({ ...l, ids: l.ids.filter((id) => byId[id]) }));
+  state.alerts = state.alerts || {};
+  state.alerted = state.alerted || [];
   let afterPersist = null; // con cuenta: sube los cambios a la nube (se activa más abajo)
-  const persist = () => { store.save(state); if (afterPersist) afterPersist(); };
+  let afterSave = null;    // en la app de Android: vuelve a programar los avisos de estreno
+  const persist = () => { store.save(state); if (afterPersist) afterPersist(); if (afterSave) afterSave(); };
   persist();
 
   const inLibrary = (id) => state.library.some((l) => l.id === id);
@@ -133,6 +149,22 @@ function startApp(MOVIES, NEWS) {
   const shortTime = (min) => (!min ? "—" : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}`);
   const trailerUrl = (m) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${m.title} ${m.year} tráiler español`)}`;
   const whereUrl = (m) => m.providersLink || `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(m.title)}`;
+  // Plataformas con su logo (los logos los guarda la sincronización de TMDB)
+  const provList = (names) => `<ul class="prov-list">${names.map((p) => `<li class="prov">${LOGOS[p]
+    ? `<img src="https://image.tmdb.org/t/p/w92${esc(LOGOS[p])}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span>${esc(p)}</span></li>`).join("")}</ul>`;
+  function whereBlock(m) {
+    if (!m.providers) return "";
+    const pay = m.pay || [];
+    let body;
+    if (m.providers.length || pay.length) {
+      body = (m.providers.length ? `<p class="where-kind">Incluida en</p>${provList(m.providers)}` : "")
+        + (pay.length ? `<p class="where-kind">Alquiler o compra</p>${provList(pay)}` : "");
+    } else {
+      body = `<p style="margin:0;color:var(--muted)">${upcoming(m)
+        ? "Todavía no se ha estrenado." : "Ahora mismo no está en ninguna plataforma en España."}</p>`;
+    }
+    return `<div class="where"><p class="section-label">Dónde verla en España</p>${body}</div>`;
+  }
   const genresOf = (list) => {
     const count = {};
     list.forEach((m) => m.genres.forEach((g) => (count[g] = (count[g] || 0) + 1)));
@@ -173,6 +205,8 @@ function startApp(MOVIES, NEWS) {
     check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
     x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.9l7.6-4.6M8.2 13.1l7.6 4.6"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></svg>',
   };
 
   // ---------- Filtro de humor (Descubrir) ----------
@@ -1260,11 +1294,11 @@ function startApp(MOVIES, NEWS) {
   // ---------- Tutorial guiado: resalta cada parte de la app con una explicación ----------
   const TOUR = [
     { view: "para-ti", target: ".weekly", title: "Tu peli de la semana", text: "Cada lunes te recomiendo una peli según tu encuesta y lo que guardas. Si te convence, guárdala con «La quiero ver»." },
-    { view: "descubrir", target: "#deck", demo: true, place: "bottom", title: "Desliza para decidir", text: "Derecha: la quieres ver. Izquierda: pasas. Arriba: ya la has visto. Toca la carátula para ver su ficha, tráiler y dónde verla." },
+    { view: "descubrir", target: "#deck", demo: true, place: "bottom", title: "Desliza para decidir", text: "Derecha: la quieres ver. Izquierda: pasas. Arriba: ya la has visto. Toca la carátula para ver su ficha: tráiler, plataformas donde verla y botón para compartirla." },
     { view: "descubrir", target: "#controls", title: "O usa los botones", text: "Deshacer, paso, la quiero ver, ya la vi y ficha. Lo mismo que deslizar." },
     { view: "descubrir", target: "#moods", title: "¿Qué te apetece?", text: "Filtra las cartas por género. «✨ Para ti» te enseña primero las que más encajan con tu encuesta." },
     { view: "descubrir", target: ".icon-btn", title: "Busca cualquier peli", text: "Por título, director o actor. Desde su ficha la guardas o la metes en tus listas." },
-    { view: "novedades", target: '.tab[data-view="novedades"]', title: "Novedades", text: "La peli destacada de la semana, lo que está en cines, los próximos estrenos, lo que más se ve y noticias de cine. Se actualiza varias veces al día." },
+    { view: "novedades", target: '.tab[data-view="novedades"]', title: "Novedades", text: "La peli destacada de la semana, lo que está en cines, los próximos estrenos, lo que más se ve y noticias de cine. Si guardas un próximo estreno, te avisamos el día que llega a los cines." },
     { view: "biblioteca", target: ".lib-tabs", title: "Tu biblioteca", text: "En «Matches» está lo que guardas deslizando, separado en Por ver y Vistas. En «Mis listas» creas tus propias colecciones." },
     { view: "ruleta", target: ".view-wheel .list-head", title: "¿No sabes cuál ver?", text: "Abre la caja: las carátulas de tus pelis por ver pasan rápido hasta pararse en una al azar. El color indica la nota. Con «🎲 Cualquier peli» elige entre todo el catálogo." },
     { view: "descubrir", target: "#account-btn", title: "Tu cuenta", text: "Tu foto, tu nombre, la seguridad y lo que Cinder sabe de tus gustos. Todo se guarda en tu cuenta y la sesión sigue abierta aunque cierres la web. En cada ficha puedes leer y escribir reseñas." },
@@ -1326,7 +1360,8 @@ function startApp(MOVIES, NEWS) {
     stopSwipeDemo();
     tourIdx = -1;
     tourBox.hidden = true;
-    location.hash = done === true ? "#descubrir" : "#para-ti";
+    const to = done === true ? "#descubrir" : "#para-ti";
+    if (location.hash === to) route(); else location.hash = to; // route() abre la ficha pendiente si la hay
   }
   function showTourStep() {
     const step = TOUR[tourIdx];
@@ -1576,6 +1611,13 @@ function startApp(MOVIES, NEWS) {
       if (tourIdx >= 0) return endTour();
       if (canGoBack && location.hash && location.hash !== "#descubrir") return history.back();
       plugin("App").minimizeApp().catch(() => plugin("App").exitApp());
+    });
+    // Al tocar el aviso de un estreno, se abre su ficha
+    plugin("LocalNotifications")?.addListener("localNotificationActionPerformed", ({ notification }) => {
+      const id = notification?.extra?.id;
+      if (!byId[id]) return;
+      pendingOpen = id;
+      if (booted) route();
     });
     // Si se cierra el navegador sin entrar
     plugin("Browser")?.addListener("browserFinished", () => setTimeout(() => {
@@ -1917,7 +1959,7 @@ function startApp(MOVIES, NEWS) {
       const enter = el("button", "btn btn-ghost", "Ya tengo cuenta: entrar");
       enter.type = "button";
       enter.onclick = () => leaveGuest("entrar");
-      box.append(create, enter, tasteSection(), el("p", "account-note", termsLink()), appLink());
+      box.append(create, enter, tasteSection(), el("p", "account-note", `${termsLink()} · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a>`), appLink());
       return;
     }
     if (u && !u.ready) {
@@ -2053,7 +2095,7 @@ function startApp(MOVIES, NEWS) {
           toast("Tu cuenta se ha borrado");
         },
       }));
-      box.append(del, el("p", "account-note", termsLink()), appLink());
+      box.append(del, el("p", "account-note", `${termsLink()} · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a>`), appLink());
       return;
     }
 
@@ -2314,12 +2356,12 @@ function startApp(MOVIES, NEWS) {
 
   // ---------- Novedades (data/news.json, se actualiza varias veces al día) ----------
   const dayText = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-  function newsRow(title, ids, withDate) {
+  function newsRow(title, ids, withDate, mine) {
     const list = (ids || []).map((id) => byId[id]).filter(Boolean);
     if (!list.length) return null;
     const sec = el("section", "news-section");
     const head = el("div", "news-section-head");
-    head.append(el("h2", "news-section-title", esc(title)));
+    head.append(el("h2", "news-section-title", (mine ? ICON.bell + " " : "") + esc(title)));
     const ul = el("ul", "news-row");
     // En el ordenador, flechas para pasar la fila (con ratón no se desliza de lado)
     const arrows = el("div", "row-arrows");
@@ -2334,7 +2376,7 @@ function startApp(MOVIES, NEWS) {
     sec.append(head);
     list.forEach((m) => {
       const li = tileFor(m, "news");
-      if (withDate && m.release) li.append(el("p", "news-date", "Estreno " + esc(dayText(m.release))));
+      if (withDate && m.release) li.append(el("p", "news-date", (wantsAlert(m.id) && upcoming(m) ? "🔔 " : "") + "Estreno " + esc(dayText(m.release))));
       ul.append(li);
     });
     sec.append(ul);
@@ -2373,13 +2415,17 @@ function startApp(MOVIES, NEWS) {
         tr.href = f.trailer;
         tr.target = "_blank";
         tr.rel = "noopener";
+        if (ytKey(f.trailer)) tr.onclick = (ev) => { ev.preventDefault(); openSheet(f.id, "news", { trailer: true }); };
         actions.append(tr);
       }
       body.append(actions);
       hero.append(body);
       box.append(hero);
     }
-    [newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true), newsRow("Tendencias de la semana", NEWS.trending)]
+    // Los próximos estrenos que tienes guardados o con aviso, por fecha
+    const mine = premiereMovies().filter(upcoming).sort((a, b) => a.release.localeCompare(b.release)).map((m) => m.id);
+    [newsRow("Tus próximos estrenos", mine, true, true), newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true),
+      newsRow("Tendencias de la semana", NEWS.trending)]
       .forEach((sec) => sec && box.append(sec));
 
     // Noticias de webs de cine: titular, foto y un trozo; se leen en la web original
@@ -2420,7 +2466,7 @@ function startApp(MOVIES, NEWS) {
   let lastFocus = null;
 
   const opened = new Set();
-  function openSheet(id, from) {
+  function openSheet(id, from, opts = {}) {
     const m = byId[id];
     if (!opened.has(id)) { opened.add(id); taste.learn(m, 0.15); }
     const e = entry(id);
@@ -2437,6 +2483,7 @@ function startApp(MOVIES, NEWS) {
     body.append(top);
 
     const content = el("div", "sheet-content", `
+      ${upcoming(m) ? `<div class="release-box"><p><span class="section-label">Estreno en cines</span><b>${esc(longDay(m.release))}</b></p></div>` : ""}
       <dl class="facts">
         <div class="fact"><dt>Año</dt><dd>${m.year}</dd></div>
         <div class="fact"><dt>Duración</dt><dd>${fmtTime(m.runtime)}</dd></div>
@@ -2448,29 +2495,47 @@ function startApp(MOVIES, NEWS) {
         <p style="margin:0;font-weight:700">${esc(m.director)}</p>
       </div>
       ${m.cast && m.cast.length ? `<div><p class="section-label">Reparto</p><p style="margin:0">${esc(m.cast.join(", "))}</p></div>` : ""}
-      ${m.providers
-        ? `<div><p class="section-label">En streaming en España</p>${m.providers.length
-            ? `<ul class="chips">${m.providers.map((p) => `<li class="chip chip-provider">${esc(p)}</li>`).join("")}</ul>`
-            : `<p style="margin:0;color:var(--muted)">No está en ninguna plataforma de suscripción ahora mismo.</p>`}</div>`
-        : ""}
+      ${whereBlock(m)}
       <div>
         <p class="section-label">Géneros</p>
         <ul class="chips">${m.genres.map((g) => `<li class="chip">${esc(g)}</li>`).join("")}</ul>
       </div>
       <div class="links">
-        <a class="link-card" href="${esc(m.trailer || trailerUrl(m))}" target="_blank" rel="noopener">
+        <a class="link-card" id="sheet-trailer" href="${esc(m.trailer || trailerUrl(m))}" target="_blank" rel="noopener">
           <span class="link-icon play">${ICON.play}</span>
-          <span class="link-text"><b>Tráiler</b><span>En YouTube</span></span>
+          <span class="link-text"><b>Tráiler</b><span>${ytKey(m.trailer) ? "Verlo aquí" : "En YouTube"}</span></span>
         </a>
         <a class="link-card" href="${esc(whereUrl(m))}" target="_blank" rel="noopener">
           <span class="link-icon where">${ICON.tv}</span>
-          <span class="link-text"><b>Dónde verla</b><span>Plataformas en España</span></span>
+          <span class="link-text"><b>Dónde verla</b><span>Todas las opciones</span></span>
         </a>
+        <button class="link-card" id="sheet-share" type="button">
+          <span class="link-icon share">${ICON.share}</span>
+          <span class="link-text"><b>Compartir</b><span>Mándasela a alguien</span></span>
+        </button>
       </div>
       <div class="sheet-actions" id="sheet-actions"></div>
       <section class="reviews" id="sheet-reviews" aria-label="Reseñas"></section>
       ${m.tmdb ? `<p class="credit">Datos e imágenes de TMDB. Plataformas: JustWatch.</p>` : ""}`);
     body.append(content);
+
+    // Tráiler dentro de la ficha (si es de YouTube); si no, se abre fuera
+    const trailerLink = content.querySelector("#sheet-trailer");
+    if (ytKey(m.trailer)) trailerLink.onclick = (ev) => { ev.preventDefault(); playTrailer(m, content); };
+    content.querySelector("#sheet-share").onclick = () => shareMovie(m);
+    // Aviso del estreno (solo si aún no se ha estrenado)
+    const releaseBox = content.querySelector(".release-box");
+    const drawAlert = () => {
+      if (!releaseBox) return;
+      releaseBox.querySelector("button")?.remove();
+      const on = wantsAlert(id);
+      const b = el("button", "btn " + (on ? "btn-ghost alert-on" : "btn-solid"), `${ICON.bell} ${on ? "Te avisaremos" : "Avísame del estreno"}`);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(on));
+      b.onclick = () => { toggleAlert(id); drawAlert(); };
+      releaseBox.append(b);
+    };
+    drawAlert();
 
     // Mis listas
     const listsBox = el("div", "sheet-lists");
@@ -2481,12 +2546,12 @@ function startApp(MOVIES, NEWS) {
         const b = el("button", "filter", esc(l.name));
         b.type = "button";
         b.setAttribute("aria-pressed", String(l.ids.includes(id)));
-        b.onclick = () => { toggleInList(l.id, id); drawLists(); drawActions(); };
+        b.onclick = () => { toggleInList(l.id, id); drawLists(); drawActions(); drawAlert(); };
         row.append(b);
       });
       const add = el("button", "filter filter-add", `${ICON.plus} Nueva lista`);
       add.type = "button";
-      add.onclick = () => nameEditor(row, "", "Crear", (name) => { const l = createList(name); toggleInList(l.id, id); drawLists(); drawActions(); }, drawLists);
+      add.onclick = () => nameEditor(row, "", "Crear", (name) => { const l = createList(name); toggleInList(l.id, id); drawLists(); drawActions(); drawAlert(); }, drawLists);
       row.append(add);
       listsBox.append(row);
     };
@@ -2532,10 +2597,134 @@ function startApp(MOVIES, NEWS) {
     sheet.hidden = backdrop.hidden = false;
     sheet.scrollTop = 0;
     $("#sheet-close").focus();
+    if (opts.trailer && ytKey(m.trailer)) playTrailer(m, content);
+  }
+
+  // ---------- Tráiler, compartir y avisos de estreno ----------
+  const ytKey = (url) => (String(url || "").match(/youtube\.com\/watch\?v=([\w-]{6,})/) || [])[1] || null;
+  function playTrailer(m, content) {
+    if (content.querySelector(".trailer-box")) return;
+    const key = ytKey(m.trailer);
+    const box = el("div", "trailer-box");
+    const frame = document.createElement("iframe");
+    frame.src = `https://www.youtube-nocookie.com/embed/${key}?autoplay=1&rel=0&playsinline=1&hl=es`;
+    frame.title = `Tráiler de ${m.title}`;
+    frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    frame.referrerPolicy = "strict-origin-when-cross-origin";
+    const open = el("a", "trailer-out", "¿No se ve? Ábrelo en YouTube");
+    open.href = m.trailer;
+    open.target = "_blank";
+    open.rel = "noopener";
+    box.append(frame, open);
+    content.prepend(box);
+    box.scrollIntoView?.({ block: "nearest" });
+  }
+
+  // Enlace a una peli: abre Cinder con su ficha (#peli/<id>)
+  const movieLink = (m) => `${location.origin}${location.pathname}#peli/${encodeURIComponent(m.id)}`;
+  async function shareMovie(m) {
+    const url = movieLink(m), text = `Mira «${m.title}» (${m.year}) en Cinder`;
+    try {
+      const native = NATIVE && plugin("Share");
+      if (native) return void (await native.share({ title: m.title, text, url, dialogTitle: "Compartir peli" }));
+      if (navigator.share) return void (await navigator.share({ title: m.title, text, url }));
+    } catch (e) {
+      if (e?.name === "AbortError" || /cancel/i.test(String(e?.message || e))) return; // la ha cerrado quien comparte
+    }
+    // Sin menú de compartir: se copia el enlace
+    const line = `${text}: ${url}`;
+    try { await navigator.clipboard.writeText(line); return toast("Enlace copiado"); } catch (e) { /* sin portapapeles moderno */ }
+    const ta = el("textarea");
+    ta.value = line;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;opacity:0;left:0;top:0";
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { /* nada */ }
+    ta.remove();
+    toast(ok ? "Enlace copiado" : "No se ha podido compartir");
+  }
+
+  // Estrenos: se avisa de las pelis guardadas (biblioteca o listas) y de las marcadas con la campana
+  const isoDay = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  const todayISO = () => isoDay(new Date());
+  const longDay = (iso) => {
+    const t = new Date(iso + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+  function upcoming(m) { return Boolean(m && m.release && m.release > todayISO()); }
+  const savedAnywhere = (id) => inLibrary(id) || state.lists.some((l) => l.ids.includes(id));
+  function wantsAlert(id) { const v = state.alerts[id]; return v === undefined ? savedAnywhere(id) : v; }
+  function premiereMovies() {
+    const ids = new Set([...Object.keys(state.alerts), ...state.library.map((l) => l.id), ...state.lists.flatMap((l) => l.ids)]);
+    return [...ids].map((id) => byId[id]).filter((m) => m && m.release && wantsAlert(m.id));
+  }
+  function toggleAlert(id) {
+    const on = !wantsAlert(id);
+    state.alerts[id] = on;
+    persist();
+    toast(on ? `Te avisaremos del estreno de «${byId[id].title}»` : "Aviso de estreno quitado");
+  }
+  // Dentro de la app: al abrirla, aviso de lo que se ha estrenado esta semana (una vez por peli)
+  function checkPremieres() {
+    const today = todayISO(), weekAgo = isoDay(new Date(Date.now() - 7 * 864e5));
+    const due = premiereMovies().filter((m) => m.release <= today && m.release >= weekAgo && !state.alerted.includes(m.id));
+    if (!due.length) return;
+    state.alerted = [...state.alerted, ...due.map((m) => m.id)].slice(-200);
+    persist();
+    const m = due[0], more = due.length > 1 ? ` y ${due.length - 1} más` : "";
+    toast(`${m.release === today ? "¡Hoy se estrena" : "Ya está en cines"} «${m.title}»${more}!`, "Ver", () => openSheet(m.id, "alert"), 9000);
+  }
+  // Tras cada cambio se reprograman; el permiso solo se pide cuando entra un estreno nuevo (al guardarlo)
+  function watchPremieres() {
+    let known = null;
+    afterSave = () => {
+      const ids = premiereMovies().filter(upcoming).map((m) => m.id);
+      const fresh = known !== null && ids.some((id) => !known.has(id));
+      known = new Set(ids);
+      scheduleAlerts(fresh);
+    };
+    afterSave();
+  }
+  // En la app de Android: notificación el día del estreno a las 10:00 (aunque la app esté cerrada)
+  let scheduleTimer;
+  function scheduleAlerts(ask) {
+    const ln = NATIVE && plugin("LocalNotifications");
+    if (!ln) return;
+    clearTimeout(scheduleTimer);
+    scheduleTimer = setTimeout(async () => {
+      try {
+        const soon = Date.now() + 60e3;
+        const items = premiereMovies().map((m) => ({ m, at: new Date(m.release + "T10:00:00") })).filter((x) => x.at.getTime() > soon)
+          .sort((a, b) => a.at - b.at).slice(0, 40);
+        let perm = (await ln.checkPermissions()).display;
+        if (perm !== "granted" && perm !== "denied") {
+          if (!ask || !items.length) return;
+          perm = (await ln.requestPermissions()).display;
+        }
+        if (perm !== "granted") { if (ask) toast("Activa las notificaciones de Cinder en Ajustes para recibir el aviso"); return; }
+        const pending = (await ln.getPending()).notifications || [];
+        if (pending.length) await ln.cancel({ notifications: pending.map((n) => ({ id: n.id })) });
+        if (!items.length) return;
+        await ln.schedule({ notifications: items.map(({ m, at }, i) => ({
+          id: Number(m.tmdb) || 100000 + i,
+          title: `¡Hoy se estrena «${m.title}»!`,
+          body: "La tienes guardada en Cinder. Toca para ver la ficha.",
+          schedule: { at, allowWhileIdle: true },
+          smallIcon: "ic_stat_cinder",
+          iconColor: "#E0414B",
+          extra: { id: m.id },
+        })) });
+      } catch (e) {
+        console.warn("Avisos de estreno:", e);
+      }
+    }, 600);
   }
 
   function closeSheet() {
     if (sheet.hidden) return;
+    $("#sheet-body").querySelector(".trailer-box")?.remove(); // para el vídeo
     sheet.hidden = backdrop.hidden = true;
     if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
   }
@@ -2607,7 +2796,9 @@ function startApp(MOVIES, NEWS) {
   // ---------- Navegación (#descubrir, #biblioteca, #ruleta) ----------
   const VIEWS = ["descubrir", "novedades", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta"];
   let lastView = null;
+  let premieresChecked = false;
   function route() {
+    takeSharedLink();
     document.body.classList.remove("booting");
     document.getElementById("boot-error")?.remove();
     gated = needLogin();
@@ -2648,6 +2839,9 @@ function startApp(MOVIES, NEWS) {
     else if (view === "cuenta") renderAccount();
     else if (view === "novedades") renderNews();
     else renderDeck();
+    if (!booted || locked || tourIdx >= 0) return;
+    if (pendingOpen) { const id = pendingOpen; pendingOpen = null; openSheet(id, "link"); }
+    else if (!premieresChecked) { premieresChecked = true; checkPremieres(); }
   }
 
   // ---------- Eventos ----------
@@ -2692,7 +2886,7 @@ function startApp(MOVIES, NEWS) {
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
     // los datos de la cuenta tampoco pueden bloquear el arranque: como mucho 8 s más
     .then(() => Promise.race([accountLoad, new Promise((r) => setTimeout(r, 8000))]))
-    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); });
+    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); });
 }
 
 // Carga las pelis de TMDB (data/movies.json, generado por scripts/sync-tmdb.mjs).
@@ -2712,5 +2906,5 @@ function startApp(MOVIES, NEWS) {
     }
     movies = movies.concat(news.movies.filter((m) => m && m.id && !have.has(m.id) && m.title && m.year && Array.isArray(m.genres) && m.genres.length && m.c));
   }
-  startApp(movies, news && Array.isArray(news.movies) ? news : null);
+  startApp(movies, news && Array.isArray(news.movies) ? news : null, { ...data?.logos, ...news?.logos });
 })();
