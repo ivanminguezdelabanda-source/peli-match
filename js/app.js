@@ -1448,7 +1448,7 @@ function startApp(MOVIES) {
     const u = cloud?.user;
     bar.hidden = !(u && u.ready && verifyPending(u));
     if (bar.hidden) return;
-    bar.replaceChildren(el("span", "", `📧 Confirma tu correo en <b>${hoursText(verifyLeft(u))}</b> o tu cuenta se borrará.`));
+    bar.replaceChildren(el("span", "", `📧 Confirma tu correo en <b>${hoursText(verifyLeft(u))}</b> o tu cuenta se borrará. ¿No lo ves? Mira en Spam y pulsa «No es spam» para que el enlace funcione.`));
     const again = el("button", "link-btn", "Reenviar");
     again.type = "button";
     again.onclick = async () => { try { await cloud.sendVerification(); toast(`Te he reenviado el correo a ${u.email}`); } catch (e) { toast(cloudError(e)); } };
@@ -1613,7 +1613,7 @@ function startApp(MOVIES) {
       card.append(picker.pick, el("div", "", `<p class="account-name">@${esc(u.name)}</p><p class="account-mail">${esc(u.email)}${u.emailVerified ? " · verificado ✓" : ""}</p>`));
       box.append(card);
       if (verifyPending(u)) {
-        const warn = el("div", "account-warn", `<p>Confirma tu correo con el enlace que te enviamos a <b>${esc(u.email)}</b>. Te quedan <b>${hoursText(verifyLeft(u))}</b>; si no, la cuenta se borra sola.</p>`);
+        const warn = el("div", "account-warn", `<p>Confirma tu correo con el enlace que te enviamos a <b>${esc(u.email)}</b>. Te quedan <b>${hoursText(verifyLeft(u))}</b>; si no, la cuenta se borra sola. Si está en Spam, pulsa «No es spam» para que el enlace funcione.</p>`);
         const again = el("button", "link-btn", "Reenviar correo");
         again.type = "button";
         again.onclick = async () => { try { await cloud.sendVerification(); toast("Te he vuelto a enviar el correo"); } catch (e) { toast(cloudError(e)); } };
