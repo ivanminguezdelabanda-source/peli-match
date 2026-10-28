@@ -97,7 +97,8 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .view-discover { padding-block: 2px 12px; gap: 12px; }
 .deck {
   position: relative; flex: 1; min-height: 0;
-  width: 100%; max-width: min(100%, calc((100dvh - 250px) * 2 / 3));
+  width: 100%; max-width: min(100%, calc((100vh - 250px) * 2 / 3));
+  max-width: min(100%, calc((100dvh - 250px) * 2 / 3));
   margin: 0 auto;
 }
 .card {
@@ -536,3 +537,33 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .account-form label.check { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; color: var(--text); line-height: 1.4; cursor: pointer; }
 .check input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--velvet); }
 .check a, .account-note a { color: var(--ticket); font-weight: 700; }
+
+/* ---------- Compatibilidad: móviles y navegadores antiguos ---------- */
+/* Las vistas con scroll: desplazamiento suave en iOS y que su contenido no se encoja (Safari antiguo) */
+.view-list, .view-wheel, .view-match, .sheet { -webkit-overflow-scrolling: touch; }
+.view-list > *, .view-wheel > *, .view-match > *, .match-body > * { flex-shrink: 0; }
+/* Sin aspect-ratio (Safari < 15): proporción de cartel con padding */
+@supports not (aspect-ratio: 2 / 3) {
+  .tile-btn, .sheet-poster { height: 0; padding-top: 150%; }
+  .reel-item { height: 162px; }
+  .list-stack-item { height: 114px; }
+}
+/* Sin consultas de contenedor (Safari < 16): tamaños fijos en el cartel tipográfico */
+@supports not (container-type: inline-size) {
+  .poster-art { padding: 8% 7%; }
+  .poster-credit { font-size: 9px; }
+  .poster-title { font-size: 20px; margin-top: 4px; }
+  .poster-title.long { font-size: 16px; }
+  .poster-title.xlong { font-size: 13px; }
+  .poster-year { font-size: 14px; }
+}
+/* Sin color-mix (Safari < 16.2, Chrome < 111, Firefox < 113): colores equivalentes */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  .poster-art { background: linear-gradient(175deg, var(--c1), #000); }
+  .card-desc { color: rgba(246, 236, 224, .85); }
+  .chip-provider { background: rgba(242, 211, 155, .18); }
+  .match-intro { background: var(--panel); }
+  .review.own { outline: 1px solid rgba(242, 211, 155, .45); }
+  .account-warn { background: rgba(242, 211, 155, .14); }
+  .verify-banner { background: #3e3530; }
+}

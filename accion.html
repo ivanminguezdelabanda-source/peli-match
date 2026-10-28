@@ -13,9 +13,9 @@
 <link rel="stylesheet" href="styles.css?v=dev">
 <style>
   /* Página de los enlaces de los correos de Firebase (verificar correo, cambiar contraseña…) */
-  html, body { height: auto; min-height: 100%; }
-  body { overflow: auto; } /* la app fija la pantalla; esta página se desplaza normal */
-  .action-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
+  /* La app fija la pantalla (body sin scroll); esta página se desplaza dentro de su propia capa */
+  .page-scroll { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .action-page { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
   .action-card { width: min(100%, 420px); display: grid; gap: 16px; text-align: center; }
   .action-logo { display: flex; align-items: center; justify-content: center; gap: 10px; }
   .action-logo svg { width: 48px; height: 48px; }
@@ -28,7 +28,7 @@
 </style>
 </head>
 <body>
-<main class="action-page">
+<div class="page-scroll"><main class="action-page">
   <div class="action-card" id="card" aria-live="polite">
     <div class="action-logo">
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="10" width="28" height="40" rx="5" fill="none" stroke="#f2d39b" stroke-width="3" transform="rotate(-12 28 30)"/><rect x="22" y="14" width="28" height="40" rx="5" fill="#e0414b" transform="rotate(10 36 34)"/><path fill="#14100f" d="M32 27v14l11-7z" transform="rotate(10 36 34)"/></svg>
@@ -36,7 +36,7 @@
     </div>
     <div id="body"><p class="empty-text">Un momento…</p></div>
   </div>
-</main>
+</main></div>
 <script src="js/firebase-config.js?v=dev"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";

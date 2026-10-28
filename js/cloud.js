@@ -15,7 +15,7 @@ export const VERIFY_HOURS = 24;
 export const MAX_USERS = 2000;
 // Tras pulsar el enlace de un correo (verificar, cambiar contraseña…), «Abrir Cinder» vuelve aquí
 const BACK = { url: new URL("./#cuenta", location.href).href };
-export const USERNAME_RE = /^(?![.])[a-z0-9_.]{3,20}(?<![.])$/;
+export const USERNAME_RE = /^(?![.])[a-z0-9_.]{2,19}[a-z0-9_]$/;
 const V = "13.1.0";
 const SDK = `https://www.gstatic.com/firebasejs/${V}`;
 

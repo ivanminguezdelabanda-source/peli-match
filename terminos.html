@@ -12,9 +12,9 @@
 <link rel="stylesheet" href="styles.css?v=dev">
 <style>
   /* Términos y condiciones: texto largo, fácil de leer en el móvil */
-  html, body { height: auto; min-height: 100%; }
-  body { overflow: auto; } /* la app fija la pantalla; esta página se desplaza normal */
-  .terms { width: min(100%, 720px); margin: 0 auto; padding: 24px 16px 64px; line-height: 1.6; }
+  /* La app fija la pantalla (body sin scroll); esta página se desplaza dentro de su propia capa */
+  .page-scroll { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .terms { width: min(100%, 720px); margin: 0 auto; padding: 24px 16px 64px; padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); line-height: 1.6; }
   .terms a.terms-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
   .terms-logo svg { width: 40px; height: 40px; }
   .terms-logo .brand-name { font-size: 26px; }
@@ -32,7 +32,7 @@
 </style>
 </head>
 <body>
-<main class="terms">
+<div class="page-scroll"><main class="terms">
   <a class="terms-logo" href="./" aria-label="Volver a Cinder">
     <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="10" width="28" height="40" rx="5" fill="none" stroke="#f2d39b" stroke-width="3" transform="rotate(-12 28 30)"/><rect x="22" y="14" width="28" height="40" rx="5" fill="#e0414b" transform="rotate(10 36 34)"/><path fill="#14100f" d="M32 27v14l11-7z" transform="rotate(10 36 34)"/></svg>
     <span class="brand-name">CIN<b>DER</b></span>
@@ -140,6 +140,6 @@
   <p>Para dudas, problemas o peticiones sobre tus datos, abre una incidencia en el <a href="https://github.com/ivanminguezdelabanda-source/peli-match/issues" target="_blank" rel="noopener">repositorio del proyecto en GitHub</a>.</p>
 
   <a class="btn btn-solid back" href="./">Volver a Cinder</a>
-</main>
+</main></div>
 </body>
 </html>

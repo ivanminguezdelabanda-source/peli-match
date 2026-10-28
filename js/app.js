@@ -1642,7 +1642,7 @@ function startApp(MOVIES) {
   setInterval(() => cloud?.user && renderVerifyBanner(), 60000);
 
   // ---------- Nombre de usuario ----------
-  const USERNAME_RE = /^(?![.])[a-z0-9_.]{3,20}(?<![.])$/;
+  const USERNAME_RE = /^(?![.])[a-z0-9_.]{2,19}[a-z0-9_]$/;
   const cleanUsername = (v) => norm(v).replace(/\s+/g, "_").replace(/[^a-z0-9_.]/g, "").slice(0, 20);
   // Campo con comprobación en directo de si el nombre está libre
   function usernameField(initial) {
