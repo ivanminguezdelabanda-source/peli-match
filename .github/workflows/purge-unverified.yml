@@ -1,6 +1,7 @@
-name: Borrar cuentas sin verificar
+name: Mantenimiento de cuentas
 
-# Cada hora: borra las cuentas con correo y contraseña que llevan más de 24 h sin verificar el correo.
+# Cada hora: borra las cuentas con correo sin verificar tras 24 h y las que llevan 3 meses sin usarse,
+# y recuenta las cuentas para el límite (meta/stats).
 # Necesita el secreto FIREBASE_SERVICE_ACCOUNT (Firebase → Configuración del proyecto → Cuentas de servicio
 # → Generar nueva clave privada; se pega el JSON entero). Sin él, no hace nada.
 on:

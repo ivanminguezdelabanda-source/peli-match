@@ -4,6 +4,9 @@ rules_version = '2';
 //   solo los lee y los cambia su dueño.
 // - Los nombres de usuario (usernames/{nombre}) son únicos: cada uno apunta a su dueño.
 // - Las reseñas las lee cualquiera; solo su autor, con perfil terminado, las escribe o borra.
+// - meta/stats cuenta las cuentas con perfil terminado. Como mucho 2000 (límite del plan gratis de Firebase):
+//   terminar el perfil exige sumar 1 a la cuenta en la misma escritura. Si cambias el límite, cámbialo
+//   también en js/cloud.js (MAX_USERS).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedAs(uid) { return request.auth != null && request.auth.uid == uid; }
@@ -11,6 +14,25 @@ service cloud.firestore {
     function validPhoto(p) { return p is string && p.size() <= 60000 && (p == '' || p.matches('^(data:image/(jpeg|webp|png);base64,|https://).*')); }
     function validUsername(n) { return n is string && n.matches('^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$'); }
     function usernameOwner(n) { return getAfter(/databases/$(database)/documents/usernames/$(n)).data.uid; }
+    function maxUsers() { return 2000; }
+    function statsPath() { return /databases/$(database)/documents/meta/stats; }
+    function usersBefore() { return exists(statsPath()) ? get(statsPath()).data.users : 0; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function wasReady(uid) { return exists(userPath(uid)) && get(userPath(uid)).data.ready == true; }
+
+    match /meta/stats {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['users']) && request.resource.data.users is int
+        && (
+          // alta: el perfil de quien escribe pasa a terminado en esta misma escritura, sin pasar del límite
+          (request.resource.data.users == usersBefore() + 1 && request.resource.data.users <= maxUsers()
+            && !wasReady(request.auth.uid) && getAfter(userPath(request.auth.uid)).data.ready == true)
+          // baja: quien escribe borra su perfil terminado en esta misma escritura
+          || (request.resource.data.users == usersBefore() - 1 && request.resource.data.users >= 0
+            && wasReady(request.auth.uid) && !existsAfter(userPath(request.auth.uid)))
+        );
+    }
 
     match /usernames/{name} {
       allow read: if true;
@@ -29,7 +51,9 @@ service cloud.firestore {
         // con el perfil terminado, el nombre tiene que ser un nombre de usuario reservado por esta cuenta
         && (request.resource.data.ready == false
             ? request.resource.data.name == ''
-            : validUsername(request.resource.data.name) && usernameOwner(request.resource.data.name) == uid);
+            : validUsername(request.resource.data.name) && usernameOwner(request.resource.data.name) == uid
+              // cuenta nueva: tiene que entrar en el contador (y así respetar el límite de cuentas)
+              && (wasReady(uid) || getAfter(statsPath()).data.users == usersBefore() + 1));
     }
 
     match /tastes/{uid} {

@@ -1357,10 +1357,11 @@ function startApp(MOVIES) {
   // Sin configuración en js/firebase-config.js la app funciona sin cuentas y las reseñas se guardan en el móvil
   let cloud = null;
   let cloudError = () => "Algo ha fallado. Inténtalo otra vez.";
+  let MAX_USERS = 2000;
   let afterLogin = null; // peli cuya ficha se reabre al entrar
   const cloudReady = window.CINDER_FIREBASE
     ? import("./cloud.js?v=dev")
-      .then((m) => { cloudError = m.errorText; return m.connect(window.CINDER_FIREBASE); })
+      .then((m) => { cloudError = m.errorText; MAX_USERS = m.MAX_USERS || MAX_USERS; return m.connect(window.CINDER_FIREBASE); })
       .then((c) => {
         cloud = c;
         c.onUser(onUserChange);
@@ -1487,6 +1488,29 @@ function startApp(MOVIES) {
     accountMode = mode;
     persist();
     if (location.hash === "#cuenta") route(); else location.hash = "#cuenta";
+  }
+  function startGuest() {
+    state.guest = true;
+    persist();
+    location.hash = state.profile ? "#descubrir" : "#para-ti";
+    route();
+  }
+  const TERMS = "terminos.html";
+  const termsLink = (text = "Términos y condiciones") => `<a href="${TERMS}" target="_blank" rel="noopener">${text}</a>`;
+  // Casilla de aceptar los términos (al crear la cuenta)
+  function termsCheck() {
+    const label = el("label", "check", `<input type="checkbox" name="terms"> <span>He leído y acepto los ${termsLink()}</span>`);
+    return { label, get ok() { return label.querySelector("input").checked; } };
+  }
+  // Límite de cuentas lleno: se explica y se ofrece el modo invitado
+  function renderFull(box, onGuest) {
+    box.append(el("h1", "page-title", "Cuentas completas"),
+      el("p", "empty-text", `Cinder ha llegado a su límite de ${String(MAX_USERS).replace(/\B(?=(\d{3})+$)/g, ".")} cuentas y de momento no se pueden crear más. Cuando se libere sitio podrás crear la tuya.`),
+      el("p", "empty-text", "Mientras tanto puedes usar Cinder como invitado: funciona igual, pero todo se guarda solo en este móvil y no puedes escribir reseñas."));
+    const guest = el("button", "btn btn-solid", "Usar Cinder como invitado");
+    guest.type = "button";
+    guest.onclick = async () => { guest.disabled = true; await onGuest(); };
+    box.append(guest, el("p", "account-note", `Más información en los ${termsLink()}.`));
   }
   let gated = false;
   let booted = false;
@@ -1694,10 +1718,13 @@ function startApp(MOVIES) {
     err.setAttribute("role", "alert");
     const go = el("button", "btn btn-solid", "Guardar y continuar");
     go.type = "submit";
-    form.append(name.wrap, err, go);
+    // Con correo los términos se aceptan al crear la cuenta; con Google, aquí
+    const terms = u.password ? null : termsCheck();
+    form.append(name.wrap, ...(terms ? [terms.label] : []), err, go);
     form.onsubmit = async (ev) => {
       ev.preventDefault();
       if (!USERNAME_RE.test(name.value)) return (err.textContent = cloudError({ code: "username-invalid" }));
+      if (terms && !terms.ok) return (err.textContent = "Para continuar tienes que aceptar los términos y condiciones.");
       go.disabled = true;
       err.textContent = "";
       try {
@@ -1705,6 +1732,7 @@ function startApp(MOVIES) {
         toast(`¡Bienvenido a Cinder, @${name.value}!`);
       } catch (e) {
         go.disabled = false;
+        if (e.code === "accounts-full") return renderAccount(); // se ha llenado: explica y ofrece el modo invitado
         err.textContent = cloudError(e);
       }
     };
@@ -1749,6 +1777,9 @@ function startApp(MOVIES) {
   async function renderAccount() {
     const box = $("#account-body");
     await cloudReady;
+    // ¿Límite de cuentas lleno? Solo importa al crear una cuenta nueva
+    const cu = cloud?.user;
+    const full = Boolean(cloud && (cu ? !cu.ready : accountMode === "crear")) && await cloud.accountsFull();
     box.replaceChildren();
     if (!cloud) {
       box.append(el("h1", "page-title", "Mi cuenta"),
@@ -1766,10 +1797,17 @@ function startApp(MOVIES) {
       const enter = el("button", "btn btn-ghost", "Ya tengo cuenta: entrar");
       enter.type = "button";
       enter.onclick = () => leaveGuest("entrar");
-      box.append(create, enter, tasteSection());
+      box.append(create, enter, tasteSection(), el("p", "account-note", termsLink()));
       return;
     }
-    if (u && !u.ready) return renderSetup(box, u);
+    if (u && !u.ready) {
+      // Cuenta recién creada (p. ej. con Google) sin sitio: se borra y se sigue como invitado
+      if (full) return renderFull(box, async () => {
+        try { await cloud.deleteAccount(null, true); } catch (e) { await cloud.signOut().catch(() => {}); }
+        startGuest();
+      });
+      return renderSetup(box, u);
+    }
     if (u) {
       box.append(el("h1", "page-title", "Mi cuenta"));
 
@@ -1895,11 +1933,19 @@ function startApp(MOVIES) {
           toast("Tu cuenta se ha borrado");
         },
       }));
-      box.append(del);
+      box.append(del, el("p", "account-note", termsLink()));
       return;
     }
 
     const signup = accountMode === "crear";
+    if (signup && full) {
+      renderFull(box, async () => startGuest());
+      const back = el("button", "link-btn", "¿Ya tienes cuenta? Entra");
+      back.type = "button";
+      back.onclick = () => { accountMode = "entrar"; renderAccount(); };
+      box.append(back);
+      return;
+    }
     box.append(el("h1", "page-title", signup ? "Crea tu cuenta" : "Bienvenido a Cinder"),
       el("p", "empty-text", signup ? "Con tu cuenta, Cinder aprende tus gustos y puedes publicar reseñas. Tendrás 24 horas para confirmar tu correo." : "Entra o crea tu cuenta para empezar a descubrir pelis."));
     const google = el("button", "btn btn-google", `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10c.9-2.7 3.3-4.6 6.2-4.6z"/></svg> Continuar con Google`);
@@ -1914,6 +1960,8 @@ function startApp(MOVIES) {
       <label>Contraseña<input class="q-search" id="acc-pass" type="password" minlength="6" autocomplete="${signup ? "new-password" : "current-password"}" placeholder="${signup ? "Mínimo 6 caracteres" : "Tu contraseña"}"></label>
       <p class="account-error" id="acc-error" role="alert"></p>
       <button class="btn btn-solid" type="submit">${signup ? "Crear cuenta" : "Entrar"}</button>`;
+    const terms = signup ? termsCheck() : null;
+    if (terms) form.querySelector("#acc-error").before(terms.label);
     const showError = (msg) => ($("#acc-error").textContent = msg);
     form.onsubmit = async (ev) => {
       ev.preventDefault();
@@ -1923,10 +1971,12 @@ function startApp(MOVIES) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError("Ese correo no es válido.");
       if (!pass) return showError("Escribe la contraseña.");
       if (signup && pass.length < 6) return showError("La contraseña necesita al menos 6 caracteres.");
+      if (signup && !terms.ok) return showError("Para crear la cuenta tienes que aceptar los términos y condiciones.");
       const btn = form.querySelector("button[type=submit]");
       btn.disabled = true;
       showError("");
       try {
+        if (signup && await cloud.accountsFull()) return renderAccount(); // se ha llenado mientras tanto
         if (signup) await cloud.signUp(email, pass);
         else await cloud.signIn(email, pass);
         if (!signup) toast("Has entrado");
@@ -1950,16 +2000,12 @@ function startApp(MOVIES) {
       };
       links.append(forgot);
     }
-    box.append(google, el("p", "account-or", "o con tu correo"), form, links);
+    box.append(google, el("p", "account-or", "o con tu correo"), form, links,
+      el("p", "account-note", signup ? `Si creas la cuenta con Google también aceptas los ${termsLink()}.` : termsLink("Términos y condiciones")));
     if (gated) {
       const guest = el("button", "btn btn-ghost", "Seguir como invitado");
       guest.type = "button";
-      guest.onclick = () => {
-        state.guest = true;
-        persist();
-        location.hash = state.profile ? "#descubrir" : "#para-ti";
-        route();
-      };
+      guest.onclick = startGuest;
       box.append(el("p", "account-or", "o"), guest,
         el("p", "account-note", "Sin cuenta: lo que hagas se guarda solo en este móvil y no podrás escribir reseñas. Puedes crear la cuenta cuando quieras."));
     }

@@ -69,7 +69,7 @@ jobs:
           URL: ${{ steps.ia.outputs.deployment-url }}
       # Cada publicación pide CSS y JS nuevos, para que el navegador no mezcle versiones
       - name: Marcar la versión de los archivos
-        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" index.html accion.html js/app.js
+        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" index.html accion.html terminos.html js/app.js
       - name: No publicar las dependencias del Worker
         run: rm -rf worker/node_modules
       - uses: actions/configure-pages@v5

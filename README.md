@@ -30,6 +30,10 @@ Este producto usa la API de TMDB, pero no está respaldado ni certificado por TM
 
 Al abrir la app, lo primero es entrar o crear la cuenta, con correo y contraseña o con Google. Justo después se elige un nombre de usuario único y una foto. Las cuentas con correo tienen 24 horas para verificarlo: la app muestra la cuenta atrás y `.github/workflows/purge-unverified.yml` borra cada hora las que caducan (necesita el secreto `FIREBASE_SERVICE_ACCOUNT`, la clave JSON de una cuenta de servicio del proyecto). Desde «Mi cuenta» (botón de arriba a la derecha) cambia su nombre y su foto, su contraseña y su correo, y puede borrar la cuenta. Con la cuenta se publican reseñas (de 1 a 5 estrellas y un texto) que ve todo el mundo en la ficha de cada peli.
 
+Límites de las cuentas (explicados en `terminos.html`, que hay que aceptar al crear la cuenta):
+- Como mucho 2.000 cuentas (`MAX_USERS` en `js/cloud.js` y `maxUsers()` en `firestore.rules`). El plan gratis de Firebase da 1 GiB y 20.000 escrituras al día; una cuenta normal ocupa unos 250 KB (perfil con foto, gustos y unas reseñas con copia de la foto) y hace unas 30 escrituras en un día de uso, así que 2.000 cuentas caben con margen aunque una de cada cuatro entre a diario. `meta/stats` lleva la cuenta: las reglas solo dejan terminar un perfil nuevo si suma 1 sin pasar del límite. Con el límite lleno, la app avisa y ofrece el modo invitado.
+- Las cuentas que llevan 3 meses sin usarse se borran con todos sus datos. Lo hace el mismo trabajo de cada hora, que además recuenta las cuentas.
+
 - `js/cloud.js` usa Firebase Authentication y Cloud Firestore (SDK web 13.1.0 desde gstatic). Solo se carga si hay configuración.
 - `js/firebase-config.js` guarda la configuración web del proyecto de Firebase. No es secreta. Si está vacía, la app funciona sin cuentas y cada reseña se queda en el móvil.
 - `firestore.rules` son las reglas de la base de datos: las reseñas las lee cualquiera, pero solo su autor las escribe o borra; cada perfil solo lo ve su dueño.

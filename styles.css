@@ -531,3 +531,8 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .card-why { margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--ticket); }
 .taste-row .chips { margin-top: 6px; }
 .account-note { margin: 0; text-align: center; font-size: 13px; line-height: 1.45; color: var(--muted); }
+
+/* Casilla de aceptar los términos */
+.account-form label.check { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; color: var(--text); line-height: 1.4; cursor: pointer; }
+.check input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--velvet); }
+.check a, .account-note a { color: var(--ticket); font-weight: 700; }

@@ -7,8 +7,12 @@
 //   usernames/{nombre}             { uid }: reserva cada nombre de usuario para que sea único
 //   tastes/{uid}                   datos de la cuenta: gustos (js/taste.js), encuesta, tutorial visto, matches, descartes y listas
 //   movies/{peli}/reviews/{uid}    una reseña por cuenta y peli, con copia del nombre y la foto del autor
+//   meta/stats                     { users }: cuántas cuentas tienen el perfil terminado (para el límite)
 // Las cuentas con correo sin verificar se borran a las 24 h (scripts/purge-unverified.mjs, cada hora en GitHub Actions).
 export const VERIFY_HOURS = 24;
+// Límite de cuentas, calculado para el plan gratis de Firebase (1 GiB y 20.000 escrituras al día).
+// Tiene que coincidir con maxUsers() en firestore.rules. meta/stats lleva la cuenta.
+export const MAX_USERS = 2000;
 // Tras pulsar el enlace de un correo (verificar, cambiar contraseña…), «Abrir Cinder» vuelve aquí
 const BACK = { url: new URL("./#cuenta", location.href).href };
 export const USERNAME_RE = /^(?![.])[a-z0-9_.]{3,20}(?<![.])$/;
@@ -32,6 +36,7 @@ export async function connect(config) {
   const userDoc = (uid) => F.doc(db, "users", uid);
   const nameDoc = (name) => F.doc(db, "usernames", name);
   const tasteDoc = (uid) => F.doc(db, "tastes", uid);
+  const statsDoc = F.doc(db, "meta", "stats");
   const reviewsOf = (movieId) => F.collection(db, "movies", String(movieId), "reviews");
   const toReview = (d) => {
     const r = d.data();
@@ -112,6 +117,11 @@ export async function connect(config) {
     resetPassword: (email) => A.sendPasswordResetEmail(auth, email, BACK),
     signOut: () => A.signOut(auth),
 
+    // ¿Se ha llegado al límite de cuentas? Sin conexión se deja intentar (las reglas lo frenan igual)
+    async accountsFull() {
+      try { return ((await F.getDoc(statsDoc)).data()?.users || 0) >= MAX_USERS; } catch (e) { return false; }
+    },
+
     // ---------- Perfil ----------
     async usernameFree(name) {
       const snap = await F.getDoc(nameDoc(name));
@@ -126,6 +136,12 @@ export async function connect(config) {
       await F.runTransaction(db, async (tx) => {
         const snap = await tx.get(nameDoc(name));
         if (snap.exists() && snap.data().uid !== user.uid) throw Object.assign(new Error("taken"), { code: "username-taken" });
+        // Cuenta nueva: entra en el contador, si queda sitio
+        if (!profile.ready) {
+          const users = (await tx.get(statsDoc)).data()?.users || 0;
+          if (users >= MAX_USERS) throw Object.assign(new Error("full"), { code: "accounts-full" });
+          tx.set(statsDoc, { users: users + 1 });
+        }
         if (!snap.exists()) tx.set(nameDoc(name), { uid: user.uid });
         if (profile.ready && profile.name && profile.name !== name) tx.delete(nameDoc(profile.name));
         tx.set(userDoc(user.uid), { name, photo: pic, reviewed: profile.reviewed || [], ready: true });
@@ -161,12 +177,14 @@ export async function connect(config) {
     // skipReauth: justo después de entrar no hace falta volver a pedir la contraseña.
     async deleteAccount(current, skipReauth = false) {
       if (!skipReauth) await reauth(current);
-      const batch = F.writeBatch(db);
-      reviewDocs().forEach((ref) => batch.delete(ref));
-      if (profile?.ready && profile.name) batch.delete(nameDoc(profile.name));
-      batch.delete(tasteDoc(user.uid));
-      batch.delete(userDoc(user.uid));
-      await batch.commit();
+      await F.runTransaction(db, async (tx) => {
+        const users = profile?.ready ? (await tx.get(statsDoc)).data()?.users || 0 : 0;
+        reviewDocs().forEach((ref) => tx.delete(ref));
+        if (profile?.ready && profile.name) tx.delete(nameDoc(profile.name));
+        tx.delete(tasteDoc(user.uid));
+        tx.delete(userDoc(user.uid));
+        if (users > 0) tx.set(statsDoc, { users: users - 1 }); // deja sitio a otra cuenta
+      });
       await A.deleteUser(user);
     },
 
@@ -220,6 +238,7 @@ export function errorText(e) {
     "auth/popup-blocked": "El navegador ha bloqueado la ventana de Google. Permite las ventanas emergentes y vuelve a probar.",
     "auth/email-change-needs-verification": "Confirma primero tu correo y vuelve a probar.",
     "permission-denied": "No tienes permiso para hacer eso.",
+    "accounts-full": "Ahora mismo no se pueden crear más cuentas. Puedes usar Cinder como invitado.",
     "unavailable": "Sin conexión. Revisa tu internet.",
     "username-taken": "Ese nombre de usuario ya está cogido. Prueba otro.",
     "username-invalid": "Usa de 3 a 20 letras minúsculas, números, puntos o guiones bajos.",
