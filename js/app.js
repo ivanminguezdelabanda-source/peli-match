@@ -1,4 +1,4 @@
-function startApp(MOVIES) {
+function startApp(MOVIES, NEWS) {
   "use strict";
 
   const byId = Object.fromEntries(MOVIES.map((m) => [m.id, m]));
@@ -116,8 +116,9 @@ function startApp(MOVIES) {
     return n;
   };
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmtTime = (min) => (min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min` : `${min} min`);
-  const shortTime = (min) => `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}`;
+  // Los próximos estrenos pueden no tener duración todavía
+  const fmtTime = (min) => (!min ? "Duración por confirmar" : min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min` : `${min} min`);
+  const shortTime = (min) => (!min ? "—" : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}`);
   const trailerUrl = (m) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${m.title} ${m.year} tráiler español`)}`;
   const whereUrl = (m) => m.providersLink || `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(m.title)}`;
   const genresOf = (list) => {
@@ -199,7 +200,7 @@ function startApp(MOVIES) {
     c.append(el("div", "card-info", `
       <p class="card-meta">${m.year} · ${fmtTime(m.runtime)}</p>
       <h2 class="card-title">${esc(m.title)}</h2>
-      <p class="card-desc">${esc(m.desc)}</p>
+      <p class="card-desc">${esc(m.desc || "Sin sinopsis todavía.")}</p>
       <ul class="chips">${m.genres.map((g) => `<li class="chip">${esc(g)}</li>`).join("")}</ul>`));
     if (taste.events >= PERSONAL_FROM) {
       const why = taste.score(m, { explore: 0 }).reasons[0];
@@ -2181,6 +2182,96 @@ function startApp(MOVIES) {
   let searchTimer;
   searchInput.addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderSearch, 120); });
 
+  // ---------- Novedades (data/news.json, se actualiza varias veces al día) ----------
+  const dayText = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  function newsRow(title, ids, withDate) {
+    const list = (ids || []).map((id) => byId[id]).filter(Boolean);
+    if (!list.length) return null;
+    const sec = el("section", "news-section");
+    sec.append(el("h2", "news-section-title", esc(title)));
+    const ul = el("ul", "news-row");
+    list.forEach((m) => {
+      const li = tileFor(m, "news");
+      if (withDate && m.release) li.append(el("p", "news-date", "Estreno " + esc(dayText(m.release))));
+      ul.append(li);
+    });
+    sec.append(ul);
+    return sec;
+  }
+  function renderNews() {
+    const box = $("#news-body");
+    box.replaceChildren(el("h1", "page-title", "Novedades"));
+    if (!NEWS) {
+      box.append(el("p", "empty-text", "Todavía no hay novedades. Vuelve en un rato."));
+      return;
+    }
+    // Destacada: la peli más en tendencia, en grande
+    const f = byId[NEWS.featured];
+    if (f) {
+      const hero = el("div", "news-hero");
+      if (f.backdrop) {
+        const img = new Image();
+        img.alt = "";
+        img.onerror = () => img.remove();
+        img.src = f.backdrop;
+        hero.append(img);
+      }
+      const body = el("div", "news-hero-body", `
+        <p class="result-label">Destacada de la semana</p>
+        <h2 class="news-hero-title">${esc(f.title)}</h2>
+        <p class="tile-meta">${f.year}${f.genres.length ? " · " + esc(f.genres.slice(0, 2).join(", ")) : ""}${f.rating != null ? ` · ${f.rating.toFixed(1)}/10` : ""}</p>
+        ${f.desc ? `<p class="news-hero-desc">${esc(f.desc)}</p>` : ""}`);
+      const actions = el("div", "match-actions");
+      const more = el("button", "btn btn-solid", "Ver ficha");
+      more.type = "button";
+      more.onclick = () => openSheet(f.id, "news");
+      actions.append(more);
+      if (f.trailer) {
+        const tr = el("a", "btn btn-ghost", `${ICON.play} Tráiler`);
+        tr.href = f.trailer;
+        tr.target = "_blank";
+        tr.rel = "noopener";
+        actions.append(tr);
+      }
+      body.append(actions);
+      hero.append(body);
+      box.append(hero);
+    }
+    [newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true), newsRow("Tendencias de la semana", NEWS.trending)]
+      .forEach((sec) => sec && box.append(sec));
+
+    // Noticias de webs de cine: titular, foto y un trozo; se leen en la web original
+    if (NEWS.news?.length) {
+      const sec = el("section", "news-section");
+      sec.append(el("h2", "news-section-title", "Noticias de cine"));
+      const ul = el("ul", "news-list");
+      NEWS.news.forEach((n) => {
+        const li = el("li");
+        const a = el("a", "news-item" + (n.image ? "" : " no-img"));
+        a.href = n.link;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        if (n.image) {
+          const img = new Image();
+          img.alt = "";
+          img.loading = "lazy";
+          img.referrerPolicy = "no-referrer";
+          img.onerror = () => { img.remove(); a.classList.add("no-img"); };
+          img.src = n.image;
+          a.append(img);
+        }
+        a.append(el("div", "", `<span class="news-src">${esc(n.source)}${n.date ? " · " + esc(ago(n.date)) : ""}</span>
+          <h3>${esc(n.title)}</h3>${n.excerpt ? `<p>${esc(n.excerpt)}</p>` : ""}`));
+        li.append(a);
+        ul.append(li);
+      });
+      sec.append(ul);
+      box.append(sec);
+    }
+    const when = NEWS.updatedAt ? new Date(NEWS.updatedAt).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+    box.append(el("p", "news-foot", `${when ? `Actualizado el ${esc(when)}. ` : ""}Películas de TMDB; las noticias son de sus webs y se abren en ellas.`));
+  }
+
   // ---------- Ficha ----------
   const sheet = $("#sheet");
   const backdrop = $("#sheet-backdrop");
@@ -2209,7 +2300,7 @@ function startApp(MOVIES) {
         <div class="fact"><dt>Duración</dt><dd>${fmtTime(m.runtime)}</dd></div>
         <div class="fact"><dt>${m.rating != null ? "Nota" : "Género"}</dt><dd>${m.rating != null ? m.rating.toFixed(1) : esc(m.genres[0])}</dd></div>
       </dl>
-      <p class="sheet-desc">${esc(m.desc)}</p>
+      <p class="sheet-desc">${esc(m.desc || "Todavía no hay sinopsis.")}</p>
       <div>
         <p class="section-label">Dirección</p>
         <p style="margin:0;font-weight:700">${esc(m.director)}</p>
@@ -2372,7 +2463,7 @@ function startApp(MOVIES) {
   }
 
   // ---------- Navegación (#descubrir, #biblioteca, #ruleta) ----------
-  const VIEWS = ["descubrir", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta"];
+  const VIEWS = ["descubrir", "novedades", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta"];
   let lastView = null;
   function route() {
     document.body.classList.remove("booting");
@@ -2413,6 +2504,7 @@ function startApp(MOVIES) {
     else if (view === "ruleta") { if (!spinning) resetSpin(); renderWheel(); }
     else if (view === "buscar") { renderSearch(); searchInput.focus(); }
     else if (view === "cuenta") renderAccount();
+    else if (view === "novedades") renderNews();
     else renderDeck();
   }
 
@@ -2465,12 +2557,13 @@ function startApp(MOVIES) {
 // Si no existe o no hay red, usa la selección local de js/movies.js.
 (async () => {
   let movies = window.MOVIES;
-  try {
-    const res = await fetch("data/movies.json", { cache: "no-cache" });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.movies) && data.movies.length) movies = data.movies;
-    }
-  } catch (e) { /* abierto como archivo o sin red */ }
-  startApp(movies);
+  const load = (url) => fetch(url, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null); // abierto como archivo o sin red
+  const [data, news] = await Promise.all([load("data/movies.json"), load("data/news.json")]);
+  if (data && Array.isArray(data.movies) && data.movies.length) movies = data.movies;
+  // Las pelis de Novedades que aún no están en el catálogo (estrenos recientes o próximos) se añaden
+  if (news && Array.isArray(news.movies)) {
+    const have = new Set(movies.map((m) => m.id));
+    movies = movies.concat(news.movies.filter((m) => m && m.id && !have.has(m.id) && m.title && m.year && Array.isArray(m.genres) && m.genres.length && m.c));
+  }
+  startApp(movies, news && Array.isArray(news.movies) ? news : null);
 })();

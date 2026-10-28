@@ -21,7 +21,6 @@ const FEEDS = [
   { name: "Espinof", url: "https://www.espinof.com/feedburner.xml" },
   { name: "Fotogramas", url: "https://www.fotogramas.es/rss/all.xml/" },
   { name: "SensaCine", url: "https://www.sensacine.com/rss/noticias.xml" },
-  { name: "eCartelera", url: "https://www.ecartelera.com/rss/noticias.xml" },
   { name: "Cinemanía", url: "https://www.20minutos.es/rss/cinemania/" },
 ];
 const MAX_NEWS = 30;
@@ -97,7 +96,7 @@ const decode = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) =>
 const cdata = (s) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
 const tag = (xml, name) => { const m = xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "i")); return m ? cdata(m[1]).trim() : ""; };
 const attr = (xml, name, a) => { const m = xml.match(new RegExp(`<${name}\\s[^>]*${a}=["']([^"']+)["']`, "i")); return m ? decode(m[1]) : ""; };
-const text = (html) => decode(decode(html).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+const text = (html) => decode(decode(html).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").replace(/\s+([,.;:!?)»”])/g, "$1").replace(/([(«“¿¡])\s+/g, "$1").trim();
 const safeUrl = (u) => { try { const x = new URL(u); return x.protocol === "https:" || x.protocol === "http:" ? x.href.replace(/^http:/, "https:") : ""; } catch (e) { return ""; } };
 
 function parseFeed(xml, source) {
