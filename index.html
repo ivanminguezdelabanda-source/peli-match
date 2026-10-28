@@ -180,6 +180,23 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
+<script>
+  // Si algo falla al arrancar, se enseña el error en vez de una pantalla vacía (y se puede mandar una captura)
+  (function () {
+    function show(msg) {
+      if (!document.body.classList.contains("booting") || document.getElementById("boot-error")) return;
+      var box = document.createElement("div");
+      box.id = "boot-error";
+      box.style.cssText = "position:fixed;inset:auto 16px 24px;padding:16px;border-radius:14px;background:#2d2423;color:#f6ece0;font:14px/1.45 system-ui;z-index:99";
+      box.innerHTML = "<b>Cinder no ha podido arrancar.</b><br>Recarga la página. Si sigue igual, manda una captura de esto:<br><code style=\"word-break:break-all;color:#f2d39b\"></code>";
+      box.querySelector("code").textContent = String(msg).slice(0, 300);
+      document.body.appendChild(box);
+    }
+    window.addEventListener("error", function (e) { show((e.message || "error") + " · " + (e.filename || "").split("/").pop() + ":" + (e.lineno || "")); });
+    window.addEventListener("unhandledrejection", function (e) { show(e.reason && (e.reason.stack || e.reason.message) || e.reason); });
+    setTimeout(function () { show("Tarda demasiado en cargar (más de 25 s). ¿Tienes conexión?"); }, 25000);
+  })();
+</script>
 <script src="js/config.js?v=dev"></script>
 <script src="js/firebase-config.js?v=dev"></script>
 <script src="js/movies.js?v=dev"></script>

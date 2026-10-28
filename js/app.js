@@ -2376,6 +2376,7 @@ function startApp(MOVIES) {
   let lastView = null;
   function route() {
     document.body.classList.remove("booting");
+    document.getElementById("boot-error")?.remove();
     gated = needLogin();
     if (gated) {
       document.body.classList.add("onboarding");
@@ -2455,7 +2456,8 @@ function startApp(MOVIES) {
   afterPersist = () => syncTaste();
   // Espera a saber si hay sesión (máximo 6 s, por si Firebase no carga) antes de mostrar nada
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
-    .then(() => accountLoad)
+    // los datos de la cuenta tampoco pueden bloquear el arranque: como mucho 8 s más
+    .then(() => Promise.race([accountLoad, new Promise((r) => setTimeout(r, 8000))]))
     .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); });
 }
 
