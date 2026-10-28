@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cinder · Entrar con Google</title>
+<meta name="theme-color" content="#14100f">
+<meta name="robots" content="noindex">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Figtree:wght@400;500;700;800&display=swap">
+<link rel="stylesheet" href="styles.css?v=dev">
+<style>
+  /* Página que abre la app de Android en el navegador para entrar con Google:
+     Google no deja iniciar sesión dentro de las apps, así que se entra aquí y se vuelve a la app con el token */
+  .app-login { min-height: 100vh; min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px 16px; text-align: center; }
+  .app-login svg { width: 64px; height: 64px; }
+  .app-login p { margin: 0; color: var(--text); max-width: 340px; line-height: 1.5; }
+  .app-login .gsi-button { min-height: 44px; display: flex; justify-content: center; }
+  .app-login .btn-solid { color: var(--ink); text-decoration: none; }
+</style>
+</head>
+<body>
+<main class="app-login">
+  <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="10" width="28" height="40" rx="5" fill="none" stroke="#f2d39b" stroke-width="3" transform="rotate(-12 28 30)"/><rect x="22" y="14" width="28" height="40" rx="5" fill="#e0414b" transform="rotate(10 36 34)"/><path fill="#14100f" d="M32 27v14l11-7z" transform="rotate(10 36 34)"/></svg>
+  <h1 class="page-title" id="title">Entra con Google</h1>
+  <p id="text">Elige tu cuenta de Google y volverás a la app de Cinder.</p>
+  <div class="gsi-button" id="gsi"></div>
+  <a class="btn btn-solid" id="back" hidden>Volver a Cinder</a>
+</main>
+<script src="js/firebase-config.js?v=dev"></script>
+<script>
+  (function () {
+    "use strict";
+    var BACK = "io.github.ivanminguez.cinder://auth";
+    var back = document.getElementById("back");
+    function done(token) {
+      document.getElementById("title").textContent = "¡Listo!";
+      document.getElementById("text").textContent = "Vuelve a la app para terminar de entrar.";
+      document.getElementById("gsi").hidden = true;
+      back.href = BACK + "?c=" + encodeURIComponent(token);
+      back.hidden = false;
+      location.href = back.href; // si el navegador no abre la app solo, queda el botón
+    }
+    function fail(msg) {
+      document.getElementById("text").textContent = msg;
+      back.href = BACK + "?error=1";
+      back.hidden = false;
+    }
+    var s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.onload = function () {
+      google.accounts.id.initialize({
+        client_id: window.CINDER_GOOGLE_CLIENT_ID,
+        ux_mode: "popup",
+        auto_select: false,
+        callback: function (r) { r && r.credential ? done(r.credential) : fail("No se pudo entrar. Inténtalo otra vez."); },
+      });
+      google.accounts.id.renderButton(document.getElementById("gsi"), {
+        type: "standard", theme: "filled_black", size: "large", shape: "pill", text: "continue_with", locale: "es", width: 300,
+      });
+    };
+    s.onerror = function () { fail("No se puede conectar con Google. Revisa tu conexión."); };
+    document.head.appendChild(s);
+  })();
+</script>
+</body>
+</html>

@@ -82,10 +82,14 @@ export async function connect(config) {
     markReady();
   });
 
+  let googleToken = null; // función que consigue un token de Google (solo en la app de Android)
   // Algunas acciones (contraseña, correo, borrar) piden haber entrado hace poco
   async function reauth(password) {
     if (user.providerData.some((p) => p.providerId === "password") && password != null) {
       await A.reauthenticateWithCredential(user, A.EmailAuthProvider.credential(user.email, password));
+    } else if (googleToken) {
+      // App de Android: Google no deja abrir su ventana dentro de la app; el token llega desde el navegador
+      await A.reauthenticateWithCredential(user, A.GoogleAuthProvider.credential(await googleToken()));
     } else {
       await A.reauthenticateWithPopup(user, new A.GoogleAuthProvider());
     }
@@ -108,6 +112,7 @@ export async function connect(config) {
       return A.signInWithPopup(auth, provider);
     },
     // Con el botón oficial de Google: llega un token de Google y se entra con él, sin ventanas de Firebase
+    setGoogleTokenSource(fn) { googleToken = fn; },
     signInGoogleToken: (idToken) => A.signInWithCredential(auth, A.GoogleAuthProvider.credential(idToken)),
     resetPassword: (email) => A.sendPasswordResetEmail(auth, email, BACK),
     signOut: () => A.signOut(auth),

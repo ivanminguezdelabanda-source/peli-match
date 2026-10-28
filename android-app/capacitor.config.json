@@ -1,0 +1,17 @@
+{
+  "appId": "io.github.ivanminguez.cinder",
+  "appName": "Cinder",
+  "webDir": "www",
+  "server": {
+    "url": "https://ivanminguezdelabanda-source.github.io/peli-match/",
+    "errorPath": "index.html",
+    "allowNavigation": ["ivanminguezdelabanda-source.github.io"]
+  },
+  "android": {
+    "backgroundColor": "#14100f",
+    "appendUserAgent": "CinderApp"
+  },
+  "plugins": {
+    "StatusBar": { "backgroundColor": "#14100f", "style": "DARK", "overlaysWebView": false }
+  }
+}

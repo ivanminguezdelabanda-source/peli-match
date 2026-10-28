@@ -1384,6 +1384,7 @@ function startApp(MOVIES, NEWS) {
           if (c.user) await c.signOut().catch((e) => console.warn("No se pudo cerrar la sesión:", e));
         }
         cloud = c;
+        if (NATIVE) c.setGoogleTokenSource?.(nativeGoogleToken);
         c.onUser(onUserChange);
         onUserChange(c.user);
       })
@@ -1517,6 +1518,9 @@ function startApp(MOVIES, NEWS) {
     route();
   }
   const TERMS = "terminos.html";
+  // Enlace a la APK de Android (la publica el workflow android.yml en las releases de GitHub); no sale dentro de la app
+  const APK_URL = "https://github.com/ivanminguezdelabanda-source/peli-match/releases/latest/download/cinder.apk";
+  const appLink = () => (NATIVE ? "" : el("p", "account-note", `<a href="${APK_URL}">📱 Descarga Cinder para Android</a>`));
   const termsLink = (text = "Términos y condiciones") => `<a href="${TERMS}" target="_blank" rel="noopener">${text}</a>`;
   // Casilla de aceptar los términos (al crear la cuenta)
   function termsCheck() {
@@ -1533,6 +1537,48 @@ function startApp(MOVIES, NEWS) {
     guest.onclick = async () => { guest.disabled = true; await onGuest(); };
     box.append(guest, el("p", "account-note", `Más información en los ${termsLink()}.`));
   }
+  // ---------- App de Android (Capacitor): abre esta misma web dentro de la app ----------
+  // Google no deja entrar con su ventana dentro de una app: se abre login-app.html en el navegador,
+  // se entra con Google allí y el navegador vuelve a la app con el token (io.github.ivanminguez.cinder://auth?c=…)
+  const NATIVE = Boolean(window.Capacitor?.isNativePlatform?.());
+  const plugin = (name) => window.Capacitor?.Plugins?.[name];
+  let tokenWait = null;
+  function nativeGoogleToken() {
+    tokenWait?.fail({ code: "auth/cancelled-popup-request" });
+    return new Promise((ok, fail) => {
+      tokenWait = { ok, fail };
+      plugin("Browser").open({ url: new URL("login-app.html", location.href).href }).catch(fail);
+    });
+  }
+  if (NATIVE) {
+    plugin("App")?.addListener("appUrlOpen", ({ url }) => {
+      // (sin new URL: los WebView antiguos no leen bien el host de los esquemas propios)
+      if (!String(url).startsWith("io.github.ivanminguez.cinder://auth")) return;
+      plugin("Browser")?.close().catch(() => {});
+      const token = new URLSearchParams(String(url).split("?")[1] || "").get("c");
+      const wait = tokenWait;
+      tokenWait = null;
+      if (wait) token ? wait.ok(token) : wait.fail({ code: "auth/popup-closed-by-user" });
+      else if (token && cloud) cloud.signInGoogleToken(token).catch((e) => toast(cloudError(e)));
+    });
+    // Si se cierra el navegador sin entrar
+    plugin("Browser")?.addListener("browserFinished", () => setTimeout(() => {
+      if (tokenWait) { tokenWait.fail({ code: "auth/popup-closed-by-user" }); tokenWait = null; }
+    }, 1500));
+    // Los enlaces a otras webs (tráiler, dónde verla, noticias) se abren en el navegador; los de Cinder, aquí mismo
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest?.("a[href]");
+      if (!a) return;
+      const url = new URL(a.getAttribute("href"), location.href);
+      if (!/^https?:$/.test(url.protocol)) return;
+      const same = url.origin === location.origin;
+      if (same && a.target !== "_blank") return;
+      e.preventDefault();
+      if (same) location.href = url.href;
+      else plugin("Browser").open({ url: url.href });
+    }, true);
+  }
+
   // ---------- Botón oficial «Continuar con Google» (Google Identity Services) ----------
   const GOOGLE_CLIENT_ID = String(window.CINDER_GOOGLE_CLIENT_ID || "").trim();
   let gsiReady = null;
@@ -1855,7 +1901,7 @@ function startApp(MOVIES, NEWS) {
       const enter = el("button", "btn btn-ghost", "Ya tengo cuenta: entrar");
       enter.type = "button";
       enter.onclick = () => leaveGuest("entrar");
-      box.append(create, enter, tasteSection(), el("p", "account-note", termsLink()));
+      box.append(create, enter, tasteSection(), el("p", "account-note", termsLink()), appLink());
       return;
     }
     if (u && !u.ready) {
@@ -1991,7 +2037,7 @@ function startApp(MOVIES, NEWS) {
           toast("Tu cuenta se ha borrado");
         },
       }));
-      box.append(del, el("p", "account-note", termsLink()));
+      box.append(del, el("p", "account-note", termsLink()), appLink());
       return;
     }
 
@@ -2009,12 +2055,15 @@ function startApp(MOVIES, NEWS) {
     const google = el("button", "btn btn-google", `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10c.9-2.7 3.3-4.6 6.2-4.6z"/></svg> Continuar con Google`);
     google.type = "button";
     google.onclick = async () => {
-      try { await cloud.signInGoogle(); } catch (e) { toast(cloudError(e)); }
+      try {
+        if (NATIVE) await cloud.signInGoogleToken(await nativeGoogleToken());
+        else await cloud.signInGoogle();
+      } catch (e) { toast(cloudError(e)); }
     };
     // Con el ID de cliente de Google se usa el botón oficial de Google: su ventana es de accounts.google.com
     // y no pasa por firebaseapp.com, que en Safari y algunos móviles abre pestañas o redirige mal.
     let googleBox = google;
-    if (GOOGLE_CLIENT_ID) {
+    if (GOOGLE_CLIENT_ID && !NATIVE) {
       googleBox = el("div", "gsi-box");
       googleBox.append(google); // mientras carga el botón oficial (o si no carga), el de siempre
       googleButton(googleBox).then((ok) => { if (ok) google.remove(); });
@@ -2067,7 +2116,7 @@ function startApp(MOVIES, NEWS) {
       links.append(forgot);
     }
     box.append(googleBox, el("p", "account-or", "o con tu correo"), form, links,
-      el("p", "account-note", signup ? `Si creas la cuenta con Google también aceptas los ${termsLink()}.` : termsLink("Términos y condiciones")));
+      el("p", "account-note", signup ? `Si creas la cuenta con Google también aceptas los ${termsLink()}.` : termsLink("Términos y condiciones")), appLink());
     if (gated) {
       const guest = el("button", "btn btn-ghost", "Seguir como invitado");
       guest.type = "button";
