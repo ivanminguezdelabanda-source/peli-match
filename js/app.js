@@ -704,9 +704,9 @@ function startApp(MOVIES) {
     "Clásicos (antes de 1990)": [0, 1989],
   };
   const STEPS = [
-    { key: "company", q: "¿Con quién la vas a ver?", type: "single", options: ["Solo", "En pareja", "Con amigos", "En familia"] },
-    { key: "moods", q: "¿Qué te apetece sentir?", hint: "Elige una o varias.", type: "multi", options: Object.keys(MOOD_GENRES) },
-    { key: "genres", q: "¿Tus géneros favoritos?", hint: "Elige los que más te gusten.", type: "multi", options: ALL_GENRES },
+    { key: "company", q: "¿Con quién la vas a ver?", type: "single", options: ["Solo", "En pareja", "Con amigos", "En familia"], required: true },
+    { key: "moods", q: "¿Qué te apetece sentir?", hint: "Elige una o varias.", type: "multi", options: Object.keys(MOOD_GENRES), required: true },
+    { key: "genres", q: "¿Tus géneros favoritos?", hint: "Elige los que más te gusten.", type: "multi", options: ALL_GENRES, required: true },
     { key: "favs", q: "Dime hasta 3 pelis que te encanten", hint: "Busco otras parecidas: mismo director, reparto, géneros y época.", type: "search" },
     { key: "note", q: "¿Algo más que deba saber?", hint: "Opcional. Escríbelo con tus palabras: «algo que me deje pensando», «nada de finales tristes», «como Amélie pero más moderna»…", type: "text", aiOnly: true },
     { key: "time", q: "¿Cuánto tiempo tienes?", type: "single", options: TIMES.map((t) => t.label) },
@@ -1025,6 +1025,7 @@ function startApp(MOVIES) {
     const nav = el("div", "q-nav");
     const back = el("button", "btn btn-ghost", stepIdx === 0 ? "Cancelar" : "Atrás");
     back.type = "button";
+    back.hidden = stepIdx === 0 && !state.profile; // la primera encuesta es obligatoria
     back.onclick = () => {
       if (stepIdx === 0) draft = null; else stepIdx--;
       renderMatch();
@@ -1046,7 +1047,9 @@ function startApp(MOVIES) {
     const v = draft[step.key];
     const empty = Array.isArray(v) ? v.length === 0 : !String(v || "").trim();
     const last = stepIdx === STEPS.length - 1;
-    b.textContent = last ? "Ver mi match" : empty ? "Saltar" : "Siguiente";
+    const blocked = step.required && empty;
+    b.disabled = blocked;
+    b.textContent = blocked ? (step.type === "single" ? "Elige una opción" : "Elige al menos una") : last ? "Ver mi match" : empty ? "Saltar" : "Siguiente";
   }
 
   function next() {
@@ -1058,6 +1061,7 @@ function startApp(MOVIES) {
     firstRun = false;
     persist();
     results = null;
+    document.body.classList.remove("onboarding");
     renderMatch();
     if (wasFirst) setTimeout(startTour, 500);
   }
@@ -1447,6 +1451,13 @@ function startApp(MOVIES) {
   const VIEWS = ["descubrir", "biblioteca", "para-ti", "ruleta", "buscar"];
   let lastView = null;
   function route() {
+    // Sin encuesta hecha no se entra al resto de la app
+    const locked = !state.profile;
+    document.body.classList.toggle("onboarding", locked);
+    if (locked && location.hash !== "#para-ti") {
+      history.replaceState(null, "", "#para-ti");
+    }
+    if (locked && !draft) startSurvey(true);
     const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "descubrir";
     // Al volver a Descubrir, ofrece empezar de cero con la biblioteca
     if (view === "descubrir" && lastView !== "descubrir" && state.library.length) {

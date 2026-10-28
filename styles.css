@@ -452,3 +452,8 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .reel-actions .reel-open { align-self: auto; }
 #reel-sound { width: 46px; height: 46px; border: 0; cursor: pointer; }
 #reel-sound[aria-pressed="false"] { color: var(--muted); }
+
+/* Primera encuesta obligatoria: sin pestañas ni buscador hasta acabarla */
+.onboarding .tabbar, .onboarding .topbar .icon-btn { display: none; }
+.q-nav .btn:disabled { opacity: .45; cursor: not-allowed; }
+.q-nav .btn[hidden] { display: none; }
