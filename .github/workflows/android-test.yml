@@ -60,7 +60,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           working-directory: android-app
-          script: node test/emulator.mjs ${{ matrix.name }} ${{ matrix.font }} || true
+          script: timeout 900 node test/emulator.mjs ${{ matrix.name }} ${{ matrix.font }} || true
       - name: Resumen
         if: always()
         run: |

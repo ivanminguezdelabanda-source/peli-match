@@ -189,13 +189,20 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>
+  // Navegadores y WebView de Android antiguos (Chrome < 86, Safari < 14) no tienen replaceChildren
+  if (!Element.prototype.replaceChildren) {
+    Element.prototype.replaceChildren = function () {
+      while (this.firstChild) this.removeChild(this.firstChild);
+      this.append.apply(this, arguments);
+    };
+  }
   // Si algo falla al arrancar, se enseña el error en vez de una pantalla vacía (y se puede mandar una captura)
   (function () {
     function show(msg) {
       if (!document.body.classList.contains("booting") || document.getElementById("boot-error")) return;
       var box = document.createElement("div");
       box.id = "boot-error";
-      box.style.cssText = "position:fixed;inset:auto 16px 24px;padding:16px;border-radius:14px;background:#2d2423;color:#f6ece0;font:14px/1.45 system-ui;z-index:99";
+      box.style.cssText = "position:fixed;left:16px;right:16px;bottom:24px;padding:16px;border-radius:14px;background:#2d2423;color:#f6ece0;font:14px/1.45 system-ui;z-index:99";
       box.innerHTML = "<b>Cinder no ha podido arrancar.</b><br>Recarga la página. Si sigue igual, manda una captura de esto:<br><code style=\"word-break:break-all;color:#f2d39b\"></code>";
       box.querySelector("code").textContent = String(msg).slice(0, 300);
       document.body.appendChild(box);

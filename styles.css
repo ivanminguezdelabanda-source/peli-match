@@ -24,7 +24,7 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { height: 100%; }
+html, body { height: 100%; margin: 0; }
 body {
   background: var(--ink);
   color: var(--text);
@@ -35,7 +35,7 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 body::before {
-  content: ""; position: fixed; inset: 0 0 auto;
+  content: ""; position: fixed; top: 0; left: 0; right: 0;
   height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ink);
 }
 a { color: inherit; }
@@ -142,7 +142,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .card .poster-year { display: none; }
 .tile-name { overflow-wrap: anywhere; }
 .card-info {
-  position: absolute; inset: auto 0 0 0; padding: 60px 18px 18px;
+  position: absolute; top: auto; right: 0; bottom: 0; left: 0; padding: 60px 18px 18px;
   background: linear-gradient(to top, rgba(12,9,8,.96) 30%, rgba(12,9,8,.6) 70%, transparent);
   display: flex; flex-direction: column; gap: 7px;
 }

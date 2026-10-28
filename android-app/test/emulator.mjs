@@ -11,7 +11,7 @@ const OUT = `results/${NAME}`;
 const PKG = "io.github.ivanminguez.cinder";
 mkdirSync(OUT, { recursive: true });
 
-const adb = (...args) => execFileSync("adb", args, { encoding: "utf8" }).trim();
+const adb = (...args) => execFileSync("adb", args, { encoding: "utf8", timeout: 30000 }).trim();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const report = { name: NAME, fontScale: FONT, steps: [], errors: [], console: [] };
 let shot = 0;
@@ -48,6 +48,7 @@ async function snap(label) {
 }
 function step(label, data = {}) {
   report.steps.push({ label, ...data });
+  writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 2)); // se guarda a cada paso por si algo se cuelga
   console.log(label, JSON.stringify(data));
 }
 
@@ -59,6 +60,11 @@ async function main() {
   const density = adb("shell", "wm", "density");
   step("device", { size, density, sdk: adb("shell", "getprop", "ro.build.version.sdk") });
 
+  // esperar a que el emulador tenga internet
+  for (let i = 0; i < 30; i++) {
+    try { if (adb("shell", "ping", "-c", "1", "-W", "2", "8.8.8.8").includes("1 received")) break; } catch (e) { /* aún no */ }
+    await sleep(2000);
+  }
   adb("install", "-r", "app-debug.apk");
   adb("shell", "pm", "clear", PKG);
   adb("shell", "am", "start", "-W", "-n", `${PKG}/.MainActivity`);
@@ -212,10 +218,10 @@ async function rect(page, sel) {
   if (!r) return null;
   if (webTop === null) {
     // dónde está el WebView en la pantalla (bounds del árbol de vistas de Android)
-    adb("shell", "uiautomator", "dump", "/sdcard/ui.xml");
-    const xml = adb("shell", "cat", "/sdcard/ui.xml");
+    let xml = "";
+    try { adb("shell", "uiautomator", "dump", "/sdcard/ui.xml"); xml = adb("shell", "cat", "/sdcard/ui.xml"); } catch (e) { report.errors.push("uiautomator: " + e.message.slice(0, 100)); }
     const m = xml.match(/class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
-    webTop = m ? Number(m[2]) : 0;
+    webTop = m ? Number(m[2]) : Math.round(24 * r.dpr); // si no, la altura normal de la barra de estado
     report.layout = { webview: m ? m.slice(1, 5).map(Number) : null, screen: adb("shell", "wm", "size"), cssH: r.vh, dpr: r.dpr };
   }
   return { cx: r.cx * r.dpr, cy: webTop + r.cy * r.dpr };
