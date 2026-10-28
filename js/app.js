@@ -489,7 +489,8 @@ function startApp(MOVIES, NEWS) {
     $("#tab-matches").setAttribute("aria-selected", String(!onLists));
     $("#tab-lists").setAttribute("aria-selected", String(onLists));
     $("#n-matches").textContent = state.library.length;
-    $("#n-lists").textContent = state.lists.length;
+    // como en «Matches», el número es de pelis (sin repetir las que están en varias listas), no de listas
+    $("#n-lists").textContent = new Set(state.lists.flatMap((l) => l.ids)).size;
     $("#lib-matches").hidden = onLists;
     $("#lib-custom").hidden = !onLists;
     if (onLists) return renderCustom();
@@ -2317,8 +2318,20 @@ function startApp(MOVIES, NEWS) {
     const list = (ids || []).map((id) => byId[id]).filter(Boolean);
     if (!list.length) return null;
     const sec = el("section", "news-section");
-    sec.append(el("h2", "news-section-title", esc(title)));
+    const head = el("div", "news-section-head");
+    head.append(el("h2", "news-section-title", esc(title)));
     const ul = el("ul", "news-row");
+    // En el ordenador, flechas para pasar la fila (con ratón no se desliza de lado)
+    const arrows = el("div", "row-arrows");
+    [["‹", -1, "Anteriores"], ["›", 1, "Siguientes"]].forEach(([txt, dir, label]) => {
+      const b = el("button", "row-arrow", txt);
+      b.type = "button";
+      b.setAttribute("aria-label", `${label}: ${title}`);
+      b.onclick = () => ul.scrollBy({ left: dir * Math.max(200, ul.clientWidth * 0.8), behavior: "smooth" });
+      arrows.append(b);
+    });
+    head.append(arrows);
+    sec.append(head);
     list.forEach((m) => {
       const li = tileFor(m, "news");
       if (withDate && m.release) li.append(el("p", "news-date", "Estreno " + esc(dayText(m.release))));

@@ -597,3 +597,119 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* Botón oficial de Google: centrado y del ancho del formulario */
 .gsi-box { display: grid; justify-items: center; min-height: 44px; }
 .gsi-button { display: flex; justify-content: center; width: 100%; color-scheme: light; }
+
+/* ---------- Ordenador y tablet ---------- */
+/* Por defecto (móvil) no se ven: flechas de las filas de Novedades y atajos de teclado */
+.news-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.row-arrows, .kbd-hint { display: none; }
+
+/* Tablet: un poco más de aire */
+@media (min-width: 700px) and (max-width: 1023px) {
+  .app { max-width: 760px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .news-row .tile { width: 140px; }
+  .news-list { grid-template-columns: 1fr 1fr; }
+  .sheet { max-width: 720px; }
+}
+
+/* Ordenador: menú lateral a la izquierda, contenido a lo ancho y la ficha como ventana centrada */
+@media (min-width: 1024px) {
+  .app {
+    max-width: 1440px; padding: 0 40px;
+    display: grid; grid-template-columns: 228px minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: "top top" "nav banner" "nav main"; column-gap: 48px;
+  }
+  .topbar { grid-area: top; padding-block: 22px 18px; }
+  .brand-mark { width: 38px; height: 38px; }
+  .brand-name { font-size: 30px; }
+  .verify-banner { grid-area: banner; }
+  main { grid-area: main; min-height: 0; }
+  .onboarding .app { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "banner" "main"; }
+
+  /* Menú lateral */
+  .tabbar {
+    grid-area: nav; align-self: start; display: flex; flex-direction: column; gap: 4px;
+    padding: 4px 0 0; border-top: 0;
+  }
+  .tab { flex-direction: row; justify-content: flex-start; gap: 14px; padding: 12px 16px; font-size: 15px; border-radius: 14px; transition: background .15s, color .15s; }
+  .tab svg { font-size: 22px; flex: none; }
+  .tab:hover { background: var(--panel); color: var(--text); }
+  .tab.active { background: var(--panel); box-shadow: 0 0 0 1px var(--line) inset; }
+  .count { position: static; margin-left: auto; }
+
+  /* Listas a lo ancho, con barra de scroll fina */
+  .view-list, .view-wheel, .view-match { padding: 4px 16px 40px 0; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 26px 20px; }
+  .moods, .filters { flex-wrap: wrap; overflow: visible; }
+  .filter:hover { color: var(--text); box-shadow: 0 0 0 1px var(--muted) inset; }
+  .filter[aria-pressed="true"]:hover { color: var(--ink); }
+  .page-title { font-size: 44px; }
+
+  /* Descubrir: carta centrada, más grande, con los atajos de teclado debajo */
+  .view-discover { padding-bottom: 20px; gap: 16px; }
+  .view-discover .moods { justify-content: center; }
+  .deck { max-width: min(100%, calc((100vh - 270px) * 2 / 3)); max-width: min(100%, calc((100dvh - 270px) * 2 / 3)); }
+  .card-title { font-size: 26px; }
+  .card-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
+  .ctl { transition: transform .15s; }
+  .ctl:hover:not(:disabled) { transform: translateY(-2px); }
+  .kbd-hint { display: block; margin: 0; text-align: center; color: var(--muted); font-size: 12.5px; }
+  .kbd-hint kbd { font-family: var(--f-mono); font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--panel); box-shadow: 0 0 0 1px var(--line) inset; color: var(--text); }
+
+  /* Novedades: portada grande con la imagen de fondo, filas con flechas y noticias en columnas */
+  .news-body { gap: 32px; }
+  .news-hero { min-height: 440px; border-radius: 26px; }
+  .news-hero::after { background: linear-gradient(90deg, var(--ink) 0%, rgba(20,16,15,.85) 35%, rgba(20,16,15,.1) 75%), linear-gradient(0deg, var(--ink) 0%, rgba(20,16,15,0) 40%); }
+  .news-hero-body { max-width: 560px; padding: 36px; gap: 12px; }
+  .news-hero-title { font-size: 64px; }
+  .news-hero-desc { font-size: 16px; -webkit-line-clamp: 4; }
+  .news-hero .btn { flex: 0 1 auto; min-width: 160px; }
+  .news-section-title { font-size: 22px; margin: 0; }
+  .news-section-head { margin-bottom: 14px; }
+  .row-arrows { display: flex; gap: 8px; }
+  .row-arrow { width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer; font-size: 24px; line-height: 1; padding-bottom: 3px;
+    background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--line) inset; }
+  .row-arrow:hover { background: var(--panel-2); }
+  .news-row { gap: 18px; scroll-snap-type: none; }
+  .news-row .tile { width: 168px; }
+  .news-list { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; }
+  .news-item { grid-template-columns: 120px 1fr; transition: background .15s; }
+  .news-item img { width: 120px; height: 120px; }
+  .news-item:hover { background: var(--panel-2); }
+  .news-item h3 { font-size: 16.5px; }
+
+  /* Biblioteca */
+  .lib-tabs { max-width: 440px; }
+  .list-cards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+  /* Para ti y cuenta: columna cómoda de leer */
+  .match-body { max-width: 760px; }
+  .account-body { max-width: 460px; }
+  .onboarding .account-body { margin: 4vh auto 0; }
+
+  /* Caja: carátulas más grandes y filtros a lo ancho */
+  .reel-wrap { margin: 6px 0 0; border-radius: 22px; padding: 22px 0; }
+  .reel-item { width: 150px; }
+  .wheel-result { max-width: 760px; }
+
+  /* Buscar */
+  #search-input { max-width: 560px; }
+
+  /* Ficha: ventana centrada en vez de hoja que sube */
+  .sheet {
+    top: 5vh; bottom: auto; max-width: 860px; max-height: 90vh; border-radius: 24px;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,.9), 0 0 0 1px var(--line);
+    animation: pop .22s cubic-bezier(.2,.8,.2,1);
+  }
+  .sheet-top { grid-template-columns: 180px minmax(0, 1fr); gap: 24px; padding: 28px 32px 0; }
+  .sheet-title { font-size: 34px; }
+  .sheet-content { padding-left: 32px; padding-right: 32px; padding-bottom: 28px; }
+  .sheet-close:hover { background: var(--panel-2); }
+}
+@keyframes pop { from { transform: translateY(12px) scale(.98); opacity: 0; } }
+
+/* Pantallas muy anchas: más columnas sin estirar la carta */
+@media (min-width: 1600px) {
+  .app { max-width: 1600px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+}
