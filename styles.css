@@ -469,3 +469,42 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .star-btn { border: 0; background: none; color: var(--ticket); font-size: 30px; line-height: 1; padding: 4px; min-width: 44px; min-height: 44px; cursor: pointer; }
 .star-btn:focus-visible { outline: 2px solid var(--ticket); border-radius: 10px; }
 .review-form .btn:disabled { opacity: .5; }
+
+/* Cuenta */
+.top-actions { display: flex; gap: 8px; }
+.account-btn .avatar { display: none; }
+.account-btn.signed svg { display: none; }
+.account-btn.signed .avatar { display: grid; }
+.avatar { place-items: center; width: 100%; height: 100%; border-radius: 50%; background: var(--velvet); color: #fff; font-weight: 800; font-size: 16px; }
+.avatar.big { display: grid; width: 56px; height: 56px; font-size: 24px; flex: none; }
+.account-body { display: grid; gap: 14px; max-width: 420px; padding-bottom: 24px; }
+.account-card { display: flex; align-items: center; gap: 14px; background: var(--panel); border-radius: 18px; padding: 16px; }
+.account-name { margin: 0; font-weight: 800; font-size: 18px; }
+.account-mail { margin: 2px 0 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.account-form { display: grid; gap: 12px; }
+.account-form label { display: grid; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--muted); }
+.account-error { margin: 0; min-height: 1.2em; color: #ff8a8a; font-size: 14px; }
+.account-error:empty { display: none; }
+.account-or { margin: 0; text-align: center; color: var(--muted); font-size: 13px; }
+.account-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.btn-google { background: #fff; color: #1f1f1f; gap: 10px; }
+.btn-google svg { width: 20px; height: 20px; }
+.reviews > .btn { width: 100%; margin-top: 4px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.avatar { overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar.small { display: grid; width: 28px; height: 28px; font-size: 13px; flex: none; }
+.review-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.photo-pick { position: relative; cursor: pointer; flex: none; border-radius: 50%; }
+.photo-pick:focus-within { outline: 2px solid var(--ticket); outline-offset: 3px; }
+.photo-edit { position: absolute; right: -4px; bottom: -4px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--ticket); color: var(--ink); }
+.photo-edit svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.account-section { background: var(--panel); border-radius: 18px; padding: 4px 16px; }
+.account-section[open] { padding-bottom: 16px; }
+.account-section summary { cursor: pointer; font-weight: 800; padding: 12px 0; list-style-position: inside; }
+.account-section > * + * { margin-top: 10px; }
+.account-sub { margin: 16px 0 0; font-weight: 800; font-size: 14px; }
+.account-warn { background: color-mix(in srgb, var(--ticket) 14%, transparent); border-radius: 14px; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.account-warn p { margin: 0; flex-basis: 100%; }
+.danger-zone summary { color: #ff8a8a; }

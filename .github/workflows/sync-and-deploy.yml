@@ -41,34 +41,15 @@ jobs:
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           git add data/movies.json
           git diff --cached --quiet || (git commit -m "Actualizar catálogo de TMDB [datos]" && git push)
-      # Servidor de Cinder (IA de «Para ti» y reseñas) en Cloudflare: solo si están CLOUDFLARE_API_TOKEN y CLOUDFLARE_ACCOUNT_ID.
-      # La IA además necesita ANTHROPIC_API_KEY; sin ella, el servidor publica solo las reseñas.
-      - name: Comprobar si el servidor está configurado
+      # IA de «Para ti»: solo si están los secretos ANTHROPIC_API_KEY, CLOUDFLARE_API_TOKEN y CLOUDFLARE_ACCOUNT_ID
+      - name: Comprobar si la IA está configurada
         id: hasia
-        run: echo "on=${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}" >> "$GITHUB_OUTPUT"
-      - name: Instalar el servidor
+        run: echo "on=${{ secrets.ANTHROPIC_API_KEY != '' && secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}" >> "$GITHUB_OUTPUT"
+      - name: Instalar el Worker de la IA
         if: steps.hasia.outputs.on == 'true'
         working-directory: worker
         run: npm ci --no-audit --no-fund
-      - name: Preparar el almacén de reseñas
-        id: kv
-        if: steps.hasia.outputs.on == 'true'
-        continue-on-error: true
-        working-directory: worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          find_id() { npx wrangler kv namespace list 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const n=JSON.parse(d.slice(d.indexOf("["))).find(x=>/cinder-reviews$/.test(x.title));process.stdout.write(n?n.id:"")}catch(e){}})'; }
-          id=$(find_id)
-          if [ -z "$id" ]; then npx wrangler kv namespace create cinder-reviews; id=$(find_id); fi
-          test -n "$id"
-          sed -i "s/REVIEWS_KV_ID/$id/" wrangler.toml
-      - name: Sin almacén, publicar el servidor sin reseñas
-        if: steps.hasia.outputs.on == 'true' && steps.kv.outcome != 'success'
-        working-directory: worker
-        run: python3 -c "import re;p='wrangler.toml';s=open(p).read();open(p,'w').write(re.sub(r'\n\[\[kv_namespaces\]\][\s\S]*$','\n',s))"
-      - name: Publicar el servidor en Cloudflare
+      - name: Publicar el Worker de la IA en Cloudflare
         id: ia
         if: steps.hasia.outputs.on == 'true'
         continue-on-error: true # si falla, la web se publica igual con el recomendador local
@@ -77,16 +58,10 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
-      - name: Guardar la clave de Anthropic en el servidor
-        if: steps.ia.outcome == 'success'
-        continue-on-error: true
-        working-directory: worker
+          secrets: |
+            ANTHROPIC_API_KEY
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          if [ -n "$ANTHROPIC_API_KEY" ]; then printf '%s' "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY; else echo "Sin ANTHROPIC_API_KEY: el servidor funciona solo con reseñas"; fi
       - name: Conectar la app con la IA
         if: steps.ia.outcome == 'success' && steps.ia.outputs.deployment-url != ''
         run: printf 'window.PELIMATCH_AI_URL = "%s";\n' "$URL" > js/config.js && cat js/config.js
@@ -94,7 +69,7 @@ jobs:
           URL: ${{ steps.ia.outputs.deployment-url }}
       # Cada publicación pide CSS y JS nuevos, para que el navegador no mezcle versiones
       - name: Marcar la versión de los archivos
-        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" index.html
+        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" index.html js/app.js
       - name: No publicar las dependencias del Worker
         run: rm -rf worker/node_modules
       - uses: actions/configure-pages@v5

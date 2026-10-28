@@ -6,8 +6,3 @@ workers_dev = true
 
 [vars]
 ALLOWED_ORIGINS = "https://ivanminguezdelabanda-source.github.io"
-
-# Reseñas públicas. El despliegue automático crea el espacio «cinder-reviews» si no existe y pone aquí su id.
-[[kv_namespaces]]
-binding = "REVIEWS"
-id = "REVIEWS_KV_ID"

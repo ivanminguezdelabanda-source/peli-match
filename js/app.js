@@ -290,14 +290,14 @@ function startApp(MOVIES) {
   const listById = (id) => state.lists.find((l) => l.id === id);
 
   // Campo en línea para poner nombre a una lista (sin ventanas emergentes)
-  function nameEditor(box, initial, saveLabel, onSave, onCancel) {
+  function nameEditor(box, initial, saveLabel, onSave, onCancel, label = "Nombre de la lista", max = 40) {
     box.replaceChildren();
     const form = el("form", "name-editor");
     const input = el("input", "q-search");
     input.type = "text";
-    input.maxLength = 40;
-    input.placeholder = "Nombre de la lista";
-    input.setAttribute("aria-label", "Nombre de la lista");
+    input.maxLength = max;
+    input.placeholder = label;
+    input.setAttribute("aria-label", label);
     input.value = initial;
     const ok = el("button", "btn btn-solid", esc(saveLabel));
     ok.type = "submit";
@@ -1245,17 +1245,291 @@ function startApp(MOVIES) {
     card.style.top = `${y}px`;
   }
 
-  // ---------- Reseñas: públicas en el servidor; sin servidor, se guardan solo en este móvil ----------
-  const REVIEWS_URL = AI_URL ? AI_URL.replace(/\/$/, "") + "/reviews" : "";
-  // Token para poder borrar o cambiar tus reseñas; va aparte para sobrevivir al modo pruebas
-  const reviewToken = (() => {
+  // ---------- Cuenta (Firebase): correo y contraseña o Google ----------
+  // Sin configuración en js/firebase-config.js la app funciona sin cuentas y las reseñas se guardan en el móvil
+  let cloud = null;
+  let cloudError = () => "Algo ha fallado. Inténtalo otra vez.";
+  let afterLogin = null; // peli cuya ficha se reabre al entrar
+  const cloudReady = window.CINDER_FIREBASE
+    ? import("./cloud.js?v=dev")
+      .then((m) => { cloudError = m.errorText; return m.connect(window.CINDER_FIREBASE); })
+      .then((c) => {
+        cloud = c;
+        c.onUser(onUserChange);
+        onUserChange(c.user);
+      })
+      .catch((e) => console.warn("Firebase no disponible:", e))
+    : Promise.resolve();
+  const userName = (u) => u.name || "Tú";
+  // Foto de perfil o, si no hay, la inicial del nombre
+  function avatar(u, cls = "") {
+    const a = el("span", "avatar " + cls);
+    a.setAttribute("aria-hidden", "true");
+    if (u.photo) {
+      const img = new Image();
+      img.alt = "";
+      img.src = u.photo;
+      img.referrerPolicy = "no-referrer";
+      a.append(img);
+    } else a.textContent = (u.name || "?").slice(0, 1).toUpperCase();
+    return a;
+  }
+
+  function onUserChange(u) {
+    const btn = $("#account-btn");
+    btn.classList.toggle("signed", Boolean(u));
+    btn.querySelector(".avatar")?.remove();
+    if (u) btn.append(avatar(u));
+    btn.setAttribute("aria-label", u ? `Mi cuenta: ${userName(u)}` : "Entrar o crear cuenta");
+    if (u && afterLogin) {
+      const id = afterLogin;
+      afterLogin = null;
+      history.back();
+      setTimeout(() => openSheet(id), 250);
+      return;
+    }
+    if (!$("#view-cuenta").hidden) renderAccount();
+  }
+
+  // Recorta la foto en cuadrado y la reduce a 192 px para guardarla en el perfil
+  async function photoFromFile(file) {
+    const url = URL.createObjectURL(file);
     try {
-      let t = localStorage.getItem("pelimatch:token");
-      if (!t) { t = crypto.randomUUID() + crypto.randomUUID(); localStorage.setItem("pelimatch:token", t); }
-      return t;
-    } catch (e) { return crypto.randomUUID() + crypto.randomUUID(); }
-  })();
-  state.myReviews = state.myReviews || {}; // { movieId: reseña propia }
+      const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = url; });
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const c = document.createElement("canvas");
+      c.width = c.height = 192;
+      c.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 192, 192);
+      for (const q of [0.85, 0.7, 0.55, 0.4]) {
+        const data = c.toDataURL("image/jpeg", q);
+        if (data.length <= 50000) return data;
+      }
+      throw new Error("Foto demasiado grande");
+    } finally { URL.revokeObjectURL(url); }
+  }
+
+  // Pequeño formulario con campos y un botón; onSubmit recibe los valores y puede lanzar errores de Firebase
+  function miniForm({ fields, submit, onSubmit, danger }) {
+    const form = el("form", "account-form");
+    form.noValidate = true;
+    form.innerHTML = fields.map((f) => `<label>${esc(f.label)}<input class="q-search" name="${f.name}" type="${f.type || "text"}" autocomplete="${f.auto || "off"}"${f.max ? ` maxlength="${f.max}"` : ""} value="${esc(f.value || "")}" placeholder="${esc(f.placeholder || "")}"></label>`).join("")
+      + `<p class="account-error" role="alert"></p><button class="btn ${danger ? "btn-red" : "btn-solid"}" type="submit">${esc(submit)}</button>`;
+    const err = form.querySelector(".account-error");
+    form.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const values = Object.fromEntries(new FormData(form));
+      const btn = form.querySelector("button[type=submit]");
+      btn.disabled = true;
+      err.textContent = "";
+      try {
+        await onSubmit(values, (msg) => { throw Object.assign(new Error(msg), { plain: true }); });
+      } catch (e) {
+        err.textContent = e.plain ? e.message : cloudError(e);
+      }
+      btn.disabled = false;
+    };
+    return form;
+  }
+
+  // Bloque plegable de la cuenta (perfil, seguridad…)
+  function accountSection(title, open) {
+    const d = el("details", "account-section");
+    d.open = Boolean(open);
+    d.append(el("summary", "", esc(title)));
+    return d;
+  }
+
+  let accountMode = "entrar";
+  async function renderAccount() {
+    const box = $("#account-body");
+    await cloudReady;
+    box.replaceChildren();
+    if (!cloud) {
+      box.append(el("h1", "page-title", "Mi cuenta"),
+        el("p", "empty-text", "Las cuentas aún no están activadas en esta versión de Cinder. Mientras tanto, todo se guarda en este móvil."));
+      return;
+    }
+    const u = cloud.user;
+    if (u) {
+      box.append(el("h1", "page-title", "Mi cuenta"));
+
+      // Tarjeta con foto, nombre y correo
+      const card = el("div", "account-card");
+      const photoBtn = el("label", "photo-pick");
+      photoBtn.title = "Cambiar foto";
+      const file = el("input");
+      file.type = "file";
+      file.accept = "image/*";
+      file.className = "visually-hidden";
+      file.setAttribute("aria-label", "Cambiar foto de perfil");
+      file.onchange = async () => {
+        if (!file.files[0]) return;
+        try {
+          const photo = await photoFromFile(file.files[0]);
+          await cloud.updateProfile({ photo });
+          toast("Foto actualizada");
+        } catch (e) { toast(e.code ? cloudError(e) : "No he podido usar esa foto. Prueba con otra."); }
+      };
+      photoBtn.append(avatar(u, "big"), el("span", "photo-edit", `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`), file);
+      card.append(photoBtn, el("div", "", `<p class="account-name">${esc(userName(u))}</p><p class="account-mail">${esc(u.email)}</p>`));
+      box.append(card);
+
+      if (u.password && !u.emailVerified) {
+        const warn = el("div", "account-warn", "<p>Confirma tu correo con el enlace que te enviamos.</p>");
+        const again = el("button", "link-btn", "Reenviar correo");
+        again.type = "button";
+        again.onclick = async () => { try { await cloud.sendVerification(); toast("Te he vuelto a enviar el correo"); } catch (e) { toast(cloudError(e)); } };
+        const done = el("button", "link-btn", "Ya lo he confirmado");
+        done.type = "button";
+        done.onclick = async () => { await cloud.refresh(); if (!cloud.user.emailVerified) toast("Todavía no aparece confirmado"); };
+        warn.append(again, done);
+        box.append(warn);
+      }
+
+      // Perfil
+      const prof = accountSection("Perfil", true);
+      prof.append(miniForm({
+        fields: [{ name: "name", label: "Nombre (sale en tus reseñas)", value: u.name, max: 30, auto: "nickname" }],
+        submit: "Guardar nombre",
+        onSubmit: async ({ name }, fail) => {
+          name = name.trim();
+          if (!name) fail("Escribe un nombre.");
+          await cloud.updateProfile({ name });
+          toast("Nombre guardado");
+        },
+      }));
+      const photoRow = el("div", "account-actions");
+      const change = el("button", "btn btn-ghost", u.photo ? "Cambiar foto" : "Subir foto");
+      change.type = "button";
+      change.onclick = () => file.click();
+      photoRow.append(change);
+      if (u.photo) {
+        const rm = el("button", "btn btn-ghost", "Quitar foto");
+        rm.type = "button";
+        rm.onclick = async () => { try { await cloud.updateProfile({ photo: "" }); toast("Foto quitada"); } catch (e) { toast(cloudError(e)); } };
+        photoRow.append(rm);
+      }
+      prof.append(photoRow);
+      box.append(prof);
+
+      // Seguridad
+      const sec = accountSection("Seguridad");
+      if (u.password) {
+        sec.append(el("p", "account-sub", "Cambiar contraseña"), miniForm({
+          fields: [
+            { name: "current", label: "Contraseña actual", type: "password", auto: "current-password" },
+            { name: "next", label: "Contraseña nueva", type: "password", auto: "new-password", placeholder: "Mínimo 6 caracteres" },
+            { name: "again", label: "Repite la nueva", type: "password", auto: "new-password" },
+          ],
+          submit: "Cambiar contraseña",
+          onSubmit: async ({ current, next, again }, fail) => {
+            if (!current) fail("Escribe tu contraseña actual.");
+            if (next.length < 6) fail("La contraseña nueva necesita al menos 6 caracteres.");
+            if (next !== again) fail("Las dos contraseñas nuevas no coinciden.");
+            await cloud.changePassword(current, next);
+            toast("Contraseña cambiada");
+            renderAccount();
+          },
+        }));
+        sec.append(el("p", "account-sub", "Cambiar correo"), miniForm({
+          fields: [
+            { name: "email", label: "Correo nuevo", type: "email", auto: "email" },
+            { name: "current", label: "Tu contraseña", type: "password", auto: "current-password" },
+          ],
+          submit: "Cambiar correo",
+          onSubmit: async ({ email, current }, fail) => {
+            if (!email.trim()) fail("Escribe el correo nuevo.");
+            if (!current) fail("Escribe tu contraseña.");
+            await cloud.changeEmail(current, email.trim());
+            toast("Te he enviado un enlace al correo nuevo. El cambio se hace al pulsarlo.", "", null, 7000);
+            renderAccount();
+          },
+        }));
+      } else {
+        sec.append(el("p", "empty-text", "Entras con Google, así que tu contraseña y tu correo se cambian desde tu cuenta de Google."));
+      }
+      box.append(sec);
+
+      // Sesión y borrar cuenta
+      const actions = el("div", "account-actions");
+      const out = el("button", "btn btn-ghost", "Cerrar sesión");
+      out.type = "button";
+      out.onclick = async () => { await cloud.signOut(); toast("Has cerrado sesión"); };
+      actions.append(out);
+      box.append(actions);
+
+      const del = accountSection("Borrar mi cuenta");
+      del.classList.add("danger-zone");
+      del.append(el("p", "empty-text", "Se borran tu perfil y todas tus reseñas. No se puede deshacer."));
+      del.append(miniForm({
+        fields: u.password ? [{ name: "current", label: "Escribe tu contraseña para confirmar", type: "password", auto: "current-password" }] : [],
+        submit: u.password ? "Borrar mi cuenta para siempre" : "Confirmar con Google y borrar",
+        danger: true,
+        onSubmit: async ({ current }, fail) => {
+          if (u.password && !current) fail("Escribe tu contraseña.");
+          accountMode = "crear";
+          await cloud.deleteAccount(u.password ? current : null);
+          toast("Tu cuenta se ha borrado");
+        },
+      }));
+      box.append(del);
+      return;
+    }
+
+    const signup = accountMode === "crear";
+    box.append(el("h1", "page-title", signup ? "Crea tu cuenta" : "Entra en Cinder"),
+      el("p", "empty-text", "Con una cuenta publicas reseñas con tu nombre y tu foto."));
+    const google = el("button", "btn btn-google", `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10c.9-2.7 3.3-4.6 6.2-4.6z"/></svg> Continuar con Google`);
+    google.type = "button";
+    google.onclick = async () => {
+      try { await cloud.signInGoogle(); } catch (e) { toast(cloudError(e)); }
+    };
+    const form = el("form", "account-form");
+    form.noValidate = true;
+    form.innerHTML = `
+      ${signup ? `<label>Tu nombre<input class="q-search" id="acc-name" maxlength="30" autocomplete="nickname" placeholder="Así firmarás tus reseñas"></label>` : ""}
+      <label>Correo<input class="q-search" id="acc-email" type="email" autocomplete="email" inputmode="email" placeholder="tu@correo.com"></label>
+      <label>Contraseña<input class="q-search" id="acc-pass" type="password" minlength="6" autocomplete="${signup ? "new-password" : "current-password"}" placeholder="${signup ? "Mínimo 6 caracteres" : "Tu contraseña"}"></label>
+      <p class="account-error" id="acc-error" role="alert"></p>
+      <button class="btn btn-solid" type="submit">${signup ? "Crear cuenta" : "Entrar"}</button>`;
+    const showError = (msg) => ($("#acc-error").textContent = msg);
+    form.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const email = $("#acc-email").value.trim();
+      const pass = $("#acc-pass").value;
+      const name = signup ? $("#acc-name").value.trim() : "";
+      if (signup && !name) return showError("Escribe tu nombre.");
+      const btn = form.querySelector("button[type=submit]");
+      btn.disabled = true;
+      try {
+        if (signup) await cloud.signUp(name, email, pass);
+        else await cloud.signIn(email, pass);
+        toast(signup ? `¡Bienvenido a Cinder, ${name}!` : "Has entrado");
+      } catch (e) {
+        btn.disabled = false;
+        showError(cloudError(e));
+      }
+    };
+    const links = el("div", "account-links");
+    const swap = el("button", "link-btn", signup ? "¿Ya tienes cuenta? Entra" : "¿No tienes cuenta? Créala");
+    swap.type = "button";
+    swap.onclick = () => { accountMode = signup ? "entrar" : "crear"; renderAccount(); };
+    links.append(swap);
+    if (!signup) {
+      const forgot = el("button", "link-btn danger", "He olvidado la contraseña");
+      forgot.type = "button";
+      forgot.onclick = async () => {
+        const email = $("#acc-email").value.trim();
+        if (!email) return showError("Escribe tu correo y te mando un enlace para cambiarla.");
+        try { await cloud.resetPassword(email); toast("Te he enviado un correo para cambiar la contraseña", "", null, 6000); } catch (e) { showError(cloudError(e)); }
+      };
+      links.append(forgot);
+    }
+    box.append(google, el("p", "account-or", "o con tu correo"), form, links);
+  }
+
+  // ---------- Reseñas: públicas en Firebase; sin Firebase, se guardan solo en este móvil ----------
+  state.myReviews = state.myReviews || {}; // reseñas locales { movieId: reseña }
   const starsText = (n) => "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
   const ago = (t) => {
     const d = Math.round((Date.now() - t) / 86400000);
@@ -1266,53 +1540,48 @@ function startApp(MOVIES) {
     const box = $("#sheet-reviews");
     if (!box) return;
     box.replaceChildren(el("p", "section-label", "Reseñas"), el("p", "reviews-note", "Cargando reseñas…"));
+    await cloudReady;
     let list = [];
     let online = false;
-    if (REVIEWS_URL) {
+    if (cloud) {
       try {
-        const res = await fetch(`${REVIEWS_URL}?movie=${encodeURIComponent(movieId)}`);
-        if (!res.ok) throw new Error(res.status);
-        list = (await res.json()).reviews || [];
+        list = await cloud.reviews(movieId);
         online = true;
-      } catch (e) { console.warn("Reseñas sin servidor:", e); }
+      } catch (e) { console.warn("Reseñas sin conexión:", e); }
+    } else if (state.myReviews[movieId]) {
+      list = [state.myReviews[movieId]];
     }
-    const mine = state.myReviews[movieId];
-    if (!online && mine) list = [mine];
     if (!box.isConnected) return; // la ficha ya muestra otra peli
     drawReviews(box, movieId, list, online);
   }
 
   function drawReviews(box, movieId, list, online) {
     box.replaceChildren();
-    const mine = state.myReviews[movieId];
+    const uid = cloud?.user?.uid;
+    const mine = cloud ? (uid && list.find((r) => r.id === uid)) : state.myReviews[movieId];
     const avg = list.length ? list.reduce((a, r) => a + r.stars, 0) / list.length : 0;
-    const head = el("div", "reviews-head", `<p class="section-label">Reseñas</p>${list.length
+    box.append(el("div", "reviews-head", `<p class="section-label">Reseñas</p>${list.length
       ? `<p class="reviews-avg"><span class="stars" aria-hidden="true">${starsText(Math.round(avg))}</span> ${avg.toFixed(1).replace(".", ",")} · ${list.length} ${list.length === 1 ? "reseña" : "reseñas"}</p>`
-      : ""}`);
-    box.append(head);
-    if (!online) box.append(el("p", "reviews-note", REVIEWS_URL
-      ? "No he podido cargar las reseñas de la gente. Inténtalo en un rato."
-      : "Las reseñas aún no son públicas: la tuya se guarda en este móvil hasta que la app esté conectada a su servidor."));
+      : ""}`));
+    if (!cloud) box.append(el("p", "reviews-note", "Las reseñas aún no son públicas: la tuya se guarda en este móvil."));
+    else if (!online) box.append(el("p", "reviews-note", "No he podido cargar las reseñas. Inténtalo en un rato."));
 
     const ul = el("ul", "review-list");
-    list.slice(0, 20).forEach((r) => {
+    list.slice(0, 30).forEach((r) => {
       const own = mine && r.id === mine.id;
       const li = el("li", "review" + (own ? " own" : ""), `
-        <div class="review-top"><b>${esc(r.name)}${own ? " (tú)" : ""}</b><span class="stars" aria-label="${r.stars} de 5 estrellas">${starsText(r.stars)}</span></div>
+        <div class="review-top"><span class="review-who"><b>${esc(r.name)}${own ? " (tú)" : ""}</b></span><span class="stars" aria-label="${r.stars} de 5 estrellas">${starsText(r.stars)}</span></div>
         ${r.text ? `<p>${esc(r.text)}</p>` : ""}
         <span class="review-date">${ago(r.at)}</span>`);
+      if (cloud) li.querySelector(".review-who").prepend(avatar(r, "small"));
       if (own) {
         const del = el("button", "link-btn danger", "Borrar mi reseña");
         del.type = "button";
         del.onclick = async () => {
-          if (online) {
-            try {
-              const res = await fetch(`${REVIEWS_URL}?movie=${encodeURIComponent(movieId)}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: reviewToken, id: r.id }) });
-              if (!res.ok && res.status !== 404) throw new Error(res.status);
-            } catch (e) { return toast("No se ha podido borrar. Inténtalo otra vez."); }
-          }
-          delete state.myReviews[movieId];
-          persist();
+          try {
+            if (cloud) await cloud.deleteReview(movieId);
+            else { delete state.myReviews[movieId]; persist(); }
+          } catch (e) { return toast(cloudError(e)); }
           toast("Reseña borrada");
           renderReviews(movieId);
         };
@@ -1323,10 +1592,18 @@ function startApp(MOVIES) {
     if (list.length) box.append(ul);
     else if (online) box.append(el("p", "reviews-note", "Nadie ha escrito todavía. ¡Sé el primero!"));
 
-    // Formulario: escribir o cambiar tu reseña
+    // Con Firebase hace falta una cuenta para opinar
+    if (cloud && !uid) {
+      const login = el("button", "btn btn-solid", "Entra para escribir tu reseña");
+      login.type = "button";
+      login.onclick = () => { afterLogin = movieId; accountMode = "entrar"; location.hash = "#cuenta"; };
+      box.append(login);
+      return;
+    }
+
     const form = el("form", "review-form");
     let stars = mine ? mine.stars : 0;
-    form.append(el("p", "review-form-title", mine ? "Cambia tu reseña" : "Escribe tu reseña"));
+    form.append(el("p", "review-form-title", mine ? "Cambia tu reseña" : cloud ? `Escribe tu reseña como ${esc(userName(cloud.user))}` : "Escribe tu reseña"));
     const starRow = el("div", "star-input");
     starRow.setAttribute("role", "radiogroup");
     starRow.setAttribute("aria-label", "Puntuación");
@@ -1343,12 +1620,6 @@ function startApp(MOVIES) {
       starRow.append(b);
     }
     drawStars();
-    const name = el("input", "q-search");
-    name.id = "review-name";
-    name.maxLength = 30;
-    name.placeholder = "Tu nombre";
-    name.setAttribute("aria-label", "Tu nombre");
-    name.value = state.reviewName || "";
     const text = el("textarea", "q-search q-note");
     text.id = "review-text";
     text.rows = 3;
@@ -1358,30 +1629,20 @@ function startApp(MOVIES) {
     text.value = mine ? mine.text : "";
     const send = el("button", "btn btn-solid", mine ? "Guardar cambios" : "Publicar reseña");
     send.type = "submit";
-    form.append(starRow, name, text, send);
+    form.append(starRow, text, send);
     form.onsubmit = async (ev) => {
       ev.preventDefault();
       if (!stars) return toast("Elige de 1 a 5 estrellas");
-      state.reviewName = name.value.trim();
-      const draftReview = { name: state.reviewName || "Anónimo", stars, text: text.value.trim() };
+      const review = { stars, text: text.value.trim() };
       send.disabled = true;
-      if (REVIEWS_URL) {
-        try {
-          const res = await fetch(`${REVIEWS_URL}?movie=${encodeURIComponent(movieId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draftReview, token: reviewToken }) });
-          if (res.status === 429) throw new Error("Demasiadas reseñas seguidas. Espera un minuto.");
-          if (!res.ok) throw new Error("No se ha podido publicar. Inténtalo otra vez.");
-          state.myReviews[movieId] = (await res.json()).review;
-          persist();
-          toast("Reseña publicada");
-          return renderReviews(movieId);
-        } catch (e) {
-          send.disabled = false;
-          return toast(e.message);
-        }
+      try {
+        if (cloud) await cloud.saveReview(movieId, review);
+        else { state.myReviews[movieId] = { id: "local", name: "Tú", ...review, at: Date.now() }; persist(); }
+      } catch (e) {
+        send.disabled = false;
+        return toast(cloudError(e));
       }
-      state.myReviews[movieId] = { id: "local", ...draftReview, at: Date.now() };
-      persist();
-      toast("Reseña guardada en este móvil");
+      toast(cloud ? "Reseña publicada" : "Reseña guardada en este móvil");
       renderReviews(movieId);
     };
     box.append(form);
@@ -1611,7 +1872,7 @@ function startApp(MOVIES) {
   }
 
   // ---------- Navegación (#descubrir, #biblioteca, #ruleta) ----------
-  const VIEWS = ["descubrir", "biblioteca", "para-ti", "ruleta", "buscar"];
+  const VIEWS = ["descubrir", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta"];
   let lastView = null;
   function route() {
     // Sin encuesta hecha no se entra al resto de la app
@@ -1639,6 +1900,7 @@ function startApp(MOVIES) {
     else if (view === "para-ti") renderMatch();
     else if (view === "ruleta") { $("#wheel-result").hidden = true; renderWheel(); }
     else if (view === "buscar") { renderSearch(); searchInput.focus(); }
+    else if (view === "cuenta") renderAccount();
     else renderDeck();
   }
 

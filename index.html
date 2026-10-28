@@ -21,9 +21,15 @@
       <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="10" width="28" height="40" rx="5" fill="none" stroke="#f2d39b" stroke-width="3" transform="rotate(-12 28 30)"/><rect x="22" y="14" width="28" height="40" rx="5" fill="#e0414b" transform="rotate(10 36 34)"/><path fill="#14100f" d="M32 27v14l11-7z" transform="rotate(10 36 34)"/></svg>
       <span class="brand-name">CIN<b>DER</b></span>
     </div>
-    <a class="icon-btn" href="#buscar" aria-label="Buscar película" title="Buscar película">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-    </a>
+    <div class="top-actions">
+      <a class="icon-btn" href="#buscar" aria-label="Buscar película" title="Buscar película">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+      </a>
+      <a class="icon-btn account-btn" id="account-btn" href="#cuenta" aria-label="Entrar o crear cuenta" title="Mi cuenta">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-3.8 4-5.5 7.5-5.5s6.3 1.7 7.5 5.5"/></svg>
+        <span class="avatar" aria-hidden="true"></span>
+      </a>
+    </div>
   </header>
 
   <main>
@@ -136,6 +142,10 @@
       </div>
       <ul class="grid" id="search-grid"></ul>
     </section>
+    <!-- Cuenta -->
+    <section class="view view-list" id="view-cuenta" aria-label="Mi cuenta" hidden>
+      <div class="account-body" id="account-body"></div>
+    </section>
   </main>
 
   <nav class="tabbar" aria-label="Secciones">
@@ -170,6 +180,7 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="js/config.js?v=dev"></script>
+<script src="js/firebase-config.js?v=dev"></script>
 <script src="js/movies.js?v=dev"></script>
 <script src="js/app.js?v=dev"></script>
 </body>

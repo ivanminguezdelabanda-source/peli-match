@@ -1,0 +1,38 @@
+rules_version = '2';
+// Reglas de Cinder:
+// - Cada perfil (users/{uid}) solo lo lee y lo cambia su dueño.
+// - Las reseñas las lee cualquiera; solo su autor, con sesión iniciada, las escribe o borra.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedAs(uid) { return request.auth != null && request.auth.uid == uid; }
+    // Foto: data:URL pequeña hecha por la app (unos 15 KB) o la URL de la foto de Google
+    function validPhoto(p) { return p is string && p.size() <= 60000 && (p == '' || p.matches('^(data:image/(jpeg|webp|png);base64,|https://).*')); }
+    function validName(n) { return n is string && n.size() > 0 && n.size() <= 30; }
+
+    match /users/{uid} {
+      allow read, delete: if signedAs(uid);
+      allow create, update: if signedAs(uid)
+        && request.resource.data.keys().hasOnly(['name', 'photo', 'reviewed'])
+        && validName(request.resource.data.name)
+        && validPhoto(request.resource.data.photo)
+        && request.resource.data.reviewed is list && request.resource.data.reviewed.size() <= 400;
+    }
+
+    match /movies/{movieId}/reviews/{uid} {
+      allow read: if true;
+      allow delete: if signedAs(uid);
+      allow create, update: if signedAs(uid)
+        && request.resource.data.keys().hasOnly(['name', 'photo', 'stars', 'text', 'at'])
+        && validName(request.resource.data.name)
+        && validPhoto(request.resource.data.photo)
+        && request.resource.data.stars is int && request.resource.data.stars >= 1 && request.resource.data.stars <= 5
+        && request.resource.data.text is string && request.resource.data.text.size() <= 600
+        // la fecha la pone el servidor al publicar; al cambiar solo nombre o foto se conserva
+        && (request.resource.data.at == request.time || (resource != null && request.resource.data.at == resource.data.at));
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

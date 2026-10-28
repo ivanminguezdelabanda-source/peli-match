@@ -22,17 +22,30 @@ La biblioteca se guarda en el `localStorage` del navegador, con la clave `pelima
 
 Este producto usa la API de TMDB, pero no está respaldado ni certificado por TMDB. Los datos de plataformas vienen de JustWatch.
 
-## Servidor: reseñas e IA (opcional)
+## Cuentas y reseñas (Firebase)
 
-La carpeta `worker/` es un Cloudflare Worker con dos funciones:
+Cada persona puede crear su cuenta con correo y contraseña o con Google. Desde «Mi cuenta» (botón de arriba a la derecha) cambia su nombre y su foto, su contraseña y su correo, y puede borrar la cuenta. Con la cuenta se publican reseñas (de 1 a 5 estrellas y un texto) que ve todo el mundo en la ficha de cada peli.
 
-- **Reseñas públicas** (`/reviews`): cada peli guarda sus reseñas (1 a 5 estrellas, nombre y texto) en Workers KV. Cada móvil tiene un token propio para cambiar o borrar su reseña, y hay un límite de 5 escrituras por minuto y por IP.
-- **IA en «Para ti»**: recibe la encuesta y las 40 mejores candidatas del recomendador local, y le pide a Claude (`claude-opus-5-5`) que elija y explique. La clave de Anthropic se guarda como secreto del Worker y nunca llega al navegador.
+- `js/cloud.js` usa Firebase Authentication y Cloud Firestore (SDK web 13.1.0 desde gstatic). Solo se carga si hay configuración.
+- `js/firebase-config.js` guarda la configuración web del proyecto de Firebase. No es secreta. Si está vacía, la app funciona sin cuentas y cada reseña se queda en el móvil.
+- `firestore.rules` son las reglas de la base de datos: las reseñas las lee cualquiera, pero solo su autor las escribe o borra; cada perfil solo lo ve su dueño.
+- Las fotos de perfil se recortan y reducen en el móvil (192 px, unos 15 KB) y se guardan en Firestore. Así no hace falta Cloud Storage, que exige el plan de pago.
 
-El Worker solo acepta peticiones desde la web publicada. Para activarlo, añade estos secretos en GitHub (Settings → Secrets and variables → Actions):
+Para activarlo en la consola de Firebase (console.firebase.google.com):
 
+1. Crea un proyecto y añade una app web. Copia el objeto `firebaseConfig` en `js/firebase-config.js` como `window.CINDER_FIREBASE = { ... };`.
+2. En Authentication → Método de acceso, activa «Correo electrónico/contraseña» y «Google».
+3. En Authentication → Configuración → Dominios autorizados, añade `ivanminguezdelabanda-source.github.io`.
+4. En Firestore Database, crea la base de datos (modo producción) y pega el contenido de `firestore.rules` en la pestaña Reglas.
+
+## IA en «Para ti» (opcional)
+
+La carpeta `worker/` es un Cloudflare Worker que recibe la encuesta y las 40 mejores candidatas del recomendador local, y le pide a Claude (`claude-opus-5-5`) que elija las 8 mejores y explique por qué. La clave de Anthropic se guarda como secreto del Worker y nunca llega al navegador; el Worker solo acepta peticiones desde la web publicada.
+
+Para activarla, añade estos secretos en GitHub (Settings → Secrets and variables → Actions):
+
+- `ANTHROPIC_API_KEY`: clave de console.anthropic.com
 - `CLOUDFLARE_API_TOKEN`: token de Cloudflare con la plantilla «Edit Cloudflare Workers»
 - `CLOUDFLARE_ACCOUNT_ID`: el Account ID de tu cuenta de Cloudflare
-- `ANTHROPIC_API_KEY` (solo para la IA): clave de console.anthropic.com
 
-Con los dos de Cloudflare ya funcionan las reseñas. El siguiente despliegue crea el almacén `cinder-reviews`, publica el Worker y escribe su dirección en `js/config.js`. Sin servidor, las reseñas se guardan solo en el móvil de cada persona y «Para ti» usa el recomendador local.
+El siguiente despliegue publica el Worker y escribe su dirección en `js/config.js`. Si falta algún secreto o la IA falla, «Para ti» usa el recomendador local.
