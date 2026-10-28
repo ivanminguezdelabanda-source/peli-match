@@ -88,8 +88,12 @@ function startApp(MOVIES) {
       const img = new Image();
       img.alt = "";
       img.draggable = false;
-      img.onload = () => wrap.append(img);
+      // Mientras carga se ve un fondo neutro; el cartel tipográfico solo si la imagen falla
+      wrap.classList.add("loading");
+      img.onload = () => { wrap.append(img); wrap.classList.remove("loading"); };
+      img.onerror = () => wrap.classList.remove("loading");
       img.src = m.poster;
+      if (img.complete && img.naturalWidth) img.onload(); // ya estaba en caché
     }
     return wrap;
   }
@@ -539,6 +543,67 @@ function startApp(MOVIES) {
     reelEl.style.transform = `translateX(${win / 2 - first.offsetLeft - first.offsetWidth / 2}px)`;
   }
 
+  // Sonido de la caja, sintetizado con Web Audio (sin archivos): tic al pasar cada carátula y premio al parar
+  let soundOn = (() => { try { return localStorage.getItem("pelimatch:sound") !== "off"; } catch (e) { return true; } })();
+  let audio = null;
+  const SOUND_ICON = {
+    on: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+    off: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>',
+  };
+  const soundBtn = $("#reel-sound");
+  const drawSoundBtn = () => {
+    soundBtn.innerHTML = soundOn ? SOUND_ICON.on : SOUND_ICON.off;
+    soundBtn.setAttribute("aria-pressed", String(soundOn));
+  };
+  soundBtn.onclick = () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem("pelimatch:sound", soundOn ? "on" : "off"); } catch (e) { /* sin almacenamiento */ }
+    drawSoundBtn();
+  };
+  drawSoundBtn();
+  function ctx() {
+    if (!soundOn) return null;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === "suspended") audio.resume();
+      return audio;
+    } catch (e) { return null; }
+  }
+  function tone(freq, start, dur, type = "square", vol = 0.08) {
+    const a = ctx();
+    if (!a) return;
+    const t = a.currentTime + start;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+  const tick = () => { tone(1700, 0, 0.035, "square", 0.05); tone(850, 0, 0.05, "triangle", 0.06); };
+  function reward(m) {
+    const lvl = Number(rarity(m).slice(1)); // 1 a 5
+    const notes = [523, 659, 784, 1047, 1319].slice(0, 2 + Math.min(lvl, 3));
+    notes.forEach((f, i) => tone(f, i * 0.09, 0.35, "triangle", 0.09));
+    if (lvl >= 4) notes.forEach((f, i) => tone(f * 2, 0.45 + i * 0.05, 0.4, "sine", 0.05)); // destello para las mejores
+  }
+  // Sigue la posición de la tira y suena un tic cada vez que una carátula cruza la marca
+  function followTicks(step) {
+    let last = null;
+    const loop = () => {
+      if (!spinning) return;
+      const x = new DOMMatrixReadOnly(getComputedStyle(reelEl).transform).m41;
+      const idx = Math.floor(-x / step);
+      if (last !== null && idx !== last) tick();
+      last = idx;
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
   const REEL_LEN = 56;
   const WIN_AT = 48;
   function spin() {
@@ -566,12 +631,15 @@ function startApp(MOVIES) {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const duration = reduce ? 300 : 6500;
     void reelEl.offsetWidth; // fija la posición inicial antes de animar
+    ctx(); // el navegador solo deja sonar tras un toque del usuario
+    if (!reduce) followTicks(target.offsetWidth + 8);
     reelEl.style.transition = `transform ${duration}ms cubic-bezier(.08, .72, .16, 1)`;
     reelEl.style.transform = `translateX(${x}px)`;
     reelEl.addEventListener("transitionend", function done() {
       reelEl.removeEventListener("transitionend", done);
       target.classList.add("won");
       spinning = false;
+      reward(winner);
       $("#wheel-spin").disabled = false;
       $("#wheel-spin").textContent = "Abrir otra";
       showResult(winner);

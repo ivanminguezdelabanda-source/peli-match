@@ -442,3 +442,13 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .tour-nav { display: flex; gap: 10px; }
 .tour-nav .btn { flex: 1; padding: 11px 14px; }
 @media (prefers-reduced-motion: reduce) { .tour-hole, .tour-card { transition: none; } }
+
+/* Carátula cargando: fondo neutro en vez del cartel provisional */
+.poster.loading { background: linear-gradient(110deg, var(--panel) 30%, var(--panel-2) 50%, var(--panel) 70%) 0 0 / 300% 100%; animation: shimmer 1.4s linear infinite; }
+.poster.loading .poster-art { visibility: hidden; }
+@keyframes shimmer { to { background-position: -150% 0; } }
+@media (prefers-reduced-motion: reduce) { .poster.loading { animation: none; } }
+.reel-actions { display: flex; justify-content: center; align-items: center; gap: 10px; }
+.reel-actions .reel-open { align-self: auto; }
+#reel-sound { width: 46px; height: 46px; border: 0; cursor: pointer; }
+#reel-sound[aria-pressed="false"] { color: var(--muted); }
