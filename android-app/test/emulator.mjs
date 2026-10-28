@@ -29,7 +29,12 @@ function cdp(url) {
     else if (msg.method) (handlers.get(msg.method) || []).forEach((f) => f(msg.params));
   };
   const api = {
-    send: (method, params = {}) => new Promise((ok, fail) => { const i = ++id; waiting.set(i, { ok, fail }); ws.send(JSON.stringify({ id: i, method, params })); }),
+    send: (method, params = {}) => new Promise((ok, fail) => {
+      const i = ++id;
+      waiting.set(i, { ok, fail });
+      ws.send(JSON.stringify({ id: i, method, params }));
+      setTimeout(() => { if (waiting.has(i)) { waiting.delete(i); fail(new Error(`${method}: sin respuesta en 15 s`)); } }, 15000);
+    }),
     on: (ev, f) => handlers.set(ev, [...(handlers.get(ev) || []), f]),
     async eval(expression) {
       const r = await api.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
@@ -79,13 +84,13 @@ async function main() {
   if (!sock) throw new Error("No se encuentra el WebView");
   adb("forward", "tcp:9222", `localabstract:${sock}`);
   // Protocolo de DevTools a mano (Playwright no se entiende con el WebView de Android)
-  let target = null;
-  for (let i = 0; i < 30 && !target; i++) {
-    const list = await fetch("http://127.0.0.1:9222/json").then((r) => r.json()).catch(() => []);
+  let target = null, list = [];
+  for (let i = 0; i < 45 && !target; i++) {
+    list = await fetch("http://127.0.0.1:9222/json").then((r) => r.json()).catch(() => []);
     target = list.find((t) => t.type === "page" && t.url.includes("github.io")) || null;
     if (!target) await sleep(1000);
   }
-  if (!target) throw new Error("No se encuentra la página de Cinder");
+  if (!target) throw new Error("No se encuentra la página de Cinder: " + JSON.stringify(list.map((t) => [t.type, t.url])));
   page = await cdp(target.webSocketDebuggerUrl);
   await page.send("Runtime.enable");
   page.on("Runtime.consoleAPICalled", (p) => { if (p.type === "error" || p.type === "warning") report.console.push(p.args.map((a) => a.value ?? a.description).join(" ").slice(0, 300)); });

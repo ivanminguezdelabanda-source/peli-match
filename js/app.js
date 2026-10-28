@@ -1568,6 +1568,14 @@ function startApp(MOVIES, NEWS) {
       if (wait) token ? wait.ok(token) : wait.fail({ code: "auth/popup-closed-by-user" });
       else if (token && cloud) cloud.signInGoogleToken(token).catch((e) => toast(cloudError(e)));
     });
+    // Botón «atrás» de Android: primero cierra la ficha o el tutorial; luego vuelve a la pantalla anterior;
+    // en la pantalla principal deja la app en segundo plano (como el resto de apps)
+    plugin("App")?.addListener("backButton", ({ canGoBack }) => {
+      if (!sheet.hidden) return closeSheet();
+      if (tourIdx >= 0) return endTour();
+      if (canGoBack && location.hash && location.hash !== "#descubrir") return history.back();
+      plugin("App").minimizeApp().catch(() => plugin("App").exitApp());
+    });
     // Si se cierra el navegador sin entrar
     plugin("Browser")?.addListener("browserFinished", () => setTimeout(() => {
       if (tokenWait) { tokenWait.fail({ code: "auth/popup-closed-by-user" }); tokenWait = null; }
