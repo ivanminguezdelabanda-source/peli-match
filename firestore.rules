@@ -1,6 +1,6 @@
 rules_version = '2';
 // Reglas de Cinder:
-// - Cada perfil (users/{uid}) y sus gustos (tastes/{uid}) solo los lee y los cambia su dueño.
+// - Cada perfil (users/{uid}) y sus gustos, encuesta y tutorial (tastes/{uid}) solo los lee y los cambia su dueño.
 // - Los nombres de usuario (usernames/{nombre}) son únicos: cada uno apunta a su dueño.
 // - Las reseñas las lee cualquiera; solo su autor, con perfil terminado, las escribe o borra.
 service cloud.firestore {
@@ -34,7 +34,9 @@ service cloud.firestore {
     match /tastes/{uid} {
       allow read, delete: if signedAs(uid);
       allow create, update: if signedAs(uid)
-        && request.resource.data.keys().hasOnly(['v', 'n', 'f', 'at'])
+        && request.resource.data.keys().hasOnly(['v', 'n', 'f', 'at', 'survey', 'tour'])
+        && (!('survey' in request.resource.data) || request.resource.data.survey == null || request.resource.data.survey is map)
+        && (!('tour' in request.resource.data) || request.resource.data.tour is bool)
         && request.resource.data.f is map && request.resource.data.f.size() <= 600
         && request.resource.data.n is number;
     }

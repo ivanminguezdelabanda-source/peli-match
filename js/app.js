@@ -1133,7 +1133,8 @@ function startApp(MOVIES) {
     results = null;
     document.body.classList.remove("onboarding");
     renderMatch();
-    if (wasFirst) setTimeout(startTour, 500);
+    syncTaste();
+    if (wasFirst && !state.tourDone) setTimeout(startTour, 500);
   }
 
   const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -1250,6 +1251,9 @@ function startApp(MOVIES) {
     showTourStep();
   }
   function endTour(done) {
+    state.tourDone = true;
+    persist();
+    syncTaste();
     stopSwipeDemo();
     tourIdx = -1;
     tourBox.hidden = true;
@@ -1333,8 +1337,11 @@ function startApp(MOVIES) {
   function syncTaste() {
     if (!cloud?.user) return;
     clearTimeout(tasteSyncTimer);
-    tasteSyncTimer = setTimeout(() => cloud.saveTaste(taste.exportModel()).catch((e) => console.warn("Gustos sin guardar:", e)), 4000);
+    // Junto a los gustos van la encuesta y si ya vio el tutorial, para no repetirlos al volver a entrar
+    tasteSyncTimer = setTimeout(() => cloud.saveTaste(taste.exportModel(), { survey: state.profile || null, tour: Boolean(state.tourDone) })
+      .catch((e) => console.warn("Gustos sin guardar:", e)), 4000);
   }
+  let accountLoad = Promise.resolve();
   async function loadAccountTaste() {
     try {
       const remote = await cloud.loadTaste();
@@ -1342,8 +1349,19 @@ function startApp(MOVIES) {
         taste.importModel(remote);
         state.taste = taste.exportModel();
         personal = null;
-        persist();
-      } else if (taste.events) syncTaste();
+      }
+      if (remote?.survey && !state.profile) {
+        state.profile = { ...emptyProfile(), ...remote.survey };
+        draft = null;
+        firstRun = false;
+        results = null;
+        forYou = [];
+        renderMoods();
+        if (location.hash === "#para-ti") history.replaceState(null, "", "#descubrir"); // ya hizo la encuesta: directo a Descubrir
+      }
+      if (remote?.tour) state.tourDone = true;
+      persist();
+      if (!remote || (taste.events && remote.n < taste.events) || (state.profile && !remote.survey)) syncTaste();
     } catch (e) { console.warn("Gustos de la cuenta no disponibles:", e); }
   }
 
@@ -1356,8 +1374,18 @@ function startApp(MOVIES) {
   function onUserChange(u) {
     const wasSigned = signedIn;
     signedIn = Boolean(u);
-    if (u && !wasSigned) loadAccountTaste();
-    if (!u && wasSigned) { taste.reset(); state.taste = null; personal = null; persist(); } // otra cuenta no hereda tus gustos
+    if (u && !wasSigned) accountLoad = loadAccountTaste();
+    if (!u && wasSigned) {
+      // otra cuenta en este móvil no hereda tus gustos, tu encuesta ni tu tutorial
+      taste.reset();
+      Object.assign(state, { taste: null, profile: null, tourDone: false, weekly: null });
+      personal = null;
+      results = null;
+      forYou = [];
+      draft = null;
+      accountMode = "entrar";
+      persist();
+    }
     const btn = $("#account-btn");
     btn.classList.toggle("signed", Boolean(u));
     btn.querySelector(".avatar")?.remove();
@@ -1375,7 +1403,7 @@ function startApp(MOVIES) {
     const gate = needLogin();
     if (booted && gate !== gated) {
       // Al terminar de entrar (y elegir nombre) se sigue con la encuesta o Descubrir; al salir, vuelve a pedir la cuenta
-      if (!gate && location.hash === "#cuenta") location.hash = state.profile ? "#descubrir" : "#para-ti";
+      if (!gate && location.hash === "#cuenta") accountLoad.then(() => { location.hash = state.profile ? "#descubrir" : "#para-ti"; });
       else route();
       return;
     }
@@ -2205,6 +2233,7 @@ function startApp(MOVIES) {
   updateCount();
   // Espera a saber si hay sesión (máximo 6 s, por si Firebase no carga) antes de mostrar nada
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
+    .then(() => accountLoad)
     .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); });
 }
 
