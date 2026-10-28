@@ -165,7 +165,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 }
 .stamp-like { left: 20px; color: var(--like); transform: rotate(-12deg); }
 .stamp-nope { right: 20px; color: #fff; transform: rotate(12deg); }
-.stamp-seen { left: 50%; top: auto; bottom: 46%; color: var(--ticket); transform: translateX(-50%); }
+.stamp-seen { left: 50%; top: 30%; color: var(--ticket); transform: translateX(-50%); }
 
 /* Controles */
 .controls { display: flex; justify-content: center; align-items: center; gap: 16px; }

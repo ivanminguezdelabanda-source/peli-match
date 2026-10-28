@@ -1050,7 +1050,7 @@ function startApp(MOVIES) {
   // ---------- Tutorial guiado: resalta cada parte de la app con una explicación ----------
   const TOUR = [
     { view: "para-ti", target: ".weekly", title: "Tu peli de la semana", text: "Cada lunes te recomiendo una peli según tu encuesta y lo que guardas. Si te convence, guárdala con «La quiero ver»." },
-    { view: "descubrir", target: "#deck", title: "Desliza para decidir", text: "Derecha: la quieres ver. Izquierda: pasas. Arriba: ya la has visto. Toca la carátula para ver su ficha, tráiler y dónde verla." },
+    { view: "descubrir", target: "#deck", demo: true, place: "bottom", title: "Desliza para decidir", text: "Derecha: la quieres ver. Izquierda: pasas. Arriba: ya la has visto. Toca la carátula para ver su ficha, tráiler y dónde verla." },
     { view: "descubrir", target: "#controls", title: "O usa los botones", text: "Deshacer, paso, la quiero ver, ya la vi y ficha. Lo mismo que deslizar." },
     { view: "descubrir", target: "#moods", title: "¿Qué te apetece?", text: "Filtra las cartas por género. «✨ Para ti» te enseña primero las que más encajan con tu encuesta." },
     { view: "descubrir", target: ".icon-btn", title: "Busca cualquier peli", text: "Por título, director o actor. Desde su ficha la guardas o la metes en tus listas." },
@@ -1059,6 +1059,37 @@ function startApp(MOVIES) {
   ];
   let tourIdx = -1;
   let tourBox = null;
+  let demoAnims = [];
+
+  // Animación de ejemplo: la carta de arriba hace sola derecha, izquierda y arriba, en bucle
+  function startSwipeDemo() {
+    stopSwipeDemo();
+    const card = topCard();
+    if (!card || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const rest = "translate(0, 0) rotate(0deg)";
+    const opts = { duration: 7200, iterations: Infinity };
+    const ease = (frames) => frames.map((f) => ({ ...f, easing: "ease-in-out" })); // suavizado entre cada pose
+    demoAnims = [
+      card.animate(ease([
+        { offset: 0, transform: rest }, { offset: 0.08, transform: rest },
+        { offset: 0.2, transform: "translate(38%, 10px) rotate(9deg)" }, { offset: 0.27, transform: "translate(38%, 10px) rotate(9deg)" },
+        { offset: 0.36, transform: rest }, { offset: 0.42, transform: rest },
+        { offset: 0.54, transform: "translate(-38%, 10px) rotate(-9deg)" }, { offset: 0.61, transform: "translate(-38%, 10px) rotate(-9deg)" },
+        { offset: 0.7, transform: rest }, { offset: 0.76, transform: rest },
+        { offset: 0.86, transform: "translate(0, -22%) rotate(0deg)" }, { offset: 0.92, transform: "translate(0, -22%) rotate(0deg)" },
+        { offset: 1, transform: rest },
+      ]), opts),
+      ...[[".stamp-like", 0.2, 0.27], [".stamp-nope", 0.54, 0.61], [".stamp-seen", 0.86, 0.92]].map(([sel, a, b]) =>
+        card.querySelector(sel).animate(ease([
+          { offset: 0, opacity: 0 }, { offset: a - 0.08, opacity: 0 }, { offset: a, opacity: 1 },
+          { offset: b, opacity: 1 }, { offset: Math.min(b + 0.06, 1), opacity: 0 }, { offset: 1, opacity: 0 },
+        ]), opts)),
+    ];
+  }
+  function stopSwipeDemo() {
+    demoAnims.forEach((a) => a.cancel());
+    demoAnims = [];
+  }
   function startTour() {
     tourIdx = 0;
     if (!tourBox) {
@@ -1077,6 +1108,7 @@ function startApp(MOVIES) {
     showTourStep();
   }
   function endTour(done) {
+    stopSwipeDemo();
     tourIdx = -1;
     tourBox.hidden = true;
     location.hash = done === true ? "#descubrir" : "#para-ti";
@@ -1089,7 +1121,13 @@ function startApp(MOVIES) {
     tourBox.querySelector(".tour-text").textContent = step.text;
     tourBox.querySelector(".tour-next").textContent = tourIdx === TOUR.length - 1 ? "¡A ver pelis!" : "Siguiente";
     tourBox.classList.add("moving");
-    setTimeout(() => { placeTour(); tourBox.classList.remove("moving"); tourBox.querySelector(".tour-next").focus(); }, 250);
+    stopSwipeDemo();
+    setTimeout(() => {
+      placeTour();
+      tourBox.classList.remove("moving");
+      tourBox.querySelector(".tour-next").focus();
+      if (step.demo) startSwipeDemo();
+    }, 250);
   }
   function placeTour() {
     const step = TOUR[tourIdx];
@@ -1109,6 +1147,7 @@ function startApp(MOVIES) {
     hole.style.cssText = `left:${r.left - pad}px;top:${top}px;width:${r.width + pad * 2}px;height:${bottom - top}px`;
     const ch = card.offsetHeight;
     // la tarjeta va debajo del elemento si cabe; si no, encima; si tampoco, abajo del todo
+    if (step.place === "bottom") { card.style.top = `${vh - ch - 8}px`; return; }
     let y = bottom + 12;
     if (y + ch > vh - 8) y = top - ch - 12;
     if (y < 8) y = vh - ch - 90;
