@@ -1366,7 +1366,14 @@ function startApp(MOVIES) {
   }
 
   // Con Firebase activo, lo primero es entrar o crear la cuenta
-  const needLogin = () => Boolean(cloud && (!cloud.user || !cloud.user.ready));
+  // Invitado (state.guest): usa la app sin cuenta; todo se queda en este móvil y no puede escribir reseñas
+  const needLogin = () => Boolean(cloud && (cloud.user ? !cloud.user.ready : !state.guest));
+  function leaveGuest(mode = "crear") {
+    state.guest = false;
+    accountMode = mode;
+    persist();
+    if (location.hash === "#cuenta") route(); else location.hash = "#cuenta";
+  }
   let gated = false;
   let booted = false;
   let signedIn = false;
@@ -1374,7 +1381,10 @@ function startApp(MOVIES) {
   function onUserChange(u) {
     const wasSigned = signedIn;
     signedIn = Boolean(u);
-    if (u && !wasSigned) accountLoad = loadAccountTaste();
+    if (u && !wasSigned) {
+      if (state.guest) { state.guest = false; persist(); }
+      accountLoad = loadAccountTaste();
+    }
     if (!u && wasSigned) {
       // otra cuenta en este móvil no hereda tus gustos, tu encuesta ni tu tutorial
       taste.reset();
@@ -1391,7 +1401,7 @@ function startApp(MOVIES) {
     btn.querySelector(".avatar")?.remove();
     if (u) btn.append(avatar(u));
     btn.setAttribute("aria-label", u ? `Mi cuenta: ${userName(u)}` : "Entrar o crear cuenta");
-    if (u && afterLogin) {
+    if (u && u.ready && afterLogin) {
       const id = afterLogin;
       afterLogin = null;
       history.back();
@@ -1629,6 +1639,19 @@ function startApp(MOVIES) {
       return;
     }
     const u = cloud.user;
+    if (!u && state.guest) {
+      box.append(el("h1", "page-title", "Modo invitado"),
+        el("p", "empty-text", "Estás usando Cinder sin cuenta. Tus matches, listas y gustos se guardan solo en este móvil: si borras los datos del navegador, se pierden."),
+        el("p", "empty-text", "Con una cuenta guardas tus gustos en cualquier móvil, tienes nombre de usuario y foto, y puedes publicar reseñas. Lo que llevas hecho como invitado pasa a tu cuenta nueva."));
+      const create = el("button", "btn btn-solid", "Crear cuenta");
+      create.type = "button";
+      create.onclick = () => leaveGuest("crear");
+      const enter = el("button", "btn btn-ghost", "Ya tengo cuenta: entrar");
+      enter.type = "button";
+      enter.onclick = () => leaveGuest("entrar");
+      box.append(create, enter, tasteSection());
+      return;
+    }
     if (u && !u.ready) return renderSetup(box, u);
     if (u) {
       box.append(el("h1", "page-title", "Mi cuenta"));
@@ -1796,6 +1819,18 @@ function startApp(MOVIES) {
       links.append(forgot);
     }
     box.append(google, el("p", "account-or", "o con tu correo"), form, links);
+    if (gated) {
+      const guest = el("button", "btn btn-ghost", "Seguir como invitado");
+      guest.type = "button";
+      guest.onclick = () => {
+        state.guest = true;
+        persist();
+        location.hash = state.profile ? "#descubrir" : "#para-ti";
+        route();
+      };
+      box.append(el("p", "account-or", "o"), guest,
+        el("p", "account-note", "Sin cuenta: lo que hagas se guarda solo en este móvil y no podrás escribir reseñas. Puedes crear la cuenta cuando quieras."));
+    }
   }
 
   // ---------- Reseñas: públicas en Firebase; sin Firebase, se guardan solo en este móvil ----------
@@ -1866,7 +1901,12 @@ function startApp(MOVIES) {
     if (cloud && !uid) {
       const login = el("button", "btn btn-solid", "Entra para escribir tu reseña");
       login.type = "button";
-      login.onclick = () => { afterLogin = movieId; accountMode = "entrar"; location.hash = "#cuenta"; };
+      login.onclick = () => {
+        afterLogin = movieId;
+        if (state.guest) return leaveGuest("entrar");
+        accountMode = "entrar";
+        location.hash = "#cuenta";
+      };
       box.append(login);
       return;
     }
