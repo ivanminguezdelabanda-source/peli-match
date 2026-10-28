@@ -5,6 +5,9 @@ function startApp(MOVIES) {
 
   // ---------- Persistencia local (en la app móvil se cambiaría por almacenamiento nativo) ----------
   const KEY = "pelimatch:v1";
+  // Modo pruebas: cada recarga empieza de cero (bienvenida y encuesta). Poner a false para guardar entre visitas.
+  const RESET_ON_LOAD = true;
+  if (RESET_ON_LOAD) { try { localStorage.removeItem(KEY); } catch (e) { /* sin almacenamiento */ } }
   const store = {
     load() {
       try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) { /* sin almacenamiento */ }
