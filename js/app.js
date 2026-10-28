@@ -741,11 +741,20 @@ function startApp(MOVIES) {
     const redo = el("button", "btn btn-ghost", "Repetir encuesta");
     redo.type = "button";
     redo.onclick = () => { draft = { ...emptyProfile(), ...state.profile }; stepIdx = 0; renderMatch(); };
+    const mine = el("button", "btn btn-red", "Ir a mi match personalizado");
+    mine.type = "button";
+    mine.onclick = () => {
+      if (!forYou.length) runMatch();
+      mood = FOR_YOU;
+      renderMoods();
+      deckEl.replaceChildren();
+      location.hash = "#descubrir";
+    };
     const tour = el("button", "btn btn-ghost", "Ver tutorial");
     tour.type = "button";
     tour.onclick = startTour;
     const footer = el("div", "match-footer");
-    footer.append(redo, tour);
+    footer.append(mine, redo, tour);
     box.append(footer);
   }
 
