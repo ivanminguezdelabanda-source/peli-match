@@ -467,7 +467,11 @@ function startApp(MOVIES) {
   let spinning = false;
 
   // Pelis base de la caja: las de la lista elegida, o los matches por ver
+  const ANY = "any"; // sorteo entre todo el catálogo, sin matches
+  const ANY_LABEL = "🎲 Cualquier peli";
+  let wheelAuto = true; // si no hay matches, empieza en «Cualquier peli»
   function wheelBase() {
+    if (wheelList === ANY) return MOVIES.filter((m) => !entry(m.id)?.watched);
     const list = listById(wheelList);
     return list
       ? list.ids.filter((id) => !entry(id)?.watched).map((id) => byId[id])
@@ -480,7 +484,8 @@ function startApp(MOVIES) {
   }
 
   function renderWheel() {
-    if (wheelList && !listById(wheelList)) wheelList = null;
+    if (wheelList && wheelList !== ANY && !listById(wheelList)) wheelList = null;
+    if (wheelAuto && !wheelList && state.library.filter((l) => !l.watched).length < 2) wheelList = ANY;
     const pendingMovies = wheelBase();
     const genres = genresOf(pendingMovies);
     if (wheelGenre !== "Todas" && !genres.includes(wheelGenre)) wheelGenre = "Todas";
@@ -492,21 +497,25 @@ function startApp(MOVIES) {
     });
 
     const listBox = $("#wheel-lists");
-    listBox.hidden = state.lists.length === 0;
-    const listNames = ["Mis matches", ...state.lists.map((l) => l.name)];
-    chipRow(listBox, listNames, listById(wheelList)?.name || "Mis matches", (name) => {
-      wheelList = state.lists.find((l) => l.name === name)?.id || null;
+    listBox.hidden = false;
+    const listNames = ["Mis matches", ...state.lists.map((l) => l.name), ANY_LABEL];
+    const current = wheelList === ANY ? ANY_LABEL : listById(wheelList)?.name || "Mis matches";
+    chipRow(listBox, listNames, current, (name) => {
+      wheelAuto = false;
+      wheelList = name === ANY_LABEL ? ANY : state.lists.find((l) => l.name === name)?.id || null;
       $("#wheel-result").hidden = true;
       renderWheel();
     });
 
-    const providers = [...new Set(pendingMovies.flatMap((m) => m.providers || []))].sort();
+    const providers = wheelList === ANY
+      ? PROVIDERS // en todo el catálogo, solo las plataformas principales
+      : [...new Set(pendingMovies.flatMap((m) => m.providers || []))].sort();
     if (!providers.includes(wheelProvider)) wheelProvider = "Cualquier sitio";
     const provBox = $("#wheel-providers");
     provBox.hidden = providers.length === 0;
     chipRow(provBox, ["Cualquier sitio", ...providers], wheelProvider, (p) => { wheelProvider = p; $("#wheel-result").hidden = true; renderWheel(); });
 
-    const tooFew = pendingMovies.length < 2 && !wheelList && !state.lists.some((l) => l.ids.length >= 2);
+    const tooFew = false; // siempre se puede sortear: como mínimo, entre todo el catálogo
     $("#wheel-empty").hidden = !tooFew;
     $(".wheel-filters").hidden = tooFew;
     $("#wheel-wrap").hidden = tooFew;
@@ -517,9 +526,11 @@ function startApp(MOVIES) {
     wheelItems = pool;
     $("#wheel-spin").disabled = pool.length === 0 || spinning;
     $("#wheel-note").textContent = pool.length === 0
-      ? "Ninguna peli de tu biblioteca encaja con estos filtros."
-      : `${pool.length} ${pool.length === 1 ? "peli entra" : "pelis entran"} en la caja.`;
-    if (!spinning) drawReel(shuffle(pool));
+      ? (wheelList === null && !state.library.some((l) => !l.watched)
+        ? "Aún no tienes matches por ver. Elige «Cualquier peli» o desliza en Descubrir."
+        : "Ninguna peli encaja con estos filtros.")
+      : `${pool.length.toLocaleString("es-ES")} ${pool.length === 1 ? "peli entra" : "pelis entran"} en la caja.`;
+    if (!spinning) drawReel(shuffle(pool).slice(0, 24));
   }
 
   // Color de «rareza» según la nota, como en las cajas de los juegos
@@ -669,13 +680,19 @@ function startApp(MOVIES) {
     again.type = "button";
     again.onclick = spin;
     actions.append(where, again);
+    if (!inLibrary(m.id)) {
+      const save = el("button", "btn btn-ghost", `${ICON.save} La quiero ver`);
+      save.type = "button";
+      save.onclick = () => { addToLibrary(m.id); save.remove(); };
+      actions.prepend(save);
+    }
     body.append(actions);
     box.append(btn, body);
     box.hidden = false;
     box.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
   $("#wheel-spin").onclick = spin;
-  window.addEventListener("resize", () => { if (!$("#view-ruleta").hidden && !spinning) drawReel(shuffle(wheelItems)); });
+  window.addEventListener("resize", () => { if (!$("#view-ruleta").hidden && !spinning) drawReel(shuffle(wheelItems).slice(0, 24)); });
 
   // ---------- Para ti: encuesta y match personalizado ----------
   const ALL_GENRES = genresOf(MOVIES);
@@ -1194,7 +1211,9 @@ function startApp(MOVIES) {
     tourBox.querySelector(".tour-next").textContent = tourIdx === TOUR.length - 1 ? "¡A ver pelis!" : "Siguiente";
     tourBox.classList.add("moving");
     stopSwipeDemo();
+    const idx = tourIdx;
     setTimeout(() => {
+      if (tourIdx !== idx) return; // se saltó o avanzó mientras tanto
       placeTour();
       tourBox.classList.remove("moving");
       tourBox.querySelector(".tour-next").focus();
