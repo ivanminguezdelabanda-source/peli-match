@@ -1,4 +1,4 @@
-# Peli Match
+# Cinder
 
 App para descubrir películas y decidir cuál ver. Desliza pósters: a la derecha van a tu biblioteca. Si sigues sin decidirte, gira la ruleta.
 

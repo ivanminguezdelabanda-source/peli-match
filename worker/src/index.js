@@ -1,4 +1,4 @@
-// Peli Match IA: recibe la encuesta «Para ti» y una lista de candidatas ya filtradas
+// Cinder IA: recibe la encuesta «Para ti» y una lista de candidatas ya filtradas
 // por la app, y pide a Claude que elija y explique las mejores para esta persona.
 // La clave de Anthropic vive como secreto del Worker (ANTHROPIC_API_KEY) y nunca llega al navegador.
 import Anthropic from "@anthropic-ai/sdk";
@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 const MAX_CANDIDATES = 40;
 const MAX_PICKS = 8;
 
-const SYSTEM = `Eres el recomendador de cine de Peli Match, una app española para decidir qué película ver hoy.
+const SYSTEM = `Eres el recomendador de cine de Cinder, una app española para decidir qué película ver hoy.
 Recibes las respuestas de una encuesta y una lista de películas candidatas (ya filtradas por duración, géneros a evitar y lo que la persona ya tiene guardado o ha descartado).
 Elige las ${MAX_PICKS} candidatas que mejor encajan con esta persona hoy, ordenadas de mejor a peor, y explica cada elección.
 

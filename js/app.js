@@ -979,7 +979,7 @@ function startApp(MOVIES) {
   function renderStep(box) {
     const step = STEPS[stepIdx];
     if (firstRun && stepIdx === 0) {
-      box.append(el("div", "welcome", `<p class="result-label">Bienvenido a Peli Match</p>
+      box.append(el("div", "welcome", `<p class="result-label">Bienvenido a Cinder</p>
         <p>Antes de nada, ${STEPS.length} preguntas rápidas para conocerte. Al acabar te doy tu peli de la semana.</p>`));
     }
     box.append(el("div", "q-progress", `<span style="width:${((stepIdx + 1) / STEPS.length) * 100}%"></span>`));
