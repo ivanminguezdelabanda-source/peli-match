@@ -1275,7 +1275,14 @@ function startApp(MOVIES) {
     return a;
   }
 
+  // Con Firebase activo, lo primero es entrar o crear la cuenta
+  const needLogin = () => Boolean(cloud && !cloud.user);
+  let booted = false;
+  let signedIn = false;
+
   function onUserChange(u) {
+    const wasSigned = signedIn;
+    signedIn = Boolean(u);
     const btn = $("#account-btn");
     btn.classList.toggle("signed", Boolean(u));
     btn.querySelector(".avatar")?.remove();
@@ -1286,6 +1293,12 @@ function startApp(MOVIES) {
       afterLogin = null;
       history.back();
       setTimeout(() => openSheet(id), 250);
+      return;
+    }
+    if (booted && wasSigned !== signedIn) {
+      // Al entrar desde la pantalla de inicio se sigue con la encuesta (o Descubrir); al salir, vuelve a pedir la cuenta
+      if (u && location.hash === "#cuenta") location.hash = state.profile ? "#descubrir" : "#para-ti";
+      else route();
       return;
     }
     if (!$("#view-cuenta").hidden) renderAccount();
@@ -1477,8 +1490,8 @@ function startApp(MOVIES) {
     }
 
     const signup = accountMode === "crear";
-    box.append(el("h1", "page-title", signup ? "Crea tu cuenta" : "Entra en Cinder"),
-      el("p", "empty-text", "Con una cuenta publicas reseñas con tu nombre y tu foto."));
+    box.append(el("h1", "page-title", signup ? "Crea tu cuenta" : "Bienvenido a Cinder"),
+      el("p", "empty-text", signup ? "Elige cómo quieres entrar. Con tu cuenta guardas tu perfil y publicas reseñas." : "Entra o crea tu cuenta para empezar a descubrir pelis."));
     const google = el("button", "btn btn-google", `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.8h3.6c2.1-1.9 3.3-4.8 3.3-8.1z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10c.9-2.7 3.3-4.6 6.2-4.6z"/></svg> Continuar con Google`);
     google.type = "button";
     google.onclick = async () => {
@@ -1875,6 +1888,16 @@ function startApp(MOVIES) {
   const VIEWS = ["descubrir", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta"];
   let lastView = null;
   function route() {
+    document.body.classList.remove("booting");
+    if (needLogin()) {
+      document.body.classList.add("onboarding");
+      if (location.hash !== "#cuenta") history.replaceState(null, "", "#cuenta");
+      closeSheet();
+      VIEWS.forEach((v) => ($("#view-" + v).hidden = v !== "cuenta"));
+      lastView = "cuenta";
+      renderAccount();
+      return;
+    }
     // Sin encuesta hecha no se entra al resto de la app
     const locked = !state.profile;
     document.body.classList.toggle("onboarding", locked);
@@ -1941,7 +1964,9 @@ function startApp(MOVIES) {
   window.addEventListener("hashchange", route);
   renderMoods();
   updateCount();
-  route();
+  // Espera a saber si hay sesión (máximo 6 s, por si Firebase no carga) antes de mostrar nada
+  Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
+    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); });
 }
 
 // Carga las pelis de TMDB (data/movies.json, generado por scripts/sync-tmdb.mjs).

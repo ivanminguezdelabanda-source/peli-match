@@ -508,3 +508,4 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .account-warn { background: color-mix(in srgb, var(--ticket) 14%, transparent); border-radius: 14px; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .account-warn p { margin: 0; flex-basis: 100%; }
 .danger-zone summary { color: #ff8a8a; }
+.booting main, .booting .tabbar { visibility: hidden; }

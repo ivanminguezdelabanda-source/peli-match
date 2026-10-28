@@ -50,6 +50,9 @@ export async function connect(config) {
     }
   }
 
+  // ready: se resuelve cuando Firebase ya sabe si hay sesión iniciada
+  let markReady;
+  const ready = new Promise((r) => (markReady = r));
   A.onAuthStateChanged(auth, async (u) => {
     user = u;
     profile = null;
@@ -57,6 +60,7 @@ export async function connect(config) {
       try { await loadProfile(u); } catch (e) { console.warn("Perfil no disponible:", e); }
     }
     emit();
+    markReady();
   });
 
   // Algunas acciones (contraseña, correo, borrar) piden haber entrado hace poco
@@ -69,6 +73,7 @@ export async function connect(config) {
   }
 
   return {
+    ready,
     get user() { return view(); },
     onUser(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
