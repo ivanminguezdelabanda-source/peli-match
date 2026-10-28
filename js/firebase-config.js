@@ -1,4 +1,11 @@
 // Configuración web de Firebase (cuentas y reseñas). No es secreta: Firebase la protege
 // con las reglas de firestore.rules y los dominios autorizados.
-// Pega aquí el objeto firebaseConfig de la consola de Firebase. Si está vacío, la app funciona sin cuentas.
-window.CINDER_FIREBASE = null;
+// Proyecto de Firebase: cinder-9e438. Si se deja en null, la app funciona sin cuentas.
+window.CINDER_FIREBASE = {
+  apiKey: "AIzaSyDa5Qf-CpQfbhbno8MX0hbCOrAIeELouno",
+  authDomain: "cinder-9e438.firebaseapp.com",
+  projectId: "cinder-9e438",
+  storageBucket: "cinder-9e438.firebasestorage.app",
+  messagingSenderId: "663858927238",
+  appId: "1:663858927238:web:7b9bb5f7986acf0046e307",
+};
