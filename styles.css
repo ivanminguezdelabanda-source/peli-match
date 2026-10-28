@@ -54,14 +54,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 /* Cabecera */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding-block: 12px 8px; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark {
-  width: 26px; height: 18px; border-radius: 3px; background: var(--ticket);
-  -webkit-mask: radial-gradient(circle 4px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat,
-                radial-gradient(circle 4px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
-          mask: radial-gradient(circle 4px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat,
-                radial-gradient(circle 4px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
-  transform: rotate(-8deg);
-}
+.brand-mark { width: 30px; height: 30px; flex: none; }
 .brand-name { font-family: var(--f-display); font-size: 22px; letter-spacing: .04em; }
 .brand-name b { font-weight: 400; color: var(--velvet); }
 
