@@ -7,6 +7,11 @@ on:
     - cron: "0 4 * * *" # cada día a las 04:00 UTC: catálogo completo y novedades
     - cron: "0 10,16,22 * * *" # tres veces más al día: solo novedades y noticias
   workflow_dispatch:
+    inputs:
+      catalogo:
+        description: "Descargar también el catálogo completo (tarda bastante)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -31,7 +36,7 @@ jobs:
         with:
           node-version: 20
       - name: Descargar pelis de TMDB
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 4 * * *'
+        if: (github.event_name == 'workflow_dispatch' && inputs.catalogo) || github.event.schedule == '0 4 * * *'
         run: node scripts/sync-tmdb.mjs
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
