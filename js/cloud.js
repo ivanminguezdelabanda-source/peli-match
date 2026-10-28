@@ -5,7 +5,7 @@
 //   users/{uid}                    perfil: name (nombre de usuario), photo (data:URL pequeña o URL de Google),
 //                                  reviewed (ids de pelis con reseña), ready (ya eligió nombre de usuario)
 //   usernames/{nombre}             { uid }: reserva cada nombre de usuario para que sea único
-//   tastes/{uid}                   modelo de gustos de js/taste.js, respuestas de la encuesta y tutorial visto
+//   tastes/{uid}                   datos de la cuenta: gustos (js/taste.js), encuesta, tutorial visto, matches, descartes y listas
 //   movies/{peli}/reviews/{uid}    una reseña por cuenta y peli, con copia del nombre y la foto del autor
 // Las cuentas con correo sin verificar se borran a las 24 h (scripts/purge-unverified.mjs, cada hora en GitHub Actions).
 export const VERIFY_HOURS = 24;
@@ -141,9 +141,9 @@ export async function connect(config) {
       const snap = await F.getDoc(tasteDoc(user.uid));
       return snap.exists() ? snap.data() : null;
     },
-    // Gustos, respuestas de la encuesta y si ya vio el tutorial
-    saveTaste: (model, { survey = null, tour = false } = {}) =>
-      F.setDoc(tasteDoc(user.uid), { v: 1, n: model.n, f: model.f, survey, tour, at: F.serverTimestamp() }),
+    // Gustos, encuesta, tutorial visto, matches (lib), descartes (passed) y listas de la cuenta
+    saveTaste: (model, { survey = null, tour = false, lib = [], passed = [], lists = [], savedAt = Date.now() } = {}) =>
+      F.setDoc(tasteDoc(user.uid), { v: 1, n: model.n, f: model.f, survey, tour, lib, passed, lists, savedAt, at: F.serverTimestamp() }),
 
     // ---------- Seguridad ----------
     async changePassword(current, next) {

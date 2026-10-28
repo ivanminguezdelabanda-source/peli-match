@@ -41,7 +41,8 @@ function startApp(MOVIES) {
   state.library = state.library.filter((l) => byId[l.id]);
   state.passed = state.passed.filter((id) => byId[id]);
   state.lists = (state.lists || []).map((l) => ({ ...l, ids: l.ids.filter((id) => byId[id]) }));
-  const persist = () => store.save(state);
+  let afterPersist = null; // con cuenta: sube los cambios a la nube (se activa más abajo)
+  const persist = () => { store.save(state); if (afterPersist) afterPersist(); };
   persist();
 
   const inLibrary = (id) => state.library.some((l) => l.id === id);
@@ -71,7 +72,32 @@ function startApp(MOVIES) {
     }
     return personal;
   }
-  const baseOrder = () => (mood === FOR_YOU ? forYou : taste.events >= PERSONAL_FROM ? personalOrder() : state.order);
+  // «Todo» es para descubrir: el catálogo al azar con una recomendación tuya cada 4 cartas.
+  // Los géneros usan tu orden personal y «Para ti» mezcla encuesta y gustos (forYou).
+  let discovery = null, discoveryAt = -1;
+  function discoveryOrder() {
+    if (!discovery || Math.abs(taste.events - discoveryAt) >= 4) {
+      const mine = personalOrder().slice(0, 400);
+      const out = [], used = new Set();
+      let r = 0, m = 0;
+      while (r < state.order.length) {
+        const fromMine = out.length % 4 === 3 && m < mine.length;
+        const id = fromMine ? mine[m++] : state.order[r++];
+        if (!used.has(id)) { used.add(id); out.push(id); }
+      }
+      discovery = out;
+      discoveryAt = taste.events;
+    }
+    return discovery;
+  }
+  let forYouAt = -1;
+  function forYouOrder() {
+    if (!forYou.length || Math.abs(taste.events - forYouAt) >= 4) { runMatch(); forYouAt = taste.events; }
+    return forYou;
+  }
+  const baseOrder = () => mood === FOR_YOU ? forYouOrder()
+    : taste.events < PERSONAL_FROM ? state.order
+    : mood === "Todo" ? discoveryOrder() : personalOrder();
   const queue = () => {
     const ok = (id) => byId[id] && !inLibrary(id) && !state.passed.includes(id) && matchesMood(byId[id]);
     const head = pinned.filter(ok);
@@ -145,7 +171,7 @@ function startApp(MOVIES) {
       b.setAttribute("aria-pressed", String(g === mood));
       b.onclick = () => {
         mood = g;
-        if (g === FOR_YOU && !forYou.length) runMatch();
+        pinned = []; // otra pestaña, otro mazo
         renderMoods();
         deckEl.replaceChildren();
         renderDeck();
@@ -872,6 +898,7 @@ function startApp(MOVIES) {
     mine.onclick = () => {
       if (!forYou.length) runMatch();
       mood = FOR_YOU;
+      pinned = [];
       renderMoods();
       deckEl.replaceChildren();
       location.hash = "#descubrir";
@@ -1332,37 +1359,80 @@ function startApp(MOVIES) {
     return a;
   }
 
-  // Los gustos viajan con la cuenta: se cargan al entrar y se guardan unos segundos después de cada cambio
+  // ---------- Datos de la cuenta ----------
+  // Cada cuenta tiene sus gustos, encuesta, tutorial, matches, descartes y listas, guardados en tastes/{uid}.
+  // state.owner dice de quién son los datos de este móvil (null = invitado). Al cambiar de cuenta se empieza limpio.
   let tasteSyncTimer = null;
-  function syncTaste() {
-    if (!cloud?.user) return;
+  let loadingAccount = false;
+  function accountPayload() {
+    state.savedAt = Date.now();
+    return {
+      survey: state.profile || null,
+      tour: Boolean(state.tourDone),
+      lib: state.library.slice(-2000),
+      passed: state.passed.slice(-3000),
+      lists: state.lists.slice(0, 50),
+      savedAt: state.savedAt,
+    };
+  }
+  function syncTaste(now = false) {
+    if (!cloud?.user || loadingAccount || state.owner !== cloud.user.uid) return;
     clearTimeout(tasteSyncTimer);
-    // Junto a los gustos van la encuesta y si ya vio el tutorial, para no repetirlos al volver a entrar
-    tasteSyncTimer = setTimeout(() => cloud.saveTaste(taste.exportModel(), { survey: state.profile || null, tour: Boolean(state.tourDone) })
-      .catch((e) => console.warn("Gustos sin guardar:", e)), 4000);
+    const send = () => {
+      tasteSyncTimer = null;
+      cloud.saveTaste(taste.exportModel(), accountPayload()).catch((e) => console.warn("Datos de la cuenta sin guardar:", e));
+    };
+    if (now) send(); else tasteSyncTimer = setTimeout(send, 1500);
+  }
+  // Si se cierra la app con cambios pendientes, se suben ya
+  document.addEventListener("visibilitychange", () => { if (document.hidden && tasteSyncTimer) syncTaste(true); });
+
+  function clearLocalData() {
+    taste.reset();
+    Object.assign(state, {
+      taste: null, profile: null, tourDone: false, weekly: null, library: [], passed: [], lists: [], history: [],
+      myReviews: {}, reviewSignals: {}, order: shuffle(MOVIES.map((m) => m.id)), owner: null, savedAt: 0,
+    });
+    personal = discovery = results = null;
+    forYou = [];
+    pinned = [];
+    draft = null;
+    firstRun = false;
+  }
+  function applyRemote(r) {
+    if (r.f) taste.importModel(r);
+    state.taste = taste.exportModel();
+    state.profile = r.survey ? { ...emptyProfile(), ...r.survey } : null;
+    state.tourDone = Boolean(r.tour);
+    state.library = (r.lib || []).filter((l) => l && byId[l.id]);
+    state.passed = (r.passed || []).filter((id) => byId[id]);
+    state.lists = (r.lists || []).map((l) => ({ ...l, ids: (l.ids || []).filter((id) => byId[id]) }));
+    state.savedAt = r.savedAt || 0;
+    personal = discovery = results = null;
+    forYou = [];
+    pinned = [];
+    if (state.profile) { draft = null; firstRun = false; }
+  }
+  function refreshAfterSwitch() {
+    deckEl.replaceChildren();
+    renderMoods();
+    updateCount();
   }
   let accountLoad = Promise.resolve();
-  async function loadAccountTaste() {
+  async function loadAccountTaste(u) {
+    const same = state.owner === u.uid;
+    loadingAccount = true;
+    if (!same) clearLocalData();
+    state.owner = u.uid;
     try {
       const remote = await cloud.loadTaste();
-      if (remote && remote.n >= taste.events) {
-        taste.importModel(remote);
-        state.taste = taste.exportModel();
-        personal = null;
-      }
-      if (remote?.survey && !state.profile) {
-        state.profile = { ...emptyProfile(), ...remote.survey };
-        draft = null;
-        firstRun = false;
-        results = null;
-        forYou = [];
-        renderMoods();
-        if (location.hash === "#para-ti") history.replaceState(null, "", "#descubrir"); // ya hizo la encuesta: directo a Descubrir
-      }
-      if (remote?.tour) state.tourDone = true;
-      persist();
-      if (!remote || (taste.events && remote.n < taste.events) || (state.profile && !remote.survey)) syncTaste();
-    } catch (e) { console.warn("Gustos de la cuenta no disponibles:", e); }
+      if (remote && (!same || (remote.savedAt || 0) > (state.savedAt || 0))) applyRemote(remote);
+    } catch (e) { console.warn("Datos de la cuenta no disponibles:", e); }
+    loadingAccount = false;
+    persist();
+    refreshAfterSwitch();
+    // ya hizo la encuesta: directo a Descubrir
+    if (state.profile && location.hash === "#para-ti") history.replaceState(null, "", "#descubrir");
   }
 
   // Con Firebase activo, lo primero es entrar o crear la cuenta
@@ -1382,19 +1452,16 @@ function startApp(MOVIES) {
     const wasSigned = signedIn;
     signedIn = Boolean(u);
     if (u && !wasSigned) {
-      if (state.guest) { state.guest = false; persist(); }
-      accountLoad = loadAccountTaste();
+      state.guest = false;
+      accountLoad = loadAccountTaste(u);
     }
     if (!u && wasSigned) {
-      // otra cuenta en este móvil no hereda tus gustos, tu encuesta ni tu tutorial
-      taste.reset();
-      Object.assign(state, { taste: null, profile: null, tourDone: false, weekly: null });
-      personal = null;
-      results = null;
-      forYou = [];
-      draft = null;
+      // otra cuenta (o un invitado) en este móvil empieza de cero
+      clearTimeout(tasteSyncTimer);
+      clearLocalData();
       accountMode = "entrar";
       persist();
+      refreshAfterSwitch();
     }
     const btn = $("#account-btn");
     btn.classList.toggle("signed", Boolean(u));
@@ -2271,6 +2338,7 @@ function startApp(MOVIES) {
   window.addEventListener("hashchange", route);
   renderMoods();
   updateCount();
+  afterPersist = () => syncTaste();
   // Espera a saber si hay sesión (máximo 6 s, por si Firebase no carga) antes de mostrar nada
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
     .then(() => accountLoad)
