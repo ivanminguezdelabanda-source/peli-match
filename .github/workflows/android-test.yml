@@ -23,6 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - { name: api36-pixel6, api: 36, profile: pixel_6, font: "1.0" }
           - { name: api35-pixel6, api: 35, profile: pixel_6, font: "1.0" }
           - { name: api34-pixel6-letra-grande, api: 34, profile: pixel_6, font: "1.3" }
           - { name: api30-pequeno, api: 30, profile: Nexus 5X, font: "1.0" }

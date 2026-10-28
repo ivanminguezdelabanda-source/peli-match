@@ -15,8 +15,9 @@
   },
   "plugins": {
     "SystemBars": {
-      "insetsHandling": "disable",
-      "style": "DARK"
+      "insetsHandling": "css",
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover"
     },
     "StatusBar": {
       "backgroundColor": "#14100f",

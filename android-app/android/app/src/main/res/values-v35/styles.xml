@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 15: la app no se dibuja debajo de la barra de estado ni de la barra de navegación
-         (así los botones de abajo de Cinder no quedan tapados por los botones del móvil) -->
+    <!-- Android 15 y siguientes dibujan la app debajo de las barras del sistema (no se puede desactivar con targetSdk 36):
+         el plugin SystemBars (insetsHandling "css") deja el contenido fuera de ellas -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
@@ -9,6 +9,5 @@
         <item name="android:windowBackground">@color/ic_launcher_background</item>
         <item name="android:statusBarColor">#14100F</item>
         <item name="android:navigationBarColor">#14100F</item>
-        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
 </resources>
