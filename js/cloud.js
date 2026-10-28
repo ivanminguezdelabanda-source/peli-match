@@ -214,7 +214,13 @@ export function errorText(e) {
     "auth/cancelled-popup-request": "Has cerrado la ventana de Google.",
     "auth/unauthorized-domain": "Este dominio no está autorizado en Firebase.",
     "auth/operation-not-allowed": "Este modo de entrar no está activado en Firebase.",
+    "auth/missing-email": "Escribe tu correo.",
+    "auth/user-disabled": "Esta cuenta está desactivada.",
+    "auth/account-exists-with-different-credential": "Ya tienes una cuenta con ese correo: entra con tu contraseña.",
+    "auth/popup-blocked": "El navegador ha bloqueado la ventana de Google. Permite las ventanas emergentes y vuelve a probar.",
+    "auth/email-change-needs-verification": "Confirma primero tu correo y vuelve a probar.",
     "permission-denied": "No tienes permiso para hacer eso.",
+    "unavailable": "Sin conexión. Revisa tu internet.",
     "username-taken": "Ese nombre de usuario ya está cogido. Prueba otro.",
     "username-invalid": "Usa de 3 a 20 letras minúsculas, números, puntos o guiones bajos.",
   })[e?.code] || "Algo ha fallado. Inténtalo otra vez.";

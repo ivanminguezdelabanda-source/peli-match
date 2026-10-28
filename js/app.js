@@ -57,6 +57,7 @@ function startApp(MOVIES) {
   taste.onChange(() => {
     clearTimeout(tasteTimer);
     tasteTimer = setTimeout(() => {
+      tasteTimer = null;
       state.taste = taste.exportModel();
       persist();
       syncTaste();
@@ -92,14 +93,15 @@ function startApp(MOVIES) {
   }
   let forYouAt = -1;
   function forYouOrder() {
-    if (!forYou.length || Math.abs(taste.events - forYouAt) >= 4) { runMatch(); forYouAt = taste.events; }
+    if (forYouAt < 0 || Math.abs(taste.events - forYouAt) >= 4) { runMatch(); forYouAt = taste.events; }
     return forYou;
   }
   const baseOrder = () => mood === FOR_YOU ? forYouOrder()
     : taste.events < PERSONAL_FROM ? state.order
     : mood === "Todo" ? discoveryOrder() : personalOrder();
   const queue = () => {
-    const ok = (id) => byId[id] && !inLibrary(id) && !state.passed.includes(id) && matchesMood(byId[id]);
+    const lib = new Set(state.library.map((l) => l.id)), gone = new Set(state.passed);
+    const ok = (id) => byId[id] && !lib.has(id) && !gone.has(id) && matchesMood(byId[id]);
     const head = pinned.filter(ok);
     const seen = new Set(head);
     return head.concat(baseOrder().filter((id) => !seen.has(id) && ok(id)));
@@ -209,27 +211,27 @@ function startApp(MOVIES) {
   function renderDeck() {
     const ids = queue().slice(0, DEPTH);
     pinned = ids;
-    const existing = new Map([...deckEl.children].map((n) => [n.dataset.id, n]));
-    const leaving = [...deckEl.children].filter((n) => n.dataset.leaving);
-    deckEl.replaceChildren();
+    // Las cartas que se van siguen encima animándose; las demás se reordenan debajo sin moverlas del DOM si no hace falta
+    const existing = new Map([...deckEl.children].filter((n) => !n.dataset.leaving).map((n) => [n.dataset.id, n]));
+    existing.forEach((n, id) => { if (!ids.includes(id)) n.remove(); });
+    const firstLeaving = [...deckEl.children].find((n) => n.dataset.leaving) || null;
     ids.slice().reverse().forEach((id) => {
       const card = existing.get(id) || cardFor(byId[id]);
       card.style.transform = "";
       card.style.opacity = "";
       card.querySelectorAll(".stamp").forEach((s) => (s.style.opacity = 0));
       card.dataset.depth = ids.indexOf(id);
-      deckEl.append(card);
+      deckEl.insertBefore(card, firstLeaving);
     });
-    deckEl.append(...leaving);
     const empty = ids.length === 0;
     $("#deck-empty").hidden = !empty;
-    deckEl.hidden = empty;
+    deckEl.hidden = empty && !firstLeaving;
     $("#deck-empty-text").textContent = mood === "Todo"
       ? "Ya has visto todas. Abre la caja con tu biblioteca o vuelve a ver las que descartaste."
       : mood === FOR_YOU
         ? "Ya has visto toda tu selección. Repite la encuesta en «Para ti» para conseguir más."
         : `No quedan pelis de ${mood.toLowerCase()}. Prueba con otro género o vuelve a ver las descartadas.`;
-    $("#btn-nope").disabled = $("#btn-like").disabled = $("#btn-info").disabled = empty;
+    $("#btn-nope").disabled = $("#btn-like").disabled = $("#btn-seen").disabled = $("#btn-info").disabled = empty;
     $("#btn-undo").disabled = state.history.length === 0;
     $("#reset-passed").hidden = state.passed.length === 0;
     if (topCard()) bindDrag(topCard());
@@ -263,12 +265,8 @@ function startApp(MOVIES) {
     taste.learn(byId[id], SIGNAL[action]);
     state.history = [...state.history, { id, action }].slice(-30);
     persist();
-    const next = queue().slice(0, DEPTH);
-    [...deckEl.children].forEach((n) => {
-      if (n !== card && next.includes(n.dataset.id)) n.dataset.depth = next.indexOf(n.dataset.id);
-    });
-    if (topCard()) bindDrag(topCard());
-    setTimeout(() => { card.remove(); renderDeck(); }, 320);
+    renderDeck(); // la siguiente carta ya está lista aunque esta siga saliendo
+    setTimeout(() => { card.remove(); if (!deckEl.querySelector(".card")) renderDeck(); }, 320);
   }
 
   function undo() {
@@ -278,6 +276,7 @@ function startApp(MOVIES) {
     if (last.action === "like" || last.action === "seen") state.library = state.library.filter((l) => l.id !== last.id);
     else state.passed = state.passed.filter((id) => id !== last.id);
     state.order = [last.id, ...state.order.filter((id) => id !== last.id)];
+    pinned = [last.id, ...pinned.filter((id) => id !== last.id)]; // vuelve arriba del mazo, sea cual sea el orden
     persist();
     renderDeck();
     updateCount();
@@ -308,7 +307,7 @@ function startApp(MOVIES) {
       nope.style.opacity = up ? 0 : Math.max(0, Math.min(1, -dx / 90));
       seen.style.opacity = Math.max(0, Math.min(1, up / 90));
     });
-    const end = () => {
+    const end = (e) => {
       if (!start) return;
       const { dx, dy } = card._drag;
       const dt = performance.now() - start.t;
@@ -323,7 +322,7 @@ function startApp(MOVIES) {
         card.classList.remove("dragging");
         card.style.transform = "";
         like.style.opacity = nope.style.opacity = seen.style.opacity = 0;
-        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) openSheet(card.dataset.id, "deck");
+        if (e.type === "pointerup" && Math.abs(dx) < 6 && Math.abs(dy) < 6) openSheet(card.dataset.id, "deck");
       }
     };
     card.addEventListener("pointerup", end);
@@ -551,22 +550,24 @@ function startApp(MOVIES) {
     const pendingMovies = wheelBase();
     const genres = genresOf(pendingMovies);
     if (wheelGenre !== "Todas" && !genres.includes(wheelGenre)) wheelGenre = "Todas";
-    chipRow($("#wheel-genres"), ["Todas", ...genres], wheelGenre, (g) => { wheelGenre = g; $("#wheel-result").hidden = true; renderWheel(); });
+    chipRow($("#wheel-genres"), ["Todas", ...genres], wheelGenre, (g) => { wheelGenre = g; resetSpin(); renderWheel(); });
     chipRow($("#wheel-time"), TIMES.map((t) => t.label), wheelTime.label, (label) => {
       wheelTime = TIMES.find((t) => t.label === label);
-      $("#wheel-result").hidden = true;
+      resetSpin();
       renderWheel();
     });
 
+    // Las listas se eligen por id: dos listas pueden llamarse igual
     const listBox = $("#wheel-lists");
     listBox.hidden = false;
-    const listNames = ["Mis matches", ...state.lists.map((l) => l.name), ANY_LABEL];
-    const current = wheelList === ANY ? ANY_LABEL : listById(wheelList)?.name || "Mis matches";
-    chipRow(listBox, listNames, current, (name) => {
-      wheelAuto = false;
-      wheelList = name === ANY_LABEL ? ANY : state.lists.find((l) => l.name === name)?.id || null;
-      $("#wheel-result").hidden = true;
-      renderWheel();
+    const listOpts = [{ id: null, name: "Mis matches" }, ...state.lists, { id: ANY, name: ANY_LABEL }];
+    listBox.replaceChildren();
+    listOpts.forEach((l) => {
+      const b = el("button", "filter", esc(l.name));
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(l.id === (wheelList || null)));
+      b.onclick = () => { wheelAuto = false; wheelList = l.id; resetSpin(); renderWheel(); };
+      listBox.append(b);
     });
 
     const providers = wheelList === ANY
@@ -575,7 +576,7 @@ function startApp(MOVIES) {
     if (!providers.includes(wheelProvider)) wheelProvider = "Cualquier sitio";
     const provBox = $("#wheel-providers");
     provBox.hidden = providers.length === 0;
-    chipRow(provBox, ["Cualquier sitio", ...providers], wheelProvider, (p) => { wheelProvider = p; $("#wheel-result").hidden = true; renderWheel(); });
+    chipRow(provBox, ["Cualquier sitio", ...providers], wheelProvider, (p) => { wheelProvider = p; resetSpin(); renderWheel(); });
 
     const tooFew = false; // siempre se puede sortear: como mínimo, entre todo el catálogo
     $("#wheel-empty").hidden = !tooFew;
@@ -593,6 +594,12 @@ function startApp(MOVIES) {
         : "Ninguna peli encaja con estos filtros.")
       : `${pool.length.toLocaleString("es-ES")} ${pool.length === 1 ? "peli entra" : "pelis entran"} en la caja.`;
     if (!spinning) drawReel(shuffle(pool).slice(0, 24));
+  }
+
+  // Filtros nuevos: se oculta el resultado anterior y el botón vuelve a «Abrir caja»
+  function resetSpin() {
+    $("#wheel-result").hidden = true;
+    $("#wheel-spin").textContent = "Abrir caja";
   }
 
   // Color de «rareza» según la nota, como en las cajas de los juegos
@@ -708,7 +715,14 @@ function startApp(MOVIES) {
     if (!reduce) followTicks(target.offsetWidth + 8);
     reelEl.style.transition = `transform ${duration}ms cubic-bezier(.08, .72, .16, 1)`;
     reelEl.style.transform = `translateX(${x}px)`;
-    reelEl.addEventListener("transitionend", function done() {
+    // Si se cambia de pestaña a mitad, el navegador no avisa del final: el temporizador lo cierra igual
+    let finished = false;
+    const fallback = setTimeout(done, duration + 400);
+    reelEl.addEventListener("transitionend", done);
+    function done(e) {
+      if (finished || (e && e.target !== reelEl)) return;
+      finished = true;
+      clearTimeout(fallback);
       reelEl.removeEventListener("transitionend", done);
       target.classList.add("won");
       spinning = false;
@@ -716,7 +730,7 @@ function startApp(MOVIES) {
       $("#wheel-spin").disabled = false;
       $("#wheel-spin").textContent = "Abrir otra";
       showResult(winner);
-    });
+    }
   }
 
   function showResult(m) {
@@ -892,7 +906,12 @@ function startApp(MOVIES) {
     renderWeekly(box);
     const redo = el("button", "btn btn-ghost", "Repetir encuesta");
     redo.type = "button";
-    redo.onclick = () => { draft = { ...emptyProfile(), ...state.profile }; stepIdx = 0; renderMatch(); };
+    redo.onclick = () => {
+      draft = { ...emptyProfile(), ...state.profile };
+      draft.favs = draft.favs.filter((id) => byId[id]);
+      stepIdx = 0;
+      renderMatch();
+    };
     const mine = el("button", "btn btn-red", "Ir a mi match personalizado");
     mine.type = "button";
     mine.onclick = () => {
@@ -1029,7 +1048,7 @@ function startApp(MOVIES) {
       <div>
         <p class="result-label">${esc(label)}</p>
         <p class="result-title">${esc(m.title)}</p>
-        <p class="tile-meta">${m.year} · ${fmtTime(m.runtime)} · ${m.rating.toFixed(1)}/10</p>
+        <p class="tile-meta">${m.year} · ${fmtTime(m.runtime)}${m.rating != null ? ` · ${m.rating.toFixed(1)}/10` : ""}</p>
       </div>
       <p class="weekly-why">${esc(w.reason)}</p>`);
     const actions = el("div", "match-actions");
@@ -1141,15 +1160,17 @@ function startApp(MOVIES) {
   }
 
   // La encuesta da al motor un punto de partida: favoritas, géneros, lo que te apetece y lo que evitas
-  function learnFromSurvey(p) {
-    p.favs.forEach((id) => taste.learn(byId[id], 2.5));
-    p.genres.forEach((g) => taste.learnFeatures(["g:" + g], 1.5));
-    p.moods.forEach((md) => taste.learnFeatures((MOOD_GENRES[md] || []).map((g) => "g:" + g), 0.6));
-    p.avoid.forEach((g) => taste.learnFeatures(["g:" + g], -3));
+  // undo = true quita lo que sumaron unas respuestas anteriores (al repetir la encuesta)
+  function learnFromSurvey(p, undo = false) {
+    p.favs.forEach((id) => taste.learn(byId[id], 2.5, undo));
+    p.genres.forEach((g) => taste.learnFeatures(["g:" + g], 1.5, undo));
+    p.moods.forEach((md) => taste.learnFeatures((MOOD_GENRES[md] || []).map((g) => "g:" + g), 0.6, undo));
+    p.avoid.forEach((g) => taste.learnFeatures(["g:" + g], -3, undo));
   }
 
   function next() {
     if (stepIdx < STEPS.length - 1) { stepIdx++; return renderMatch(); }
+    if (state.profile) learnFromSurvey(state.profile, true); // repetir la encuesta sustituye a la anterior
     state.profile = draft;
     learnFromSurvey(draft);
     state.weekly = null; // la peli de la semana se recalcula con las nuevas respuestas
@@ -1158,6 +1179,8 @@ function startApp(MOVIES) {
     firstRun = false;
     persist();
     results = null;
+    forYou = []; forYouAt = -1; // el mazo «Para ti» se recalcula con las respuestas nuevas
+    if (mood === FOR_YOU) pinned = [];
     document.body.classList.remove("onboarding");
     renderMatch();
     syncTaste();
@@ -1211,6 +1234,7 @@ function startApp(MOVIES) {
   function addToLibrary(id) {
     if (inLibrary(id)) return;
     state.library.push({ id, at: Date.now(), watched: false });
+    taste.learn(byId[id], SIGNAL.like);
     state.passed = state.passed.filter((x) => x !== id);
     persist();
     bumpCount();
@@ -1384,8 +1408,25 @@ function startApp(MOVIES) {
     };
     if (now) send(); else tasteSyncTimer = setTimeout(send, 1500);
   }
-  // Si se cierra la app con cambios pendientes, se suben ya
-  document.addEventListener("visibilitychange", () => { if (document.hidden && tasteSyncTimer) syncTaste(true); });
+  // Guarda ya los gustos pendientes y, con cuenta, los sube (al cerrar sesión o salir de la app)
+  function flushAccount() {
+    clearTimeout(tasteTimer);
+    tasteTimer = null;
+    clearTimeout(tasteSyncTimer);
+    tasteSyncTimer = null;
+    state.taste = taste.exportModel();
+    store.save(state);
+    if (!cloud?.user || loadingAccount || state.owner !== cloud.user.uid) return Promise.resolve();
+    return cloud.saveTaste(state.taste, accountPayload()).catch((e) => console.warn("Datos de la cuenta sin guardar:", e));
+  }
+  // Para borrar la cuenta: que no se vuelva a subir nada mientras se borra
+  function stopSync() {
+    clearTimeout(tasteTimer);
+    tasteTimer = null;
+    clearTimeout(tasteSyncTimer);
+    tasteSyncTimer = null;
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden && (tasteTimer || tasteSyncTimer)) flushAccount(); });
 
   function clearLocalData() {
     taste.reset();
@@ -1395,7 +1436,9 @@ function startApp(MOVIES) {
     });
     personal = discovery = results = null;
     forYou = [];
+    forYouAt = -1;
     pinned = [];
+    mood = "Todo";
     draft = null;
     firstRun = false;
   }
@@ -1410,6 +1453,7 @@ function startApp(MOVIES) {
     state.savedAt = r.savedAt || 0;
     personal = discovery = results = null;
     forYou = [];
+    forYouAt = -1;
     pinned = [];
     if (state.profile) { draft = null; firstRun = false; }
   }
@@ -1451,6 +1495,8 @@ function startApp(MOVIES) {
   function onUserChange(u) {
     const wasSigned = signedIn;
     signedIn = Boolean(u);
+    // Correo sin confirmar en 24 h: la cuenta se borra al entrar
+    if (u && verifyExpired(u)) return purgeExpired();
     if (u && !wasSigned) {
       state.guest = false;
       accountLoad = loadAccountTaste(u);
@@ -1475,7 +1521,6 @@ function startApp(MOVIES) {
       setTimeout(() => openSheet(id), 250);
       return;
     }
-    if (u && verifyExpired(u)) return purgeExpired();
     renderVerifyBanner();
     const gate = needLogin();
     if (booted && gate !== gated) {
@@ -1544,8 +1589,13 @@ function startApp(MOVIES) {
     const h = Math.floor(ms / 3600000), m = Math.max(1, Math.floor((ms % 3600000) / 60000));
     return h ? `${h} h ${m} min` : `${m} min`;
   };
+  let purging = false;
   async function purgeExpired() {
-    try { await cloud.deleteAccount(null, true); } catch (e) { await cloud.signOut(); }
+    if (purging) return;
+    purging = true;
+    stopSync();
+    try { await cloud.deleteAccount(null, true); } catch (e) { await cloud.signOut().catch(() => {}); }
+    purging = false;
     toast("Tu cuenta se ha borrado porque no confirmaste el correo en 24 horas. Puedes crear otra.", "", null, 9000);
   }
   function renderVerifyBanner() {
@@ -1560,8 +1610,8 @@ function startApp(MOVIES) {
     const done = el("button", "link-btn", "Ya lo confirmé");
     done.type = "button";
     done.onclick = async () => {
-      await cloud.refresh();
-      toast(cloud.user.emailVerified ? "¡Correo confirmado!" : "Todavía no aparece confirmado. Pulsa el enlace del correo.");
+      try { await cloud.refresh(); } catch (e) { return toast(cloudError(e)); }
+      toast(cloud.user?.emailVerified ? "¡Correo confirmado!" : "Todavía no aparece confirmado. Pulsa el enlace del correo.");
     };
     bar.append(again, done);
   }
@@ -1709,7 +1759,7 @@ function startApp(MOVIES) {
     if (!u && state.guest) {
       box.append(el("h1", "page-title", "Modo invitado"),
         el("p", "empty-text", "Estás usando Cinder sin cuenta. Tus matches, listas y gustos se guardan solo en este móvil: si borras los datos del navegador, se pierden."),
-        el("p", "empty-text", "Con una cuenta guardas tus gustos en cualquier móvil, tienes nombre de usuario y foto, y puedes publicar reseñas. Lo que llevas hecho como invitado pasa a tu cuenta nueva."));
+        el("p", "empty-text", "Con una cuenta guardas tus gustos en cualquier móvil, tienes nombre de usuario y foto, y puedes publicar reseñas. Ojo: lo que llevas hecho como invitado no pasa a la cuenta, empiezas de cero."));
       const create = el("button", "btn btn-solid", "Crear cuenta");
       create.type = "button";
       create.onclick = () => leaveGuest("crear");
@@ -1737,7 +1787,10 @@ function startApp(MOVIES) {
         again.onclick = async () => { try { await cloud.sendVerification(); toast("Te he vuelto a enviar el correo"); } catch (e) { toast(cloudError(e)); } };
         const done = el("button", "link-btn", "Ya lo he confirmado");
         done.type = "button";
-        done.onclick = async () => { await cloud.refresh(); if (!cloud.user.emailVerified) toast("Todavía no aparece confirmado"); };
+        done.onclick = async () => {
+          try { await cloud.refresh(); } catch (e) { return toast(cloudError(e)); }
+          toast(cloud.user?.emailVerified ? "¡Correo confirmado!" : "Todavía no aparece confirmado");
+        };
         warn.append(again, done);
         box.append(warn);
       }
@@ -1801,7 +1854,8 @@ function startApp(MOVIES) {
           ],
           submit: "Cambiar correo",
           onSubmit: async ({ email, current }, fail) => {
-            if (!email.trim()) fail("Escribe el correo nuevo.");
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) fail("Escribe un correo nuevo válido.");
+            if (email.trim().toLowerCase() === u.email.toLowerCase()) fail("Ese ya es tu correo.");
             if (!current) fail("Escribe tu contraseña.");
             await cloud.changeEmail(current, email.trim());
             toast("Te he enviado un enlace al correo nuevo. El cambio se hace al pulsarlo.", "", null, 7000);
@@ -1817,7 +1871,11 @@ function startApp(MOVIES) {
       const actions = el("div", "account-actions");
       const out = el("button", "btn btn-ghost", "Cerrar sesión");
       out.type = "button";
-      out.onclick = async () => { await cloud.signOut(); toast("Has cerrado sesión"); };
+      out.onclick = async () => {
+        out.disabled = true;
+        await flushAccount(); // que no se pierda lo último que hiciste
+        try { await cloud.signOut(); toast("Has cerrado sesión"); } catch (e) { out.disabled = false; toast(cloudError(e)); }
+      };
       actions.append(out);
       box.append(actions);
 
@@ -1830,8 +1888,10 @@ function startApp(MOVIES) {
         danger: true,
         onSubmit: async ({ current }, fail) => {
           if (u.password && !current) fail("Escribe tu contraseña.");
-          accountMode = "crear";
+          stopSync();
           await cloud.deleteAccount(u.password ? current : null);
+          accountMode = "crear";
+          if (!$("#view-cuenta").hidden) renderAccount();
           toast("Tu cuenta se ha borrado");
         },
       }));
@@ -1859,8 +1919,13 @@ function startApp(MOVIES) {
       ev.preventDefault();
       const email = $("#acc-email").value.trim();
       const pass = $("#acc-pass").value;
+      if (!email) return showError("Escribe tu correo.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError("Ese correo no es válido.");
+      if (!pass) return showError("Escribe la contraseña.");
+      if (signup && pass.length < 6) return showError("La contraseña necesita al menos 6 caracteres.");
       const btn = form.querySelector("button[type=submit]");
       btn.disabled = true;
+      showError("");
       try {
         if (signup) await cloud.signUp(email, pass);
         else await cloud.signIn(email, pass);
@@ -1952,8 +2017,11 @@ function startApp(MOVIES) {
         del.onclick = async () => {
           try {
             if (cloud) await cloud.deleteReview(movieId);
-            else { delete state.myReviews[movieId]; persist(); }
+            else delete state.myReviews[movieId];
           } catch (e) { return toast(cloudError(e)); }
+          const signal = state.reviewSignals?.[movieId];
+          if (signal) { taste.learn(byId[movieId], signal, true); delete state.reviewSignals[movieId]; }
+          persist();
           toast("Reseña borrada");
           renderReviews(movieId);
         };
@@ -2086,7 +2154,7 @@ function startApp(MOVIES) {
     pst.append(poster(m));
     top.append(pst, el("div", "", `
       <h2 class="sheet-title" id="sheet-title">${esc(m.title)}</h2>
-      ${m.original !== m.title ? `<p class="sheet-original">${esc(m.original)}</p>` : ""}`));
+      ${m.original && m.original !== m.title ? `<p class="sheet-original">${esc(m.original)}</p>` : ""}`));
     body.append(top);
 
     const content = el("div", "sheet-content", `
@@ -2111,11 +2179,11 @@ function startApp(MOVIES) {
         <ul class="chips">${m.genres.map((g) => `<li class="chip">${esc(g)}</li>`).join("")}</ul>
       </div>
       <div class="links">
-        <a class="link-card" href="${m.trailer || trailerUrl(m)}" target="_blank" rel="noopener">
+        <a class="link-card" href="${esc(m.trailer || trailerUrl(m))}" target="_blank" rel="noopener">
           <span class="link-icon play">${ICON.play}</span>
           <span class="link-text"><b>Tráiler</b><span>En YouTube</span></span>
         </a>
-        <a class="link-card" href="${whereUrl(m)}" target="_blank" rel="noopener">
+        <a class="link-card" href="${esc(whereUrl(m))}" target="_blank" rel="noopener">
           <span class="link-icon where">${ICON.tv}</span>
           <span class="link-text"><b>Dónde verla</b><span>Plataformas en España</span></span>
         </a>
@@ -2165,7 +2233,7 @@ function startApp(MOVIES) {
     } else if (from === "match" && !e) {
       const drop = () => { results = (results || []).filter((r) => r.m.id !== id); renderMatch(); };
       actions.append(
-        button("btn btn-ghost", `${ICON.x} Paso`, () => { state.passed.push(id); persist(); drop(); }),
+        button("btn btn-ghost", `${ICON.x} Paso`, () => { state.passed.push(id); taste.learn(byId[id], SIGNAL.pass); persist(); drop(); }),
         button("btn btn-solid", `${ICON.save} La quiero ver`, () => { addToLibrary(id); drop(); }),
       );
     } else if (e) {
@@ -2196,7 +2264,7 @@ function startApp(MOVIES) {
   function refreshViews() {
     updateCount();
     if (!$("#view-biblioteca").hidden) renderLibrary();
-    if (!$("#view-ruleta").hidden) { $("#wheel-result").hidden = true; renderWheel(); }
+    if (!$("#view-ruleta").hidden && !spinning) { resetSpin(); renderWheel(); }
     if (!$("#view-buscar").hidden) renderSearch();
   }
 
@@ -2281,7 +2349,7 @@ function startApp(MOVIES) {
     if (locked && !draft) startSurvey(true);
     const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "descubrir";
     // Al volver a Descubrir, ofrece empezar de cero con la biblioteca
-    if (view === "descubrir" && lastView !== "descubrir" && state.library.length) {
+    if (view === "descubrir" && lastView !== "descubrir" && state.library.length && tourIdx < 0) {
       const n = state.library.length;
       toast(`Tienes ${n} ${n === 1 ? "match guardado" : "matches guardados"}`, "Vaciar biblioteca", emptyLibrary, 6000);
     }
@@ -2295,7 +2363,7 @@ function startApp(MOVIES) {
     });
     if (view === "biblioteca") renderLibrary();
     else if (view === "para-ti") renderMatch();
-    else if (view === "ruleta") { $("#wheel-result").hidden = true; renderWheel(); }
+    else if (view === "ruleta") { if (!spinning) resetSpin(); renderWheel(); }
     else if (view === "buscar") { renderSearch(); searchInput.focus(); }
     else if (view === "cuenta") renderAccount();
     else renderDeck();
