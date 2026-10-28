@@ -9,6 +9,8 @@
 //   movies/{peli}/reviews/{uid}    una reseña por cuenta y peli, con copia del nombre y la foto del autor
 // Las cuentas con correo sin verificar se borran a las 24 h (scripts/purge-unverified.mjs, cada hora en GitHub Actions).
 export const VERIFY_HOURS = 24;
+// Tras pulsar el enlace de un correo (verificar, cambiar contraseña…), «Abrir Cinder» vuelve aquí
+const BACK = { url: new URL("./#cuenta", location.href).href };
 export const USERNAME_RE = /^(?![.])[a-z0-9_.]{3,20}(?<![.])$/;
 const V = "13.1.0";
 const SDK = `https://www.gstatic.com/firebasejs/${V}`;
@@ -91,7 +93,7 @@ export async function connect(config) {
 
     async signUp(email, password) {
       const { user: u } = await A.createUserWithEmailAndPassword(auth, email, password);
-      A.sendEmailVerification(u).catch(() => {});
+      A.sendEmailVerification(u, BACK).catch(() => {});
     },
     signIn: (email, password) => A.signInWithEmailAndPassword(auth, email, password),
     async signInGoogle() {
@@ -107,7 +109,7 @@ export async function connect(config) {
         throw e;
       }
     },
-    resetPassword: (email) => A.sendPasswordResetEmail(auth, email),
+    resetPassword: (email) => A.sendPasswordResetEmail(auth, email, BACK),
     signOut: () => A.signOut(auth),
 
     // ---------- Perfil ----------
@@ -149,9 +151,9 @@ export async function connect(config) {
     // Firebase manda un enlace al correo nuevo; el cambio se aplica al pulsarlo
     async changeEmail(current, email) {
       await reauth(current);
-      await A.verifyBeforeUpdateEmail(user, email);
+      await A.verifyBeforeUpdateEmail(user, email, BACK);
     },
-    sendVerification: () => A.sendEmailVerification(user),
+    sendVerification: () => A.sendEmailVerification(user, BACK),
     async refresh() { await A.reload(user); emit(); },
     // Borra reseñas, perfil, nombre de usuario y gustos, y después la cuenta.
     // skipReauth: justo después de entrar no hace falta volver a pedir la contraseña.

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cinder · Tu cuenta</title>
+<meta name="theme-color" content="#14100f">
+<meta name="robots" content="noindex">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Figtree:wght@400;500;700;800&family=DM+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css?v=dev">
+<style>
+  /* Página de los enlaces de los correos de Firebase (verificar correo, cambiar contraseña…) */
+  .action-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
+  .action-card { width: min(100%, 420px); display: grid; gap: 16px; text-align: center; }
+  .action-logo { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .action-logo svg { width: 48px; height: 48px; }
+  .action-logo .brand-name { font-size: 30px; }
+  #body { display: grid; gap: 14px; }
+  .action-icon { font-size: 54px; line-height: 1; margin: 0; }
+  .action-card .empty-text { margin: 0 auto; }
+  .action-card .account-form { text-align: left; }
+  .action-card .btn { width: 100%; }
+</style>
+</head>
+<body>
+<main class="action-page">
+  <div class="action-card" id="card" aria-live="polite">
+    <div class="action-logo">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="10" width="28" height="40" rx="5" fill="none" stroke="#f2d39b" stroke-width="3" transform="rotate(-12 28 30)"/><rect x="22" y="14" width="28" height="40" rx="5" fill="#e0414b" transform="rotate(10 36 34)"/><path fill="#14100f" d="M32 27v14l11-7z" transform="rotate(10 36 34)"/></svg>
+      <span class="brand-name">CIN<b>DER</b></span>
+    </div>
+    <div id="body"><p class="empty-text">Un momento…</p></div>
+  </div>
+</main>
+<script src="js/firebase-config.js?v=dev"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+  import { getAuth, applyActionCode, checkActionCode, verifyPasswordResetCode, confirmPasswordReset } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+
+  const q = new URLSearchParams(location.search);
+  const mode = q.get("mode");
+  const code = q.get("oobCode");
+  const appUrl = (() => {
+    try {
+      const u = new URL(q.get("continueUrl") || "");
+      if (u.origin === location.origin) return u.href;
+    } catch (e) { /* sin continueUrl */ }
+    return new URL("./#cuenta", location.href).href;
+  })();
+  const body = document.getElementById("body");
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const show = (icon, title, text, button = true) => {
+    body.innerHTML = `<p class="action-icon" aria-hidden="true">${icon}</p>
+      <h1 class="page-title">${esc(title)}</h1>
+      <p class="empty-text">${text}</p>
+      ${button ? `<a class="btn btn-solid" href="${esc(appUrl)}">Abrir Cinder</a>` : ""}`;
+  };
+  const failed = (e) => {
+    const expired = ["auth/expired-action-code", "auth/invalid-action-code"].includes(e?.code);
+    show("⚠️", expired ? "Este enlace ya no vale" : "Algo ha fallado",
+      expired ? "Ha caducado o ya se usó. Desde Cinder puedes pedir otro." : "Inténtalo otra vez en un rato.");
+  };
+
+  if (!window.CINDER_FIREBASE || !mode || !code) {
+    show("🎬", "Nada que hacer aquí", "Este enlace no está completo. Abre Cinder y vuelve a pedirlo.");
+  } else {
+    const auth = getAuth(initializeApp(window.CINDER_FIREBASE));
+    auth.languageCode = "es";
+    try {
+      if (mode === "verifyEmail") {
+        await applyActionCode(auth, code);
+        show("✅", "¡Correo confirmado!", "Tu cuenta de Cinder ya está verificada. Vuelve a la app y sigue descubriendo pelis.");
+      } else if (mode === "verifyAndChangeEmail" || mode === "recoverEmail") {
+        const info = await checkActionCode(auth, code);
+        await applyActionCode(auth, code);
+        const email = esc(info.data.email || "");
+        show("✅", mode === "recoverEmail" ? "Correo recuperado" : "Correo cambiado",
+          mode === "recoverEmail"
+            ? `Tu cuenta vuelve a usar <b>${email}</b>. Si no pediste el cambio, cambia también tu contraseña.`
+            : `A partir de ahora entras con <b>${email}</b>.`);
+      } else if (mode === "resetPassword") {
+        const email = await verifyPasswordResetCode(auth, code);
+        body.innerHTML = `<h1 class="page-title">Nueva contraseña</h1>
+          <p class="empty-text">Para <b>${esc(email)}</b></p>
+          <form class="account-form" id="reset" novalidate>
+            <label>Contraseña nueva<input class="q-search" name="pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
+            <label>Repítela<input class="q-search" name="again" type="password" autocomplete="new-password"></label>
+            <p class="account-error" role="alert"></p>
+            <button class="btn btn-solid" type="submit">Guardar contraseña</button>
+          </form>`;
+        const form = document.getElementById("reset");
+        const err = form.querySelector(".account-error");
+        form.onsubmit = async (ev) => {
+          ev.preventDefault();
+          const { pass, again } = Object.fromEntries(new FormData(form));
+          if (pass.length < 6) return (err.textContent = "La contraseña necesita al menos 6 caracteres.");
+          if (pass !== again) return (err.textContent = "Las dos contraseñas no coinciden.");
+          form.querySelector("button").disabled = true;
+          try {
+            await confirmPasswordReset(auth, code, pass);
+            show("🔑", "Contraseña cambiada", "Ya puedes entrar en Cinder con tu contraseña nueva.");
+          } catch (e) { failed(e); }
+        };
+      } else {
+        show("🎬", "Nada que hacer aquí", "Este enlace no es de Cinder o está incompleto.");
+      }
+    } catch (e) {
+      console.warn(e);
+      failed(e);
+    }
+  }
+</script>
+</body>
+</html>
