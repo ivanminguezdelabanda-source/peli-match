@@ -4,7 +4,6 @@
 // Uso: node test/emulator.mjs <nombre> [escala de letra]
 import { execFileSync, execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { chromium } from "playwright";
 
 const NAME = process.argv[2] || "android";
 const FONT = process.argv[3] || "1.0";
@@ -16,6 +15,31 @@ const adb = (...args) => execFileSync("adb", args, { encoding: "utf8" }).trim();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const report = { name: NAME, fontScale: FONT, steps: [], errors: [], console: [] };
 let shot = 0;
+let page = null;
+const visible = (sel) => page.fn((s) => { const e = document.querySelector(s); return Boolean(e && !e.hidden && e.getClientRects().length); }, sel);
+
+// Cliente mínimo del protocolo de DevTools (WebSocket de Node)
+function cdp(url) {
+  const ws = new WebSocket(url);
+  let id = 0;
+  const waiting = new Map(), handlers = new Map();
+  ws.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    if (msg.id && waiting.has(msg.id)) { const { ok, fail } = waiting.get(msg.id); waiting.delete(msg.id); msg.error ? fail(new Error(msg.error.message)) : ok(msg.result); }
+    else if (msg.method) (handlers.get(msg.method) || []).forEach((f) => f(msg.params));
+  };
+  const api = {
+    send: (method, params = {}) => new Promise((ok, fail) => { const i = ++id; waiting.set(i, { ok, fail }); ws.send(JSON.stringify({ id: i, method, params })); }),
+    on: (ev, f) => handlers.set(ev, [...(handlers.get(ev) || []), f]),
+    async eval(expression) {
+      const r = await api.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+      if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
+      return r.result.value;
+    },
+    fn: (f, arg) => api.eval(`(${f.toString()})(${JSON.stringify(arg)})`),
+  };
+  return new Promise((ok, fail) => { ws.onopen = () => ok(api); ws.onerror = () => fail(new Error("WebSocket")); });
+}
 async function snap(label) {
   shot++;
   const file = `${String(shot).padStart(2, "0")}-${label}.png`;
@@ -48,20 +72,27 @@ async function main() {
   }
   if (!sock) throw new Error("No se encuentra el WebView");
   adb("forward", "tcp:9222", `localabstract:${sock}`);
-  const browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
-  let page = null;
-  for (let i = 0; i < 30 && !page; i++) {
-    page = browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().includes("github.io")) || null;
-    if (!page) await sleep(1000);
+  // Protocolo de DevTools a mano (Playwright no se entiende con el WebView de Android)
+  let target = null;
+  for (let i = 0; i < 30 && !target; i++) {
+    const list = await fetch("http://127.0.0.1:9222/json").then((r) => r.json()).catch(() => []);
+    target = list.find((t) => t.type === "page" && t.url.includes("github.io")) || null;
+    if (!target) await sleep(1000);
   }
-  if (!page) throw new Error("No se encuentra la página de Cinder");
-  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") report.console.push(m.text()); });
-  page.on("pageerror", (e) => report.errors.push("pageerror: " + e.message));
-  await page.waitForLoadState("load");
-  await sleep(3000);
+  if (!target) throw new Error("No se encuentra la página de Cinder");
+  page = await cdp(target.webSocketDebuggerUrl);
+  await page.send("Runtime.enable");
+  page.on("Runtime.consoleAPICalled", (p) => { if (p.type === "error" || p.type === "warning") report.console.push(p.args.map((a) => a.value ?? a.description).join(" ").slice(0, 300)); });
+  page.on("Runtime.exceptionThrown", (p) => report.errors.push("pageerror: " + (p.exceptionDetails.exception?.description || p.exceptionDetails.text).slice(0, 300)));
+  // esperar a que Cinder arranque (pantalla de entrar o la app)
+  for (let i = 0; i < 40; i++) {
+    if (await page.eval(`!!document.querySelector("#account-body .btn, .opt, #deck .card")`)) break;
+    await sleep(500);
+  }
+  await sleep(1000);
 
   // Medidas: lo que ve la web frente a la pantalla real
-  const metrics = () => page.evaluate(() => {
+  const metrics = () => page.fn(() => {
     const r = (sel) => { const e = document.querySelector(sel); if (!e || !e.getClientRects().length) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)]; };
     const over = [...document.querySelectorAll("body *")].filter((e) => {
       if (!e.getClientRects().length) return false;
@@ -77,29 +108,34 @@ async function main() {
   });
 
   step("gate", { ...(await metrics()), shot: await snap("gate") });
-  await page.click("text=Seguir como invitado");
+  await page.eval(`[...document.querySelectorAll("#account-body button")].find((b) => b.textContent.includes("invitado"))?.click()`);
   await sleep(1000);
   step("encuesta", { ...(await metrics()), shot: await snap("encuesta") });
 
-  // Encuesta: las primeras opciones de cada pregunta
-  await page.click(".opt >> text=Solo").catch(() => page.click(".opt >> nth=0"));
-  await page.click(".opt >> nth=0");
-  await page.click("#q-next");
-  await page.click(".opt >> nth=0");
-  for (let i = 0; i < 12; i++) {
-    const nx = await page.$("#q-next");
-    if (!nx) break;
-    const t = await nx.textContent();
-    await nx.click();
-    await sleep(250);
-    if (t === "Ver mi match") break;
+  // Encuesta: la primera opción de cada pregunta (y «Solo» en la de compañía)
+  for (let i = 0; i < 30; i++) {
+    const r = await page.fn(() => {
+      const next = document.querySelector("#q-next");
+      if (!next) return "fin";
+      const opts = [...document.querySelectorAll(".opt")];
+      if (opts.length && !opts.some((o) => o.getAttribute("aria-pressed") === "true")) {
+        (opts.find((o) => o.textContent.trim() === "Solo") || opts[0]).click();
+        return "opción";
+      }
+      const t = next.textContent;
+      next.click();
+      return t;
+    });
+    await sleep(400);
+    if (r === "fin" || r === "Ver mi match") break;
   }
   await sleep(1500);
+  step("tras encuesta", { hash: await page.eval("location.hash"), shot: await snap("tras-encuesta") });
 
   // Tutorial: cada paso con su captura y si la tarjeta cabe en pantalla
-  for (let i = 0; i < 12 && await page.isVisible(".tour-next"); i++) {
+  for (let i = 0; i < 12 && await visible(".tour-next"); i++) {
     await sleep(700);
-    const t = await page.evaluate(() => {
+    const t = await page.fn(() => {
       const c = document.querySelector(".tour-card").getBoundingClientRect();
       const h = document.querySelector(".tour-hole").getBoundingClientRect();
       return { count: document.querySelector(".tour-count").textContent, title: document.querySelector(".tour-title").textContent,
@@ -127,31 +163,31 @@ async function main() {
     const y = Math.round(card.cy), x0 = Math.round(card.cx);
     adb("shell", "input", "swipe", String(x0), String(y), String(x0 + 500), String(y), "250");
     await sleep(1200);
-    step("swipe derecha", { lib: await page.evaluate(() => JSON.parse(localStorage.getItem("pelimatch:v1") || "{}").library?.length || 0), shot: await snap("swipe") });
+    step("swipe derecha", { lib: await page.fn(() => JSON.parse(localStorage.getItem("pelimatch:v1") || "{}").library?.length || 0), shot: await snap("swipe") });
   }
   await tapEl(page, "#btn-info");
   await sleep(1500);
-  step("ficha", { open: await page.isVisible(".sheet"), shot: await snap("ficha") });
+  step("ficha", { open: await visible(".sheet"), shot: await snap("ficha") });
   adb("shell", "input", "keyevent", "4"); // botón atrás
   await sleep(1200);
-  step("atrás desde ficha", { hash: await page.evaluate(() => location.hash), sheetOpen: await page.isVisible(".sheet"), shot: await snap("atras") });
+  step("atrás desde ficha", { hash: await page.eval("location.hash"), sheetOpen: await visible(".sheet"), shot: await snap("atras") });
 
   // Caja: abrir y esperar el resultado
   await tapEl(page, '.tab[data-view="ruleta"]');
   await sleep(1000);
   await tapEl(page, "#wheel-spin");
   await sleep(8000);
-  step("caja", { result: await page.isVisible("#wheel-result"), shot: await snap("caja") });
+  step("caja", { result: await visible("#wheel-result"), shot: await snap("caja") });
 
   // Buscar con el teclado del móvil
   await tapEl(page, ".topbar .icon-btn");
   await sleep(800);
   adb("shell", "input", "text", "dune");
   await sleep(1500);
-  step("buscar", { results: await page.locator(".search-results .tile, #search-results > *").count().catch(() => -1), shot: await snap("buscar") });
+  step("buscar", { query: await page.eval(`document.querySelector("input[type=search], .q-search")?.value`), results: await page.eval(`document.querySelectorAll("#view-buscar .tile, #view-buscar li").length`), shot: await snap("buscar") });
 
   // Mi cuenta (invitado) y el botón de Google: debe abrir el navegador
-  await page.evaluate(() => { location.hash = "#cuenta"; });
+  await page.eval(`location.hash = "#cuenta"`);
   await sleep(1200);
   step("cuenta", { ...(await metrics()), shot: await snap("cuenta") });
 
@@ -162,13 +198,12 @@ async function main() {
   step("reabrir", { shot: await snap("reabrir") });
 
   writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 2));
-  await browser.close().catch(() => {});
 }
 
 // Toque real en el centro de un elemento: convierte coordenadas de la web a píxeles de la pantalla
 let webTop = null;
 async function rect(page, sel) {
-  const r = await page.evaluate((s) => {
+  const r = await page.fn((s) => {
     const e = document.querySelector(s);
     if (!e || !e.getClientRects().length) return null;
     const b = e.getBoundingClientRect();
@@ -188,10 +223,10 @@ async function rect(page, sel) {
 async function tapEl(page, sel) {
   const r = await rect(page, sel);
   if (!r) return false;
-  const before = await page.evaluate(() => location.hash + "|" + (document.querySelector(".tour-count")?.textContent || ""));
+  const before = await page.fn(() => location.hash + "|" + (document.querySelector(".tour-count")?.textContent || ""));
   adb("shell", "input", "tap", String(Math.round(r.cx)), String(Math.round(r.cy)));
   await sleep(400);
-  const after = await page.evaluate(() => location.hash + "|" + (document.querySelector(".tour-count")?.textContent || ""));
+  const after = await page.fn(() => location.hash + "|" + (document.querySelector(".tour-count")?.textContent || ""));
   return before !== after ? "changed" : "same";
 }
 

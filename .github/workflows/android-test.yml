@@ -46,7 +46,6 @@ jobs:
       - name: APK de depuración
         run: |
           npm ci
-          npm install --no-save playwright@1
           npx cap sync android
           cd android && chmod +x gradlew
           ./gradlew --no-daemon assembleDebug > build.log 2>&1 || { tail -30 build.log | while read -r l; do echo "::error::$l"; done; exit 1; }
