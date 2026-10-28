@@ -1245,6 +1245,148 @@ function startApp(MOVIES) {
     card.style.top = `${y}px`;
   }
 
+  // ---------- Reseñas: públicas en el servidor; sin servidor, se guardan solo en este móvil ----------
+  const REVIEWS_URL = AI_URL ? AI_URL.replace(/\/$/, "") + "/reviews" : "";
+  // Token para poder borrar o cambiar tus reseñas; va aparte para sobrevivir al modo pruebas
+  const reviewToken = (() => {
+    try {
+      let t = localStorage.getItem("pelimatch:token");
+      if (!t) { t = crypto.randomUUID() + crypto.randomUUID(); localStorage.setItem("pelimatch:token", t); }
+      return t;
+    } catch (e) { return crypto.randomUUID() + crypto.randomUUID(); }
+  })();
+  state.myReviews = state.myReviews || {}; // { movieId: reseña propia }
+  const starsText = (n) => "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
+  const ago = (t) => {
+    const d = Math.round((Date.now() - t) / 86400000);
+    return d < 1 ? "hoy" : d === 1 ? "ayer" : d < 30 ? `hace ${d} días` : new Date(t).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  async function renderReviews(movieId) {
+    const box = $("#sheet-reviews");
+    if (!box) return;
+    box.replaceChildren(el("p", "section-label", "Reseñas"), el("p", "reviews-note", "Cargando reseñas…"));
+    let list = [];
+    let online = false;
+    if (REVIEWS_URL) {
+      try {
+        const res = await fetch(`${REVIEWS_URL}?movie=${encodeURIComponent(movieId)}`);
+        if (!res.ok) throw new Error(res.status);
+        list = (await res.json()).reviews || [];
+        online = true;
+      } catch (e) { console.warn("Reseñas sin servidor:", e); }
+    }
+    const mine = state.myReviews[movieId];
+    if (!online && mine) list = [mine];
+    if (!box.isConnected) return; // la ficha ya muestra otra peli
+    drawReviews(box, movieId, list, online);
+  }
+
+  function drawReviews(box, movieId, list, online) {
+    box.replaceChildren();
+    const mine = state.myReviews[movieId];
+    const avg = list.length ? list.reduce((a, r) => a + r.stars, 0) / list.length : 0;
+    const head = el("div", "reviews-head", `<p class="section-label">Reseñas</p>${list.length
+      ? `<p class="reviews-avg"><span class="stars" aria-hidden="true">${starsText(Math.round(avg))}</span> ${avg.toFixed(1).replace(".", ",")} · ${list.length} ${list.length === 1 ? "reseña" : "reseñas"}</p>`
+      : ""}`);
+    box.append(head);
+    if (!online) box.append(el("p", "reviews-note", REVIEWS_URL
+      ? "No he podido cargar las reseñas de la gente. Inténtalo en un rato."
+      : "Las reseñas aún no son públicas: la tuya se guarda en este móvil hasta que la app esté conectada a su servidor."));
+
+    const ul = el("ul", "review-list");
+    list.slice(0, 20).forEach((r) => {
+      const own = mine && r.id === mine.id;
+      const li = el("li", "review" + (own ? " own" : ""), `
+        <div class="review-top"><b>${esc(r.name)}${own ? " (tú)" : ""}</b><span class="stars" aria-label="${r.stars} de 5 estrellas">${starsText(r.stars)}</span></div>
+        ${r.text ? `<p>${esc(r.text)}</p>` : ""}
+        <span class="review-date">${ago(r.at)}</span>`);
+      if (own) {
+        const del = el("button", "link-btn danger", "Borrar mi reseña");
+        del.type = "button";
+        del.onclick = async () => {
+          if (online) {
+            try {
+              const res = await fetch(`${REVIEWS_URL}?movie=${encodeURIComponent(movieId)}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: reviewToken, id: r.id }) });
+              if (!res.ok && res.status !== 404) throw new Error(res.status);
+            } catch (e) { return toast("No se ha podido borrar. Inténtalo otra vez."); }
+          }
+          delete state.myReviews[movieId];
+          persist();
+          toast("Reseña borrada");
+          renderReviews(movieId);
+        };
+        li.append(del);
+      }
+      ul.append(li);
+    });
+    if (list.length) box.append(ul);
+    else if (online) box.append(el("p", "reviews-note", "Nadie ha escrito todavía. ¡Sé el primero!"));
+
+    // Formulario: escribir o cambiar tu reseña
+    const form = el("form", "review-form");
+    let stars = mine ? mine.stars : 0;
+    form.append(el("p", "review-form-title", mine ? "Cambia tu reseña" : "Escribe tu reseña"));
+    const starRow = el("div", "star-input");
+    starRow.setAttribute("role", "radiogroup");
+    starRow.setAttribute("aria-label", "Puntuación");
+    const drawStars = () => [...starRow.children].forEach((b, i) => {
+      b.textContent = i < stars ? "★" : "☆";
+      b.setAttribute("aria-checked", String(i + 1 === stars));
+    });
+    for (let i = 1; i <= 5; i++) {
+      const b = el("button", "star-btn");
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-label", `${i} ${i === 1 ? "estrella" : "estrellas"}`);
+      b.onclick = () => { stars = i; drawStars(); };
+      starRow.append(b);
+    }
+    drawStars();
+    const name = el("input", "q-search");
+    name.id = "review-name";
+    name.maxLength = 30;
+    name.placeholder = "Tu nombre";
+    name.setAttribute("aria-label", "Tu nombre");
+    name.value = state.reviewName || "";
+    const text = el("textarea", "q-search q-note");
+    text.id = "review-text";
+    text.rows = 3;
+    text.maxLength = 600;
+    text.placeholder = "¿Qué te ha parecido? Sin spoilers 🙂";
+    text.setAttribute("aria-label", "Tu reseña");
+    text.value = mine ? mine.text : "";
+    const send = el("button", "btn btn-solid", mine ? "Guardar cambios" : "Publicar reseña");
+    send.type = "submit";
+    form.append(starRow, name, text, send);
+    form.onsubmit = async (ev) => {
+      ev.preventDefault();
+      if (!stars) return toast("Elige de 1 a 5 estrellas");
+      state.reviewName = name.value.trim();
+      const draftReview = { name: state.reviewName || "Anónimo", stars, text: text.value.trim() };
+      send.disabled = true;
+      if (REVIEWS_URL) {
+        try {
+          const res = await fetch(`${REVIEWS_URL}?movie=${encodeURIComponent(movieId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draftReview, token: reviewToken }) });
+          if (res.status === 429) throw new Error("Demasiadas reseñas seguidas. Espera un minuto.");
+          if (!res.ok) throw new Error("No se ha podido publicar. Inténtalo otra vez.");
+          state.myReviews[movieId] = (await res.json()).review;
+          persist();
+          toast("Reseña publicada");
+          return renderReviews(movieId);
+        } catch (e) {
+          send.disabled = false;
+          return toast(e.message);
+        }
+      }
+      state.myReviews[movieId] = { id: "local", ...draftReview, at: Date.now() };
+      persist();
+      toast("Reseña guardada en este móvil");
+      renderReviews(movieId);
+    };
+    box.append(form);
+  }
+
   // ---------- Buscar ----------
   const searchInput = $("#search-input");
   function renderSearch() {
@@ -1332,6 +1474,7 @@ function startApp(MOVIES) {
         </a>
       </div>
       <div class="sheet-actions" id="sheet-actions"></div>
+      <section class="reviews" id="sheet-reviews" aria-label="Reseñas"></section>
       ${m.tmdb ? `<p class="credit">Datos e imágenes de TMDB. Plataformas: JustWatch.</p>` : ""}`);
     body.append(content);
 
@@ -1391,6 +1534,7 @@ function startApp(MOVIES) {
     };
     drawActions();
 
+    renderReviews(id);
     sheet.hidden = backdrop.hidden = false;
     sheet.scrollTop = 0;
     $("#sheet-close").focus();

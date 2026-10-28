@@ -22,14 +22,17 @@ La biblioteca se guarda en el `localStorage` del navegador, con la clave `pelima
 
 Este producto usa la API de TMDB, pero no está respaldado ni certificado por TMDB. Los datos de plataformas vienen de JustWatch.
 
-## IA en «Para ti» (opcional)
+## Servidor: reseñas e IA (opcional)
 
-La carpeta `worker/` es un Cloudflare Worker que recibe la encuesta y las 40 mejores candidatas del recomendador local, y le pide a Claude (`claude-opus-5-5`) que elija las 8 mejores y explique por qué. La clave de Anthropic se guarda como secreto del Worker y nunca llega al navegador; el Worker solo acepta peticiones desde la web publicada.
+La carpeta `worker/` es un Cloudflare Worker con dos funciones:
 
-Para activarla, añade estos secretos en GitHub (Settings → Secrets and variables → Actions):
+- **Reseñas públicas** (`/reviews`): cada peli guarda sus reseñas (1 a 5 estrellas, nombre y texto) en Workers KV. Cada móvil tiene un token propio para cambiar o borrar su reseña, y hay un límite de 5 escrituras por minuto y por IP.
+- **IA en «Para ti»**: recibe la encuesta y las 40 mejores candidatas del recomendador local, y le pide a Claude (`claude-opus-5-5`) que elija y explique. La clave de Anthropic se guarda como secreto del Worker y nunca llega al navegador.
 
-- `ANTHROPIC_API_KEY`: clave de console.anthropic.com
+El Worker solo acepta peticiones desde la web publicada. Para activarlo, añade estos secretos en GitHub (Settings → Secrets and variables → Actions):
+
 - `CLOUDFLARE_API_TOKEN`: token de Cloudflare con la plantilla «Edit Cloudflare Workers»
 - `CLOUDFLARE_ACCOUNT_ID`: el Account ID de tu cuenta de Cloudflare
+- `ANTHROPIC_API_KEY` (solo para la IA): clave de console.anthropic.com
 
-El siguiente despliegue publica el Worker y escribe su dirección en `js/config.js`. Si falta algún secreto o la IA falla, «Para ti» usa el recomendador local.
+Con los dos de Cloudflare ya funcionan las reseñas. El siguiente despliegue crea el almacén `cinder-reviews`, publica el Worker y escribe su dirección en `js/config.js`. Sin servidor, las reseñas se guardan solo en el móvil de cada persona y «Para ti» usa el recomendador local.

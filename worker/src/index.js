@@ -1,6 +1,7 @@
-// Cinder IA: recibe la encuesta «Para ti» y una lista de candidatas ya filtradas
-// por la app, y pide a Claude que elija y explique las mejores para esta persona.
-// La clave de Anthropic vive como secreto del Worker (ANTHROPIC_API_KEY) y nunca llega al navegador.
+// Servidor de Cinder (Cloudflare Worker):
+// - POST /         IA de «Para ti»: recibe la encuesta y candidatas ya filtradas por la app, y Claude elige y explica.
+//                  La clave de Anthropic vive como secreto del Worker (ANTHROPIC_API_KEY) y nunca llega al navegador.
+// - /reviews       Reseñas públicas de cada peli, guardadas en Workers KV (binding REVIEWS).
 import Anthropic from "@anthropic-ai/sdk";
 
 const MAX_CANDIDATES = 40;
@@ -70,7 +71,7 @@ function cors(request, env) {
     ok,
     headers: {
       "Access-Control-Allow-Origin": ok ? origin : "null",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
       "Access-Control-Max-Age": "86400",
       Vary: "Origin",
@@ -81,11 +82,70 @@ function cors(request, env) {
 const json = (body, status, headers) =>
   new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json; charset=utf-8" } });
 
+// ---------- Reseñas ----------
+const MAX_REVIEWS_PER_MOVIE = 300;
+const sha256 = async (text) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const publicReview = ({ tok, ...r }) => r;
+const movieKey = (id) => `r:${id}`;
+
+async function reviews(request, env, headers, url) {
+  if (!env.REVIEWS) return json({ error: "no_storage" }, 503, headers);
+  const movie = clip(url.searchParams.get("movie"), 40);
+  if (!/^[\w-]{1,40}$/.test(movie)) return json({ error: "movie" }, 400, headers);
+  const key = movieKey(movie);
+  const list = (await env.REVIEWS.get(key, "json")) || [];
+
+  if (request.method === "GET") {
+    return json({ reviews: list.map(publicReview) }, 200, { ...headers, "Cache-Control": "no-store" });
+  }
+
+  // Límite sencillo contra spam: 5 escrituras por minuto y por IP
+  const ip = request.headers.get("CF-Connecting-IP") || "?";
+  const rlKey = `rl:${ip}`;
+  const used = Number(await env.REVIEWS.get(rlKey)) || 0;
+  if (used >= 5) return json({ error: "too_many" }, 429, headers);
+  await env.REVIEWS.put(rlKey, String(used + 1), { expirationTtl: 60 });
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "bad_json" }, 400, headers);
+  }
+  const token = clip(body.token, 80);
+  if (token.length < 16) return json({ error: "token" }, 400, headers);
+  const tok = await sha256(token);
+
+  if (request.method === "DELETE") {
+    const next = list.filter((r) => !(r.id === body.id && r.tok === tok));
+    if (next.length === list.length) return json({ error: "not_found" }, 404, headers);
+    await env.REVIEWS.put(key, JSON.stringify(next));
+    return json({ ok: true }, 200, headers);
+  }
+
+  const stars = Math.round(Number(body.stars));
+  const name = clip(String(body.name || "").trim(), 30) || "Anónimo";
+  const text = clip(String(body.text || "").trim(), 600);
+  if (!(stars >= 1 && stars <= 5)) return json({ error: "stars" }, 400, headers);
+  // Una reseña por persona y peli: si ya tenía una, se sustituye
+  const review = { id: crypto.randomUUID(), name, stars, text, at: Date.now(), tok };
+  const next = [review, ...list.filter((r) => r.tok !== tok)].slice(0, MAX_REVIEWS_PER_MOVIE);
+  await env.REVIEWS.put(key, JSON.stringify(next));
+  return json({ review: publicReview(review) }, 201, headers);
+}
+
 export default {
   async fetch(request, env) {
     const { ok, headers } = cors(request, env);
     if (request.method === "OPTIONS") return new Response(null, { status: ok ? 204 : 403, headers });
-    if (request.method === "GET") return json({ ok: true }, 200, headers);
+    const url = new URL(request.url);
+    if (url.pathname === "/reviews") {
+      if (!ok) return json({ error: "origin" }, 403, headers);
+      if (!["GET", "POST", "DELETE"].includes(request.method)) return json({ error: "method" }, 405, headers);
+      return reviews(request, env, headers, url);
+    }
+    if (request.method === "GET") return json({ ok: true, ai: Boolean(env.ANTHROPIC_API_KEY), reviews: Boolean(env.REVIEWS) }, 200, headers);
     if (request.method !== "POST") return json({ error: "method" }, 405, headers);
     if (!ok) return json({ error: "origin" }, 403, headers);
     if (!env.ANTHROPIC_API_KEY) return json({ error: "no_key" }, 503, headers);
