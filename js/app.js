@@ -133,6 +133,7 @@ function startApp(MOVIES) {
     c.append(poster(m));
     c.append(el("span", "stamp stamp-like", "LA VERÉ"));
     c.append(el("span", "stamp stamp-nope", "PASO"));
+    c.append(el("span", "stamp stamp-seen", "YA LA VI"));
     c.append(el("div", "card-info", `
       <p class="card-meta">${m.year} · ${fmtTime(m.runtime)}</p>
       <h2 class="card-title">${esc(m.title)}</h2>
@@ -177,13 +178,19 @@ function startApp(MOVIES) {
     const dir = action === "like" ? 1 : -1;
     const cur = card._drag || { dx: 0, dy: 0 };
     card.classList.remove("dragging");
-    card.style.transform = `translate(${dir * deckEl.clientWidth * 1.6}px, ${cur.dy + 40}px) rotate(${dir * 28}deg)`;
+    card.style.transform = action === "seen"
+      ? `translate(${cur.dx}px, ${-deckEl.clientHeight * 1.4}px)`
+      : `translate(${dir * deckEl.clientWidth * 1.6}px, ${cur.dy + 40}px) rotate(${dir * 28}deg)`;
     card.style.opacity = "0";
-    card.querySelector(dir > 0 ? ".stamp-like" : ".stamp-nope").style.opacity = 1;
+    card.querySelector(action === "seen" ? ".stamp-seen" : dir > 0 ? ".stamp-like" : ".stamp-nope").style.opacity = 1;
 
     if (action === "like") {
       state.library.push({ id, at: Date.now(), watched: false });
       bumpCount();
+    } else if (action === "seen") {
+      // deslizar hacia arriba: ya la he visto, va a Matches → Vistas
+      state.library.push({ id, at: Date.now(), watched: true });
+      toast(`A «Vistas»: ${byId[id].title}`);
     } else {
       state.passed.push(id);
     }
@@ -200,7 +207,7 @@ function startApp(MOVIES) {
   function undo() {
     const last = state.history.pop();
     if (!last) return;
-    if (last.action === "like") state.library = state.library.filter((l) => l.id !== last.id);
+    if (last.action === "like" || last.action === "seen") state.library = state.library.filter((l) => l.id !== last.id);
     else state.passed = state.passed.filter((id) => id !== last.id);
     state.order = [last.id, ...state.order.filter((id) => id !== last.id)];
     persist();
@@ -213,6 +220,7 @@ function startApp(MOVIES) {
     card._bound = true;
     const like = card.querySelector(".stamp-like");
     const nope = card.querySelector(".stamp-nope");
+    const seen = card.querySelector(".stamp-seen");
     let start = null;
     card.addEventListener("pointerdown", (e) => {
       if (card.dataset.depth !== "0" || card.dataset.leaving) return;
@@ -227,8 +235,10 @@ function startApp(MOVIES) {
       const dy = e.clientY - start.y;
       card._drag = { dx, dy };
       card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.06}deg)`;
-      like.style.opacity = Math.max(0, Math.min(1, dx / 90));
-      nope.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+      const up = -dy > Math.abs(dx) ? -dy : 0;
+      like.style.opacity = up ? 0 : Math.max(0, Math.min(1, dx / 90));
+      nope.style.opacity = up ? 0 : Math.max(0, Math.min(1, -dx / 90));
+      seen.style.opacity = Math.max(0, Math.min(1, up / 90));
     });
     const end = () => {
       if (!start) return;
@@ -236,12 +246,15 @@ function startApp(MOVIES) {
       const dt = performance.now() - start.t;
       start = null;
       const fast = Math.abs(dx) / dt > 0.6 && Math.abs(dx) > 40;
-      if (Math.abs(dx) > deckEl.clientWidth * 0.3 || fast) {
+      const upward = -dy > Math.abs(dx) && (-dy > deckEl.clientHeight * 0.22 || (-dy / dt > 0.6 && -dy > 50));
+      if (upward) {
+        decide("seen", card);
+      } else if (Math.abs(dx) > deckEl.clientWidth * 0.3 || fast) {
         decide(dx > 0 ? "like" : "pass", card);
       } else {
         card.classList.remove("dragging");
         card.style.transform = "";
-        like.style.opacity = nope.style.opacity = 0;
+        like.style.opacity = nope.style.opacity = seen.style.opacity = 0;
         if (Math.abs(dx) < 6 && Math.abs(dy) < 6) openSheet(card.dataset.id, "deck");
       }
     };
@@ -914,12 +927,23 @@ function startApp(MOVIES) {
       <ul class="match-steps">${STEPS.map((s) => `<li>${esc(s.q.replace(/[¿?]/g, ""))}</li>`).join("")}</ul>`));
     const start = el("button", "btn btn-red", "Empezar encuesta");
     start.type = "button";
-    start.onclick = () => { draft = emptyProfile(); stepIdx = 0; renderMatch(); };
+    start.onclick = () => { startSurvey(); renderMatch(); };
     box.querySelector(".match-intro").append(start);
+  }
+
+  let firstRun = false;
+  function startSurvey(first = false) {
+    firstRun = first;
+    draft = emptyProfile();
+    stepIdx = 0;
   }
 
   function renderStep(box) {
     const step = STEPS[stepIdx];
+    if (firstRun && stepIdx === 0) {
+      box.append(el("div", "welcome", `<p class="result-label">Bienvenido a Peli Match</p>
+        <p>Antes de nada, ${STEPS.length} preguntas rápidas para conocerte. Al acabar te doy tu match personalizado y tu peli de la semana.</p>`));
+    }
     box.append(el("div", "q-progress", `<span style="width:${((stepIdx + 1) / STEPS.length) * 100}%"></span>`));
     box.append(el("p", "q-count", `Pregunta ${stepIdx + 1} de ${STEPS.length}`));
     box.append(el("h2", "q-title", esc(step.q)));
@@ -991,6 +1015,7 @@ function startApp(MOVIES) {
     if (stepIdx < STEPS.length - 1) { stepIdx++; return renderMatch(); }
     state.profile = draft;
     draft = null;
+    firstRun = false;
     persist();
     results = null;
     renderMatch();
@@ -1230,6 +1255,7 @@ function startApp(MOVIES) {
       actions.append(
         button("btn btn-ghost", `${ICON.x} Paso`, () => decide("pass")),
         button("btn btn-solid", `${ICON.save} La quiero ver`, () => decide("like")),
+        button("btn btn-ghost", `${ICON.check} Ya la he visto`, () => decide("seen")),
       );
     } else if (from === "match" && !e) {
       const drop = () => { results = (results || []).filter((r) => r.m.id !== id); renderMatch(); };
@@ -1354,6 +1380,7 @@ function startApp(MOVIES) {
   $("#btn-like").onclick = () => decide("like");
   $("#btn-nope").onclick = () => decide("pass");
   $("#btn-undo").onclick = undo;
+  $("#btn-seen").onclick = () => decide("seen");
   $("#btn-info").onclick = () => { const c = topCard(); if (c) openSheet(c.dataset.id, "deck"); };
   $("#reset-passed").onclick = () => {
     state.passed = [];
@@ -1370,9 +1397,18 @@ function startApp(MOVIES) {
     if (!sheet.hidden || $("#view-descubrir").hidden || e.target.closest("input, textarea")) return;
     if (e.key === "ArrowRight") decide("like");
     else if (e.key === "ArrowLeft") decide("pass");
-    else if (e.key === "ArrowUp") $("#btn-info").click();
+    else if (e.key === "ArrowUp") decide("seen");
+    else if (e.key.toLowerCase() === "i") $("#btn-info").click();
     else if (e.key.toLowerCase() === "z") undo();
   });
+
+  // Primera vez: directo a la encuesta, para empezar con el match y la peli de la semana
+  if (!state.profile && !state.onboarded) {
+    state.onboarded = true;
+    persist();
+    startSurvey(true);
+    if (location.hash !== "#para-ti") history.replaceState(null, "", "#para-ti");
+  }
 
   window.addEventListener("hashchange", route);
   renderMoods();
