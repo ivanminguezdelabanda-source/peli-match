@@ -52,7 +52,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           git add data/
-          git diff --cached --quiet || (git commit -m "Actualizar catálogo de TMDB [datos]" && git push)
+          # main puede haber avanzado mientras se descargaba el catálogo (tarda): se suben los datos encima
+          git diff --cached --quiet || (git commit -m "Actualizar catálogo de TMDB [datos]" && git pull --rebase -q origin main && git push)
       # IA de «Para ti»: solo si están los secretos ANTHROPIC_API_KEY, CLOUDFLARE_API_TOKEN y CLOUDFLARE_ACCOUNT_ID
       - name: Comprobar si la IA está configurada
         id: hasia
