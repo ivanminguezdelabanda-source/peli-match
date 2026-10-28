@@ -50,41 +50,57 @@ async function movieList(path, params, pages = 2) {
 }
 
 async function movies(genreNames) {
-  const today = new Date().toISOString().slice(0, 10);
-  const nowPlaying = await movieList("/movie/now_playing", {});
-  const upcoming = (await movieList("/movie/upcoming", {}, 3))
-    .filter((m) => m.release_date && m.release_date > today)
-    .sort((a, b) => a.release_date.localeCompare(b.release_date));
+  const day = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+  const today = day(0);
+  // En cines y próximos en España: la lista de TMDB y, además, todo lo estrenado (o por estrenar) en cines españoles
+  // según las fechas de estreno de España, ordenado por popularidad. Así no se escapan pelis que TMDB no pone en su lista.
+  const discover = (from, to, pages) => movieList("/discover/movie", {
+    "release_date.gte": from, "release_date.lte": to, with_release_type: "2|3", sort_by: "popularity.desc", include_adult: "false",
+  }, pages);
+  const nowPlaying = [...await movieList("/movie/now_playing", {}, 5), ...await discover(day(-45), today, 4)];
+  const upcoming = [...await movieList("/movie/upcoming", {}, 5), ...await discover(day(1), day(180), 4)];
   const trending = await movieList("/trending/movie/week", {}, 1);
+  const uniq = (list) => [...new Map(list.map((m) => [m.id, m])).values()];
 
   // Ficha completa (reparto, tráiler, plataformas) de cada una, sin repetir
   const full = new Map();
-  for (const m of [...nowPlaying.slice(0, 20), ...upcoming.slice(0, 20), ...trending.slice(0, 20)]) {
+  const pop = (list) => uniq(list).filter((m) => m.poster_path).sort((a, b) => b.popularity - a.popularity);
+  for (const m of [...pop(nowPlaying).slice(0, 70), ...pop(upcoming).slice(0, 70), ...trending.slice(0, 20)]) {
     if (full.has(m.id)) continue;
     try {
       const d = await tmdb(`/movie/${m.id}`, { language: "es-ES", append_to_response: "videos,credits,watch/providers,release_dates", include_video_language: "es,en" });
       const movie = toMovie(d, genreNames);
-      // Fecha de estreno en España si la hay (la de TMDB es la mundial)
-      const es = d.release_dates?.results?.find((r) => r.iso_3166_1 === "ES")?.release_dates?.find((r) => r.type === 3 || r.type === 2);
-      movie.release = (es?.release_date || d.release_date || "").slice(0, 10) || null;
+      // Fecha de estreno en cines de España si la hay (la de TMDB es la mundial)
+      const es = d.release_dates?.results?.find((r) => r.iso_3166_1 === "ES")?.release_dates?.filter((r) => r.type === 3 || r.type === 2)
+        .map((r) => r.release_date.slice(0, 10)).sort()[0];
+      movie.release = es || (d.release_date || "").slice(0, 10) || null;
       movie.backdrop = d.backdrop_path ? `${IMG}/w780${d.backdrop_path}` : null;
       movie.tagline = d.tagline || "";
+      movie.pop = m.popularity;
       if (!movie.year && movie.release) movie.year = Number(movie.release.slice(0, 4));
       if (movie.title && movie.year) full.set(m.id, movie);
     } catch (e) {
       console.warn(`  ${m.id}: ${e.message}`);
     }
-    await sleep(40);
+    await sleep(30);
   }
-  const ids = (list) => list.map((m) => `tmdb-${m.id}`).filter((id) => [...full.values()].some((x) => x.id === id)).slice(0, 20);
+  const got = (list) => uniq(list).map((m) => full.get(m.id)).filter(Boolean);
+  // En cines: ya estrenadas en España (como mucho hace 2 meses), las más populares primero
+  const inCinemas = got(nowPlaying).filter((m) => m.release && m.release <= today && m.release >= day(-60))
+    .sort((a, b) => b.pop - a.pop).slice(0, 40);
+  // Próximas: las que aún no se han estrenado en España (las de la lista de cines con fecha futura también), por fecha
+  const next = got([...upcoming, ...nowPlaying]).filter((m) => m.release && m.release > today)
+    .sort((a, b) => b.pop - a.pop).slice(0, 40).sort((a, b) => a.release.localeCompare(b.release) || b.pop - a.pop);
+  const ids = (list) => list.map((m) => m.id);
   const all = [...full.values()];
+  for (const m of all) delete m.pop;
   const featured = trending.map((m) => full.get(m.id)).find((m) => m && m.backdrop && m.desc) || all.find((m) => m.backdrop) || null;
   return {
     movies: all,
     featured: featured?.id || null,
-    nowPlaying: ids(nowPlaying),
-    upcoming: ids(upcoming),
-    trending: ids(trending),
+    nowPlaying: ids(inCinemas),
+    upcoming: ids(next),
+    trending: ids(got(trending).slice(0, 20)),
   };
 }
 
