@@ -2254,11 +2254,11 @@ function startApp(MOVIES, NEWS) {
     const f = byId[NEWS.featured];
     if (f) {
       const hero = el("div", "news-hero");
-      if (f.backdrop) {
+      if (f.backdrop || f.poster) {
         const img = new Image();
         img.alt = "";
         img.onerror = () => img.remove();
-        img.src = f.backdrop;
+        img.src = f.backdrop || f.poster;
         hero.append(img);
       }
       const body = el("div", "news-hero-body", `
@@ -2607,7 +2607,12 @@ function startApp(MOVIES, NEWS) {
   if (data && Array.isArray(data.movies) && data.movies.length) movies = data.movies;
   // Las pelis de Novedades que aún no están en el catálogo (estrenos recientes o próximos) se añaden
   if (news && Array.isArray(news.movies)) {
-    const have = new Set(movies.map((m) => m.id));
+    const have = new Map(movies.map((m) => [m.id, m]));
+    // Las que ya están se quedan con la imagen de fondo, la fecha de estreno y el lema de Novedades
+    for (const n of news.movies) {
+      const m = n && have.get(n.id);
+      if (m) for (const k of ["backdrop", "release", "tagline"]) if (n[k] && !m[k]) m[k] = n[k];
+    }
     movies = movies.concat(news.movies.filter((m) => m && m.id && !have.has(m.id) && m.title && m.year && Array.isArray(m.genres) && m.genres.length && m.c));
   }
   startApp(movies, news && Array.isArray(news.movies) ? news : null);
