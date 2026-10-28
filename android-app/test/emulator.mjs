@@ -46,6 +46,7 @@ function cdp(url) {
   return new Promise((ok, fail) => { ws.onopen = () => ok(api); ws.onerror = () => fail(new Error("WebSocket")); });
 }
 async function snap(label) {
+  try { execFileSync("adb", ["shell", "am", "broadcast", "-a", "android.intent.action.CLOSE_SYSTEM_DIALOGS"], { timeout: 10000 }); } catch (e) { /* nada */ }
   shot++;
   const file = `${String(shot).padStart(2, "0")}-${label}.png`;
   execSync(`adb exec-out screencap -p > ${OUT}/${file}`);
@@ -70,6 +71,10 @@ async function main() {
     try { if (adb("shell", "ping", "-c", "1", "-W", "2", "8.8.8.8").includes("1 received")) break; } catch (e) { /* aún no */ }
     await sleep(2000);
   }
+  // el emulador recién arrancado va lento: se le deja asentarse y se cierran avisos de «no responde» del sistema
+  await sleep(20000);
+  const closeDialogs = () => { try { adb("shell", "am", "broadcast", "-a", "android.intent.action.CLOSE_SYSTEM_DIALOGS"); } catch (e) { /* nada */ } };
+  closeDialogs();
   adb("install", "-r", "app-debug.apk");
   adb("shell", "pm", "clear", PKG);
   adb("shell", "am", "start", "-W", "-n", `${PKG}/.MainActivity`);
@@ -78,7 +83,9 @@ async function main() {
   // Conectar con el WebView de la app (en la APK de depuración se puede inspeccionar)
   let sock = "";
   for (let i = 0; i < 20 && !sock; i++) {
-    sock = (adb("shell", "cat", "/proc/net/unix").match(/@(webview_devtools_remote_\d+)/) || [])[1] || "";
+    let pid = "";
+    try { pid = adb("shell", "pidof", PKG); } catch (e) { /* aún no */ }
+    if (pid && adb("shell", "cat", "/proc/net/unix").includes(`webview_devtools_remote_${pid}`)) sock = `webview_devtools_remote_${pid}`;
     if (!sock) await sleep(1000);
   }
   if (!sock) throw new Error("No se encuentra el WebView");
