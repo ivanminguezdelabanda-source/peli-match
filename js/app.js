@@ -676,6 +676,8 @@ function startApp(MOVIES, NEWS) {
     o.start(t);
     o.stop(t + dur + 0.02);
   }
+  // Solo suena si estás mirando la caja (no en otra pestaña de Cinder ni con la app en segundo plano)
+  const boxOnScreen = () => !$("#view-ruleta").hidden && document.visibilityState === "visible";
   const tick = () => { tone(1700, 0, 0.035, "square", 0.05); tone(850, 0, 0.05, "triangle", 0.06); };
   function reward(m) {
     const lvl = Number(rarity(m).slice(1)); // 1 a 5
@@ -690,7 +692,7 @@ function startApp(MOVIES, NEWS) {
       if (!spinning) return;
       const x = new DOMMatrixReadOnly(getComputedStyle(reelEl).transform).m41;
       const idx = Math.floor(-x / step);
-      if (last !== null && idx !== last) tick();
+      if (last !== null && idx !== last && boxOnScreen()) tick();
       last = idx;
       requestAnimationFrame(loop);
     };
@@ -739,7 +741,7 @@ function startApp(MOVIES, NEWS) {
       reelEl.removeEventListener("transitionend", done);
       target.classList.add("won");
       spinning = false;
-      reward(winner);
+      if (boxOnScreen()) reward(winner);
       $("#wheel-spin").disabled = false;
       $("#wheel-spin").textContent = "Abrir otra";
       showResult(winner);
@@ -1261,7 +1263,7 @@ function startApp(MOVIES, NEWS) {
     { view: "descubrir", target: "#controls", title: "O usa los botones", text: "Deshacer, paso, la quiero ver, ya la vi y ficha. Lo mismo que deslizar." },
     { view: "descubrir", target: "#moods", title: "¿Qué te apetece?", text: "Filtra las cartas por género. «✨ Para ti» te enseña primero las que más encajan con tu encuesta." },
     { view: "descubrir", target: ".icon-btn", title: "Busca cualquier peli", text: "Por título, director o actor. Desde su ficha la guardas o la metes en tus listas." },
-    { view: "novedades", target: ".news-hero", title: "Novedades", text: "La peli destacada de la semana, lo que está en cines, los próximos estrenos, lo que más se ve y noticias de cine. Se actualiza varias veces al día." },
+    { view: "novedades", target: '.tab[data-view="novedades"]', title: "Novedades", text: "La peli destacada de la semana, lo que está en cines, los próximos estrenos, lo que más se ve y noticias de cine. Se actualiza varias veces al día." },
     { view: "biblioteca", target: ".lib-tabs", title: "Tu biblioteca", text: "En «Matches» está lo que guardas deslizando, separado en Por ver y Vistas. En «Mis listas» creas tus propias colecciones." },
     { view: "ruleta", target: ".view-wheel .list-head", title: "¿No sabes cuál ver?", text: "Abre la caja: las carátulas de tus pelis por ver pasan rápido hasta pararse en una al azar. El color indica la nota. Con «🎲 Cualquier peli» elige entre todo el catálogo." },
     { view: "descubrir", target: "#account-btn", title: "Tu cuenta", text: "Tu foto, tu nombre, la seguridad y lo que Cinder sabe de tus gustos. Todo se guarda en tu cuenta y la sesión sigue abierta aunque cierres la web. En cada ficha puedes leer y escribir reseñas." },
@@ -1364,7 +1366,12 @@ function startApp(MOVIES, NEWS) {
     if (step.place === "bottom") { card.style.top = `${vh - ch - 8}px`; return; }
     let y = bottom + 12;
     if (y + ch > vh - 8) y = top - ch - 12;
-    if (y < 8) y = vh - ch - 90;
+    if (y < 8) {
+      // el elemento es tan alto que la tarjeta no cabe ni encima ni debajo: se marca solo su parte de arriba
+      const cut = Math.max(top + 48, vh - ch - 20);
+      hole.style.height = `${cut - top}px`;
+      y = Math.min(cut + 12, vh - ch - 8);
+    }
     card.style.top = `${y}px`;
   }
 
