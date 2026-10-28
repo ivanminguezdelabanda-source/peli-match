@@ -1,6 +1,7 @@
 // Mantenimiento de las cuentas de Cinder. Borra, junto con su perfil, su nombre de usuario, sus gustos y sus reseñas:
 //   - las cuentas con correo que no lo han verificado 24 horas después de crearlas;
 //   - las cuentas que llevan más de 3 meses (90 días) sin usar Cinder.
+// Revisa las denuncias de reseñas: borra las reseñas con 2 denuncias o más (y sus denuncias) y las denuncias de más de 30 días.
 // Al final recuenta las cuentas con perfil terminado y lo guarda en meta/stats (el límite de cuentas lo usa).
 // Lo ejecuta GitHub Actions cada hora (.github/workflows/purge-unverified.yml) con el secreto
 // FIREBASE_SERVICE_ACCOUNT (clave JSON de una cuenta de servicio del proyecto).
@@ -73,5 +74,44 @@ do {
 // (solo las que siguen existiendo: un perfil suelto de una cuenta borrada desde la consola no cuenta)
 const users = (await db.collection("users").where("ready", "==", true).select().get()).docs.filter((d) => alive.has(d.id)).length;
 if (!DRY_RUN) await db.doc("meta/stats").set({ users });
+
+// Denuncias de reseñas
+const REPORTS_TO_REMOVE = 2;
+const reports = (await db.collection("reports").get()).docs;
+const byReview = new Map();
+for (const d of reports) {
+  const r = d.data();
+  const key = `${r.movie}/${r.author}`;
+  if (!byReview.has(key)) byReview.set(key, []);
+  byReview.get(key).push(d);
+}
+let removed = 0, open = 0;
+for (const [key, docs] of byReview) {
+  const [movie, author] = key.split("/");
+  const review = db.doc(`movies/${movie}/reviews/${author}`);
+  const gone = !(await review.get()).exists;
+  const old = docs.every((d) => now - (d.data().at?.toMillis?.() || 0) > 30 * 864e5);
+  if (docs.length >= REPORTS_TO_REMOVE || gone || old) {
+    if (!gone && docs.length >= REPORTS_TO_REMOVE) {
+      console.log(`${DRY_RUN ? "[prueba] " : ""}Reseña retirada por ${docs.length} denuncias: ${key}`);
+      removed++;
+    }
+    if (DRY_RUN) continue;
+    const batch = db.batch();
+    if (!gone && docs.length >= REPORTS_TO_REMOVE) {
+      batch.delete(review);
+      const profile = db.doc(`users/${author}`);
+      if ((await profile.get()).exists) {
+        batch.update(profile, { reviewed: (await profile.get()).data().reviewed?.filter((id) => id !== movie) || [] });
+      }
+    }
+    docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  } else {
+    open++;
+  }
+}
+
 // Como aviso del workflow, para verlo en el resumen de la ejecución sin abrir el registro
 console.log(`::notice::Revisadas ${checked} cuentas; borradas ${purged} (${inactive} por inactividad). Cuentas activas: ${users}.`);
+if (removed || open) console.log(`::notice::Reseñas: ${removed} retiradas por denuncias; ${open} con una denuncia pendiente (Firestore → reports).`);

@@ -7,6 +7,7 @@
 //   usernames/{nombre}             { uid }: reserva cada nombre de usuario para que sea único
 //   tastes/{uid}                   datos de la cuenta: gustos (js/taste.js), encuesta, tutorial visto, matches, descartes y listas
 //   movies/{peli}/reviews/{uid}    una reseña por cuenta y peli, con copia del nombre y la foto del autor
+//   reports/{peli_autor_quien}     denuncias de reseñas (solo se crean; las revisa scripts/purge cada hora)
 //   meta/stats                     { users }: cuántas cuentas tienen el perfil terminado (para el límite)
 // Las cuentas con correo sin verificar se borran a las 24 h (scripts/purge-unverified.mjs, cada hora en GitHub Actions).
 export const VERIFY_HOURS = 24;
@@ -202,6 +203,14 @@ export async function connect(config) {
       batch.update(userDoc(user.uid), { reviewed: F.arrayUnion(id) });
       await batch.commit();
       profile = { ...profile, reviewed: [...new Set([...(profile?.reviewed || []), id])] };
+    },
+    // Denuncia una reseña de otra persona (una vez por reseña y cuenta)
+    async reportReview(movieId, authorUid, reason) {
+      if (!user) throw Object.assign(new Error("Inicia sesión"), { code: "no-user" });
+      const movie = String(movieId);
+      // Si ya la había denunciado, las reglas lo rechazan (la app recuerda las denunciadas para no repetir)
+      await F.setDoc(F.doc(db, "reports", `${movie}_${authorUid}_${user.uid}`),
+        { movie, author: authorUid, reporter: user.uid, reason, at: F.serverTimestamp() });
     },
     async deleteReview(movieId) {
       const id = String(movieId);

@@ -58,6 +58,8 @@ function startApp(MOVIES, NEWS, LOGOS) {
     weekly: null, // { week, id, reason, ai } peli de la semana
     alerts: {},   // { id: true | false } avisos de estreno (sin marcar: se avisa de las guardadas)
     alerted: [],  // estrenos de los que ya se ha avisado dentro de la app
+    blocked: [],  // autores de reseñas bloqueados (sus reseñas no se ven en este dispositivo)
+    reported: [], // reseñas ya denunciadas desde aquí ("peli/autor")
   };
   Object.assign(state, store.load() || {});
   const known = state.order.filter((id) => byId[id]);
@@ -68,6 +70,8 @@ function startApp(MOVIES, NEWS, LOGOS) {
   state.lists = (state.lists || []).map((l) => ({ ...l, ids: l.ids.filter((id) => byId[id]) }));
   state.alerts = state.alerts || {};
   state.alerted = state.alerted || [];
+  state.blocked = state.blocked || [];
+  state.reported = state.reported || [];
   let afterPersist = null; // con cuenta: sube los cambios a la nube (se activa más abajo)
   let afterSave = null;    // en la app de Android: vuelve a programar los avisos de estreno
   const persist = () => { store.save(state); if (afterPersist) afterPersist(); if (afterSave) afterSave(); };
@@ -1499,6 +1503,7 @@ function startApp(MOVIES, NEWS, LOGOS) {
     Object.assign(state, {
       taste: null, profile: null, tourDone: false, weekly: null, library: [], passed: [], lists: [], history: [],
       myReviews: {}, reviewSignals: {}, order: shuffle(MOVIES.map((m) => m.id)), owner: null, savedAt: 0,
+      alerts: {}, alerted: [], blocked: [], reported: [],
     });
     personal = discovery = results = null;
     forYou = [];
@@ -2211,8 +2216,60 @@ function startApp(MOVIES, NEWS, LOGOS) {
     drawReviews(box, movieId, list, online);
   }
 
-  function drawReviews(box, movieId, list, online) {
+  // Denunciar o bloquear la reseña de otra persona (lo pide Google Play para el contenido de los usuarios)
+  const REPORT_REASONS = [["spam", "Spam o publicidad"], ["ofensiva", "Ofensiva o acoso"], ["spoiler", "Destripa la peli"], ["otro", "Otro motivo"]];
+  function reviewTools(movieId, r, redraw) {
+    const row = el("div", "review-tools");
+    const key = `${movieId}/${r.id}`;
+    if (state.reported.includes(key)) row.append(el("span", "review-tools-q", "Denunciada"));
+    const report = el("button", "link-btn danger", "Denunciar");
+    report.type = "button";
+    report.onclick = () => {
+      if (!cloud?.user) return toast("Entra con tu cuenta para denunciar una reseña");
+      row.replaceChildren(el("span", "review-tools-q", "¿Por qué?"));
+      REPORT_REASONS.forEach(([code, label]) => {
+        const b = el("button", "filter", esc(label));
+        b.type = "button";
+        b.onclick = async () => {
+          row.querySelectorAll("button").forEach((x) => (x.disabled = true));
+          try {
+            await cloud.reportReview(movieId, r.id, code);
+            state.reported = [...state.reported, key].slice(-300);
+            persist();
+            row.replaceChildren(el("span", "review-tools-q", "Gracias. La revisaremos y, si incumple las normas, se borrará."));
+          } catch (e) {
+            toast(cloudError(e));
+            redraw();
+          }
+        };
+        row.append(b);
+      });
+      const cancel = el("button", "link-btn", "Cancelar");
+      cancel.type = "button";
+      cancel.onclick = redraw;
+      row.append(cancel);
+    };
+    const block = el("button", "link-btn danger", "Bloquear a este usuario");
+    block.type = "button";
+    block.onclick = () => {
+      state.blocked = [...new Set([...state.blocked, r.id])];
+      persist();
+      redraw();
+      toast(`Ya no verás las reseñas de ${r.name}`, "Deshacer", () => {
+        state.blocked = state.blocked.filter((id) => id !== r.id);
+        persist();
+        redraw();
+      });
+    };
+    if (!state.reported.includes(key)) row.append(report);
+    row.append(block);
+    return row;
+  }
+
+  function drawReviews(box, movieId, all, online) {
     box.replaceChildren();
+    const list = all.filter((r) => !state.blocked.includes(r.id));
+    const hidden = all.length - list.length;
     const uid = cloud?.user?.uid;
     const mine = cloud ? (uid && list.find((r) => r.id === uid)) : state.myReviews[movieId];
     const avg = list.length ? list.reduce((a, r) => a + r.stars, 0) / list.length : 0;
@@ -2245,11 +2302,24 @@ function startApp(MOVIES, NEWS, LOGOS) {
           renderReviews(movieId);
         };
         li.append(del);
+      } else if (cloud) {
+        li.append(reviewTools(movieId, r, () => drawReviews(box, movieId, all, online)));
       }
       ul.append(li);
     });
     if (list.length) box.append(ul);
-    else if (online) box.append(el("p", "reviews-note", "Nadie ha escrito todavía. ¡Sé el primero!"));
+    if (hidden) {
+      const un = el("button", "link-btn", `${hidden} ${hidden === 1 ? "reseña oculta" : "reseñas ocultas"} de usuarios que has bloqueado · Desbloquear`);
+      un.type = "button";
+      un.onclick = () => {
+        const ids = new Set(all.map((r) => r.id));
+        state.blocked = state.blocked.filter((id) => !ids.has(id));
+        persist();
+        drawReviews(box, movieId, all, online);
+      };
+      box.append(un);
+    }
+    if (!all.length && online) box.append(el("p", "reviews-note", "Nadie ha escrito todavía. ¡Sé el primero!"));
 
     // Con Firebase hace falta una cuenta para opinar
     if (cloud && !uid) {

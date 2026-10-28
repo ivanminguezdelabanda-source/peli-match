@@ -4,6 +4,8 @@ rules_version = '2';
 //   solo los lee y los cambia su dueño.
 // - Los nombres de usuario (usernames/{nombre}) son únicos: cada uno apunta a su dueño.
 // - Las reseñas las lee cualquiera; solo su autor, con perfil terminado, las escribe o borra.
+// - Cualquiera con sesión puede denunciar una reseña (reports/{peli_autor_quien}); nadie las lee desde la app:
+//   las revisa el mantenimiento de cada hora (scripts/purge), que borra las reseñas con 2 denuncias o más.
 // - meta/stats cuenta las cuentas con perfil terminado. Como mucho 2000 (límite del plan gratis de Firebase):
 //   terminar el perfil exige sumar 1 a la cuenta en la misma escritura. Si cambias el límite, cámbialo
 //   también en js/cloud.js (MAX_USERS).
@@ -81,6 +83,17 @@ service cloud.firestore {
         && request.resource.data.text is string && request.resource.data.text.size() <= 600
         // la fecha la pone el servidor al publicar; al cambiar solo nombre o foto se conserva
         && (request.resource.data.at == request.time || (resource != null && request.resource.data.at == resource.data.at));
+    }
+
+    match /reports/{id} {
+      allow create: if request.auth != null
+        && id == request.resource.data.movie + '_' + request.resource.data.author + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['movie', 'author', 'reporter', 'reason', 'at'])
+        && request.resource.data.reporter == request.auth.uid && request.resource.data.author != request.auth.uid
+        && request.resource.data.movie is string && request.resource.data.movie.size() <= 40
+        && request.resource.data.author is string && request.resource.data.author.size() <= 128
+        && request.resource.data.reason in ['spam', 'ofensiva', 'spoiler', 'otro']
+        && request.resource.data.at == request.time;
     }
 
     match /{document=**} {

@@ -404,6 +404,9 @@ button.link-card { border: 0; font: inherit; color: inherit; text-align: left; c
 .list-hint { color: var(--muted); font-size: 13px; margin-right: auto; }
 .link-btn { border: 0; background: none; padding: 4px 0; color: var(--ticket); font-weight: 700; font-size: 13.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .link-btn.danger { color: var(--muted); }
+.review-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 4px; }
+.review-tools .link-btn { font-size: 12.5px; }
+.review-tools-q { font-size: 13px; color: var(--muted); }
 .name-editor { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
 .name-editor .q-search { flex: 1 1 200px; }
 .name-editor .btn { padding: 10px 16px; }
