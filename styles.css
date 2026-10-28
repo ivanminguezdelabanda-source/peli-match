@@ -409,3 +409,12 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .list-card-name { font-weight: 800; font-size: 15px; overflow-wrap: anywhere; }
 .list-card-n { color: var(--muted); font-size: 12.5px; }
 .list-card-new { background: transparent; box-shadow: 0 0 0 1px var(--ticket) inset; }
+
+/* Peli de la semana */
+.weekly { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 14px; padding: 14px; border-radius: 18px;
+  background: linear-gradient(135deg, rgba(242,211,155,.16), rgba(224,65,75,.1)); box-shadow: 0 0 0 1px rgba(242,211,155,.45) inset; flex: none; }
+.weekly .tile-btn { border-radius: 10px; }
+.weekly .result-label { color: var(--ticket); }
+.weekly-why { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.weekly-empty { display: block; }
+.weekly-empty p:last-child { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; }

@@ -20,6 +20,10 @@ Cómo elegir:
 
 Cada motivo va en español de España, tuteando, en una frase corta (máximo 140 caracteres), concreto y sin spoilers. Habla de la peli y de por qué le va a gustar a esta persona, no de la encuesta.`;
 
+const WEEKLY = `
+
+Esta vez es la «peli de la semana»: devuelve una sola elección, la que más probabilidades tenga de encantarle según lo que ha guardado (le_gustaron_antes) y sus favoritas. El motivo puede tener hasta dos frases y debe mencionar alguna peli que guardó.`;
+
 const SCHEMA = {
   type: "object",
   properties: {
@@ -109,6 +113,8 @@ export default {
       le_gustaron_antes: list(body.liked, 15, 120),
     };
 
+    // «Peli de la semana»: una sola elección basada sobre todo en lo que ha guardado
+    const weekly = body.task === "weekly";
     const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
     let response;
     try {
@@ -125,7 +131,7 @@ export default {
         messages: [
           {
             role: "user",
-            content: `<encuesta>\n${JSON.stringify(encuesta)}\n</encuesta>\n\n<candidatas>\n${JSON.stringify(candidates)}\n</candidatas>`,
+            content: `<encuesta>\n${JSON.stringify(encuesta)}\n</encuesta>\n\n<candidatas>\n${JSON.stringify(candidates)}\n</candidatas>${weekly ? WEEKLY : ""}`,
           },
         ],
       });
@@ -152,8 +158,8 @@ export default {
     const seen = new Set();
     picks = picks
       .filter((x) => valid.has(x.id) && !seen.has(x.id) && seen.add(x.id))
-      .slice(0, MAX_PICKS)
-      .map((x) => ({ id: x.id, reason: clip(x.reason, 200) }));
+      .slice(0, weekly ? 1 : MAX_PICKS)
+      .map((x) => ({ id: x.id, reason: clip(x.reason, weekly ? 320 : 200) }));
     return json({ picks, model: response.model }, 200, headers);
   },
 };

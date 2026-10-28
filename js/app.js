@@ -28,7 +28,8 @@ function startApp(MOVIES) {
     passed: [],   // ids descartados
     profile: null, // respuestas de la encuesta «Para ti»
     history: [],  // [{ id, action }] para deshacer
-    lists: [],    // [{ id, name, ids }] bibliotecas propias, con pelis de la biblioteca
+    lists: [],    // [{ id, name, ids }] bibliotecas propias, independientes de los matches
+    weekly: null, // { week, id, reason, ai } peli de la semana
   };
   Object.assign(state, store.load() || {});
   const known = state.order.filter((id) => byId[id]);
@@ -758,10 +759,140 @@ function startApp(MOVIES) {
     const box = $("#match-body");
     box.replaceChildren();
     if (draft) return renderStep(box);
-    if (!state.profile) return renderIntro(box);
+    if (!state.profile) { renderWeekly(box); return renderIntro(box); }
     if (!results) runMatch();
     if (aiStatus === "loading") return renderThinking(box);
+    renderWeekly(box);
     renderResults(box);
+  }
+
+  // ---------- Peli de la semana: una recomendación fija cada semana según tus gustos ----------
+  const weekStart = (d = new Date()) => {
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); // lunes
+    return x;
+  };
+  const weekKey = () => { const w = weekStart(); return `${w.getFullYear()}-${w.getMonth() + 1}-${w.getDate()}`; };
+  const shortDate = (d) => d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  let weeklyBusy = false;
+
+  function tasteSignal() {
+    return state.library.length + state.lists.reduce((n, l) => n + l.ids.length, 0) + (state.profile ? 3 : 0);
+  }
+
+  // Gustos a partir de matches, vistas, listas, descartes y encuesta
+  function weeklyCandidates() {
+    const g = {}, dir = {}, cast = {};
+    const like = (m, w) => {
+      m.genres.forEach((x) => (g[x] = (g[x] || 0) + w));
+      if (m.director && m.director !== "Desconocido") dir[m.director] = (dir[m.director] || 0) + w;
+      (m.cast || []).slice(0, 3).forEach((c) => (cast[c] = (cast[c] || 0) + w));
+    };
+    state.library.forEach((l) => like(byId[l.id], l.watched ? 1.3 : 1));
+    state.lists.forEach((l) => l.ids.forEach((id) => like(byId[id], 0.8)));
+    state.passed.slice(-150).forEach((id) => byId[id].genres.forEach((x) => (g[x] = (g[x] || 0) - 0.15)));
+    const p = state.profile;
+    if (p) {
+      p.genres.forEach((x) => (g[x] = (g[x] || 0) + 2));
+      p.favs.map((id) => byId[id]).filter(Boolean).forEach((m) => like(m, 2.5));
+    }
+    const total = Object.values(g).reduce((a, b) => a + Math.max(b, 0), 0) || 1;
+    const skip = new Set([...state.library.map((l) => l.id), ...state.passed, ...state.lists.flatMap((l) => l.ids), ...(p ? p.favs : [])]);
+    const out = [];
+    for (const m of MOVIES) {
+      if (skip.has(m.id) || m.rating == null || m.rating < 7) continue;
+      if (p && p.avoid.some((x) => m.genres.includes(x))) continue;
+      let s = m.genres.reduce((a, x) => a + (g[x] || 0), 0) / total * 6;
+      s += Math.min(dir[m.director] || 0, 4) * 1.2;
+      s += (m.cast || []).reduce((a, c) => a + Math.min(cast[c] || 0, 3) * 0.5, 0);
+      s += (m.rating - 7) * 1.5;
+      out.push({ m, s });
+    }
+    return out.sort((a, b) => b.s - a.s);
+  }
+
+  function localWeeklyReason(m) {
+    const liked = state.library.map((l) => byId[l.id]);
+    const sameDir = liked.find((x) => x.director === m.director && m.director !== "Desconocido");
+    if (sameDir) return `Es de ${m.director}, el director de «${sameDir.title}», que guardaste.`;
+    const g = m.genres[0];
+    return `Mezcla lo que más guardas${g ? `, sobre todo ${g.toLowerCase()}` : ""}, y tiene un ${m.rating.toFixed(1)}/10.`;
+  }
+
+  async function ensureWeekly() {
+    const week = weekKey();
+    if (state.weekly && state.weekly.week === week && byId[state.weekly.id]) return;
+    if (weeklyBusy || tasteSignal() < 3) return;
+    const cands = weeklyCandidates().slice(0, 30);
+    if (!cands.length) return;
+    // Sin IA: una de las 5 mejores, fija para toda la semana
+    const seed = [...week].reduce((a, c) => a + c.charCodeAt(0), 0);
+    const pick = cands[seed % Math.min(5, cands.length)].m;
+    state.weekly = { week, id: pick.id, reason: localWeeklyReason(pick), ai: false };
+    persist();
+    if (!AI_URL) return;
+    weeklyBusy = true;
+    try {
+      const slim = (m) => ({ id: m.id, title: m.title, year: m.year, director: m.director, cast: m.cast, genres: m.genres,
+        runtime: m.runtime, rating: m.rating, providers: m.providers, desc: m.desc });
+      const liked = [...state.library.map((l) => byId[l.id]), ...state.lists.flatMap((l) => l.ids.map((id) => byId[id]))]
+        .slice(-15).map((m) => `${m.title} (${m.year})`);
+      const res = await fetch(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task: "weekly", profile: state.profile || {}, favs: (state.profile?.favs || []).map((id) => byId[id]).filter(Boolean).map(slim), liked, candidates: cands.map((c) => slim(c.m)) }),
+      });
+      if (!res.ok) throw new Error(`IA ${res.status}`);
+      const top = ((await res.json()).picks || []).find((x) => byId[x.id]);
+      if (top && state.weekly.week === week) {
+        state.weekly = { week, id: top.id, reason: top.reason, ai: true };
+        persist();
+        if (!$("#view-para-ti").hidden && !draft && aiStatus !== "loading") renderMatch();
+      }
+    } catch (e) {
+      console.warn("Peli de la semana: sin IA,", e);
+    } finally {
+      weeklyBusy = false;
+    }
+  }
+
+  function renderWeekly(box) {
+    ensureWeekly();
+    const w = state.weekly;
+    const start = weekStart();
+    const end = new Date(start); end.setDate(end.getDate() + 6);
+    const label = `Peli de la semana · ${shortDate(start)} – ${shortDate(end)}`;
+    if (!w || w.week !== weekKey()) {
+      box.append(el("div", "weekly weekly-empty", `<p class="result-label">${esc(label)}</p>
+        <p>Guarda unas cuantas pelis o haz la encuesta y cada lunes te recomiendo una pensada para ti.</p>`));
+      return;
+    }
+    const m = byId[w.id];
+    const card = el("div", "weekly");
+    const pbtn = el("button", "tile-btn");
+    pbtn.type = "button";
+    pbtn.setAttribute("aria-label", `Ver ficha de ${m.title}`);
+    pbtn.append(poster(m));
+    pbtn.onclick = () => openSheet(m.id, "weekly");
+    const body = el("div", "result-body", `
+      <div>
+        <p class="result-label">${esc(label)}</p>
+        <p class="result-title">${esc(m.title)}</p>
+        <p class="tile-meta">${m.year} · ${fmtTime(m.runtime)} · ${m.rating.toFixed(1)}/10</p>
+      </div>
+      <p class="weekly-why">${esc(w.reason)}</p>`);
+    const actions = el("div", "match-actions");
+    if (inLibrary(m.id)) {
+      actions.append(el("span", "tile-why", "✓ Ya está en tus matches"));
+    } else {
+      const save = el("button", "btn btn-solid", `${ICON.save} La quiero ver`);
+      save.type = "button";
+      save.onclick = () => { addToLibrary(m.id); renderMatch(); };
+      actions.append(save);
+    }
+    body.append(actions);
+    card.append(pbtn, body);
+    box.append(card);
   }
 
   function renderThinking(box) {
