@@ -652,8 +652,6 @@ function startApp(MOVIES) {
   let stepIdx = 0;
   let results = null;   // [{ m, score, reasons }]
   let forYou = [];      // ids ordenados para el mazo «Para ti»
-  let aiStatus = null;  // null | "loading" | "ok" | "error"
-  let aiRun = 0;        // descarta respuestas de consultas anteriores
 
   function scoreMovie(m, p, favs) {
     const reasons = [];
@@ -730,45 +728,7 @@ function startApp(MOVIES) {
     const all = computeMatches(state.profile);
     results = all.slice(0, 12);
     forYou = all.slice(0, 300).map((r) => r.m.id);
-    aiStatus = null;
     renderMoods();
-    if (AI_URL && all.length >= 2) askAI(all);
-  }
-
-  // Manda la encuesta y las 40 mejores candidatas locales al Worker; Claude elige y explica.
-  async function askAI(all) {
-    const run = ++aiRun;
-    aiStatus = "loading";
-    const p = state.profile;
-    const slim = (m) => ({ id: m.id, title: m.title, year: m.year, director: m.director, cast: m.cast, genres: m.genres,
-      runtime: m.runtime, rating: m.rating, providers: m.providers, desc: m.desc });
-    const payload = {
-      profile: p,
-      favs: p.favs.map((id) => byId[id]).filter(Boolean).map(slim),
-      liked: state.library.slice(-15).map((l) => byId[l.id] && `${byId[l.id].title} (${byId[l.id].year})`).filter(Boolean),
-      candidates: all.slice(0, 40).map((r) => slim(r.m)),
-    };
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 60000);
-      const res = await fetch(AI_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: ctrl.signal });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error(`IA ${res.status}`);
-      const { picks } = await res.json();
-      if (run !== aiRun) return;
-      const fresh = (id) => byId[id] && !inLibrary(id) && !state.passed.includes(id);
-      const chosen = (picks || []).filter((x) => fresh(x.id)).map((x) => ({ m: byId[x.id], reasons: [x.reason], ai: true }));
-      if (!chosen.length) throw new Error("IA sin elecciones");
-      const ids = new Set(chosen.map((c) => c.m.id));
-      results = [...chosen, ...all.filter((r) => !ids.has(r.m.id) && fresh(r.m.id)).slice(0, Math.max(0, 12 - chosen.length))];
-      forYou = [...ids, ...forYou.filter((id) => !ids.has(id))];
-      aiStatus = "ok";
-    } catch (e) {
-      if (run !== aiRun) return;
-      console.warn("Para ti: sin IA,", e);
-      aiStatus = "error";
-    }
-    if (!$("#view-para-ti").hidden && !draft) renderMatch();
   }
 
   function renderMatch() {
@@ -777,9 +737,13 @@ function startApp(MOVIES) {
     if (draft) return renderStep(box);
     if (!state.profile) { renderWeekly(box); return renderIntro(box); }
     if (!results) runMatch();
-    if (aiStatus === "loading") return renderThinking(box);
     renderWeekly(box);
-    renderResults(box);
+    const redo = el("button", "btn btn-ghost", "Repetir encuesta");
+    redo.type = "button";
+    redo.onclick = () => { draft = { ...emptyProfile(), ...state.profile }; stepIdx = 0; renderMatch(); };
+    const footer = el("div", "match-footer");
+    footer.append(redo);
+    box.append(footer);
   }
 
   // ---------- Peli de la semana: una recomendación fija cada semana según tus gustos ----------
@@ -828,11 +792,14 @@ function startApp(MOVIES) {
   }
 
   function localWeeklyReason(m) {
-    const liked = state.library.map((l) => byId[l.id]);
+    const p = state.profile;
+    const liked = [...(p ? p.favs.map((id) => byId[id]).filter(Boolean) : []), ...state.library.map((l) => byId[l.id])];
     const sameDir = liked.find((x) => x.director === m.director && m.director !== "Desconocido");
-    if (sameDir) return `Es de ${m.director}, el director de «${sameDir.title}», que guardaste.`;
-    const g = m.genres[0];
-    return `Mezcla lo que más guardas${g ? `, sobre todo ${g.toLowerCase()}` : ""}, y tiene un ${m.rating.toFixed(1)}/10.`;
+    if (sameDir) return `Es de ${m.director}, el director de «${sameDir.title}». Tiene un ${m.rating.toFixed(1)}/10.`;
+    const fav = p && m.genres.find((x) => p.genres.includes(x));
+    if (fav) return `Es de ${fav.toLowerCase()}, uno de tus géneros favoritos, y tiene un ${m.rating.toFixed(1)}/10.`;
+    if (state.library.length) return `Se parece a lo que más guardas, sobre todo ${m.genres[0].toLowerCase()}, y tiene un ${m.rating.toFixed(1)}/10.`;
+    return `De las mejor valoradas que encajan con tus respuestas: ${m.rating.toFixed(1)}/10.`;
   }
 
   async function ensureWeekly() {
@@ -863,7 +830,7 @@ function startApp(MOVIES) {
       if (top && state.weekly.week === week) {
         state.weekly = { week, id: top.id, reason: top.reason, ai: true };
         persist();
-        if (!$("#view-para-ti").hidden && !draft && aiStatus !== "loading") renderMatch();
+        if (!$("#view-para-ti").hidden && !draft) renderMatch();
       }
     } catch (e) {
       console.warn("Peli de la semana: sin IA,", e);
@@ -911,22 +878,10 @@ function startApp(MOVIES) {
     box.append(card);
   }
 
-  function renderThinking(box) {
-    box.append(el("div", "match-thinking", `
-      <span class="thinking-dot" aria-hidden="true"></span>
-      <h1 class="page-title">Pensando tu match…</h1>
-      <p>Claude está leyendo tus respuestas y comparando ${MOVIES.length.toLocaleString("es-ES")} películas. Tarda unos segundos.</p>`));
-    const skip = el("button", "btn btn-ghost", "Ver ya la selección rápida");
-    skip.type = "button";
-    skip.onclick = () => { aiRun++; aiStatus = null; renderMatch(); };
-    box.querySelector(".match-thinking").append(skip);
-    box.querySelector(".match-thinking").setAttribute("role", "status");
-  }
-
   function renderIntro(box) {
     box.append(el("div", "match-intro", `
       <h1 class="page-title">Tu match personalizado</h1>
-      <p>Responde ${STEPS.length} preguntas rápidas y ${AI_URL ? "Claude elige" : "elijo"} entre ${MOVIES.length.toLocaleString("es-ES")} películas las que mejor encajan contigo hoy, diciéndote por qué.</p>
+      <p>Responde ${STEPS.length} preguntas rápidas y ${AI_URL ? "Claude elige" : "elijo"} entre ${MOVIES.length.toLocaleString("es-ES")} películas tu peli de la semana, diciéndote por qué.</p>
       <ul class="match-steps">${STEPS.map((s) => `<li>${esc(s.q.replace(/[¿?]/g, ""))}</li>`).join("")}</ul>`));
     const start = el("button", "btn btn-red", "Empezar encuesta");
     start.type = "button";
@@ -945,7 +900,7 @@ function startApp(MOVIES) {
     const step = STEPS[stepIdx];
     if (firstRun && stepIdx === 0) {
       box.append(el("div", "welcome", `<p class="result-label">Bienvenido a Peli Match</p>
-        <p>Antes de nada, ${STEPS.length} preguntas rápidas para conocerte. Al acabar te doy tu match personalizado y tu peli de la semana.</p>`));
+        <p>Antes de nada, ${STEPS.length} preguntas rápidas para conocerte. Al acabar te doy tu peli de la semana.</p>`));
     }
     box.append(el("div", "q-progress", `<span style="width:${((stepIdx + 1) / STEPS.length) * 100}%"></span>`));
     box.append(el("p", "q-count", `Pregunta ${stepIdx + 1} de ${STEPS.length}`));
@@ -1017,6 +972,7 @@ function startApp(MOVIES) {
   function next() {
     if (stepIdx < STEPS.length - 1) { stepIdx++; return renderMatch(); }
     state.profile = draft;
+    state.weekly = null; // la peli de la semana se recalcula con las nuevas respuestas
     draft = null;
     firstRun = false;
     persist();
@@ -1066,62 +1022,6 @@ function startApp(MOVIES) {
     input.addEventListener("input", search);
     box.append(chips, input, list);
     drawChips();
-  }
-
-  function renderResults(box) {
-    const head = el("div", "list-head", `<h1 class="page-title">Tu match</h1>`);
-    box.append(head);
-    if (aiStatus === "error") box.append(el("p", "match-note", "No he podido consultar a la IA ahora mismo, así que te enseño mi selección rápida."));
-    if (!results.length) {
-      box.append(el("div", "list-empty", `<p class="empty-title">Nada encaja</p><p class="empty-text">Con esas respuestas no queda ninguna peli. Prueba a quitar algo de «evitar» o a darte más tiempo.</p>`));
-    } else {
-      const [top, ...rest] = results;
-      const hero = el("div", "match-hero");
-      const pbtn = el("button", "tile-btn");
-      pbtn.type = "button";
-      pbtn.setAttribute("aria-label", `Ver ficha de ${top.m.title}`);
-      pbtn.append(poster(top.m));
-      pbtn.onclick = () => openSheet(top.m.id, "match");
-      const body = el("div", "result-body", `
-        <div>
-          <p class="result-label">${top.ai ? "Claude cree que esta es para ti" : "Esta es para ti"}</p>
-          <p class="result-title">${esc(top.m.title)}</p>
-          <p class="tile-meta">${top.m.year} · ${fmtTime(top.m.runtime)}${top.m.rating != null ? ` · ${top.m.rating.toFixed(1)}/10` : ""}</p>
-        </div>
-        <ul class="reasons">${top.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`);
-      const actions = el("div", "match-actions");
-      const save = el("button", "btn btn-solid", `${ICON.save} La quiero ver`);
-      save.type = "button";
-      save.onclick = () => { addToLibrary(top.m.id); results = results.slice(1); renderMatch(); };
-      const another = el("button", "btn btn-ghost", "Otra");
-      another.type = "button";
-      another.onclick = () => { state.passed.push(top.m.id); persist(); results = results.slice(1); renderMatch(); };
-      actions.append(save, another);
-      body.append(actions);
-      hero.append(pbtn, body);
-      box.append(hero);
-
-      if (rest.length) {
-        box.append(el("h2", "section-title", "También te pueden encajar"));
-        const grid = el("ul", "grid");
-        rest.forEach((r) => {
-          const li = tileFor(r.m, "match");
-          if (r.reasons[0]) li.append(el("p", "tile-why", esc(r.reasons[0])));
-          grid.append(li);
-        });
-        box.append(grid);
-      }
-    }
-
-    const footer = el("div", "match-footer");
-    const deck = el("button", "btn btn-red", "Deslizar mi selección");
-    deck.type = "button";
-    deck.onclick = () => { mood = FOR_YOU; renderMoods(); deckEl.replaceChildren(); location.hash = "#descubrir"; };
-    const redo = el("button", "btn btn-ghost", "Repetir encuesta");
-    redo.type = "button";
-    redo.onclick = () => { draft = { ...emptyProfile(), ...state.profile }; stepIdx = 0; renderMatch(); };
-    footer.append(deck, redo);
-    box.append(footer);
   }
 
   function addToLibrary(id) {
