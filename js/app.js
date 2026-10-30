@@ -340,15 +340,28 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const nope = card.querySelector(".stamp-nope");
     const seen = card.querySelector(".stamp-seen");
     let start = null;
+    const fingers = new Set();
+    // Dos dedos a la vez (pellizcar) no mueven la carta: vuelve a su sitio y no cuenta como gesto
+    const snapBack = () => {
+      start = null;
+      card.classList.remove("dragging");
+      card.style.transform = "";
+      like.style.opacity = nope.style.opacity = seen.style.opacity = 0;
+    };
+    const lift = (e) => fingers.delete(e.pointerId);
+    card.addEventListener("pointerup", lift);
+    card.addEventListener("pointercancel", lift);
     card.addEventListener("pointerdown", (e) => {
+      fingers.add(e.pointerId);
+      if (fingers.size > 1) { snapBack(); return; }
       if (card.dataset.depth !== "0" || card.dataset.leaving) return;
-      start = { x: e.clientX, y: e.clientY, t: performance.now() };
+      start = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
       card._drag = { dx: 0, dy: 0 };
       card.setPointerCapture(e.pointerId);
       card.classList.add("dragging");
     });
     card.addEventListener("pointermove", (e) => {
-      if (!start) return;
+      if (!start || e.pointerId !== start.id) return;
       const dx = e.clientX - start.x;
       const dy = e.clientY - start.y;
       card._drag = { dx, dy };
@@ -359,7 +372,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       seen.style.opacity = Math.max(0, Math.min(1, up / 90));
     });
     const end = (e) => {
-      if (!start) return;
+      if (!start || e.pointerId !== start.id) return;
       const { dx, dy } = card._drag;
       const dt = performance.now() - start.t;
       start = null;
