@@ -108,6 +108,8 @@ async function main() {
     await sleep(500);
   }
   await sleep(1000);
+  // El aviso de APK nueva sale porque la de prueba es la versión 1: se anota y se quita para seguir
+  await page.eval(`setInterval(() => { const m = document.querySelector(".update-modal"); if (m) { window.__avisoVisto = true; m.remove(); } }, 200)`);
 
   // Medidas: lo que ve la web frente a la pantalla real
   const metrics = () => page.fn(() => {
@@ -172,6 +174,27 @@ async function main() {
     await sleep(1500);
     step("tab " + v, { tapped: ok, ...(await metrics()), shot: await snap(v) });
   }
+
+  // Ni zoom ni desplazamiento de lado: deslizar en horizontal por la pantalla y pellizcar
+  const shift = () => page.fn(() => {
+    const moved = [...document.querySelectorAll("*")].filter((e) => e.scrollLeft > 0 && !e.matches(".news-row, .moods, .filters")).map((e) => e.className || e.tagName).slice(0, 5);
+    return { sx: scrollX, vx: Math.round(visualViewport.offsetLeft), scale: visualViewport.scale, appLeft: Math.round(document.querySelector(".app").getBoundingClientRect().left), moved };
+  });
+  for (const v of ["ruleta", "biblioteca", "cuenta", "descubrir"]) {
+    await page.eval(`location.hash = "#${v}"`);
+    await sleep(1200);
+    const sz = adb("shell", "wm", "size").match(/(\d+)x(\d+)/);
+    const W = Number(sz[1]), H = Number(sz[2]), y = String(Math.round(H * 0.22));
+    adb("shell", "input", "swipe", String(Math.round(W * 0.85)), y, String(Math.round(W * 0.1)), y, "300");
+    await sleep(600);
+    const izq = await shift();
+    adb("shell", "input", "swipe", String(Math.round(W * 0.1)), y, String(Math.round(W * 0.85)), y, "300");
+    await sleep(600);
+    step("lateral " + v, { izq, der: await shift(), shot: await snap("lateral-" + v) });
+  }
+  try { await page.send("Input.synthesizePinchGesture", { x: 180, y: 400, scaleFactor: 2.5, gestureSourceType: "touch" }); } catch (e) { report.errors.push("pinch: " + e.message); }
+  await sleep(800);
+  step("pellizco", { ...(await shift()), aviso: await page.eval("!!window.__avisoVisto"), shot: await snap("pellizco") });
 
   // Descubrir: deslizar una carta con el dedo y abrir una ficha
   await tapEl(page, '.tab[data-view="descubrir"]');
