@@ -232,6 +232,22 @@ async function main() {
   await sleep(1200);
   step("cuenta", { ...(await metrics()), shot: await snap("cuenta") });
 
+  // Widget: la app le pasa la peli de la semana a Android (y su cartel) y el enlace del widget abre la ficha
+  await page.eval(`location.hash = "#para-ti"`);
+  await sleep(4000);
+  let prefs = "", files = "";
+  try { prefs = adb("shell", "run-as", PKG, "cat", "shared_prefs/cinder_widget.xml"); } catch (e) { prefs = "sin datos: " + e.message.slice(0, 80); }
+  try { files = adb("shell", "run-as", PKG, "ls", "-l", "files"); } catch (e) { files = e.message.slice(0, 80); }
+  const wid = (prefs.match(/name="id">([^<]+)</) || [])[1];
+  step("widget", { prefs: prefs.slice(0, 600), files, shot: await snap("para-ti-widget") });
+  if (wid) {
+    await page.eval(`location.hash = "#descubrir"`);
+    await sleep(800);
+    adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", `io.github.ivanminguez.cinder://peli/${wid}`, PKG);
+    await sleep(2500);
+    step("enlace del widget", { want: wid, sheetOpen: await visible(".sheet"), title: await page.eval(`document.querySelector("#sheet-title")?.textContent`), shot: await snap("widget-ficha") });
+  }
+
   // Volver a abrir la app: sigue donde estaba
   adb("shell", "am", "force-stop", PKG);
   adb("shell", "am", "start", "-W", "-n", `${PKG}/.MainActivity`);
