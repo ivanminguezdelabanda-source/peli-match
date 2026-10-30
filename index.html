@@ -67,6 +67,63 @@
   @media (prefers-reduced-motion: reduce) {
     #splash *, #splash::before { animation-duration: .01s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; }
   }
+
+  /* ---------- Pantallas de carga de los eventos (Halloween y Navidad): la escena la monta el script de abajo ---------- */
+  .sp-scene { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .sp-scene svg { stroke: none; } /* sin el trazo general de los iconos (styles.css) */
+  .sp-scene > svg { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; }
+  .sp-scene > svg.xm-lights { top: 0; bottom: auto; height: 90px; }
+  html.event-halloween #splash { background: linear-gradient(180deg, #0d0717 0%, #1d0f2b 45%, #2a1430 75%, #140b12 100%); }
+  html.event-halloween #splash::before { background: radial-gradient(closest-side, rgba(255, 122, 26, .30), rgba(255, 122, 26, 0)); }
+  html.event-halloween .sp-logo, html.event-navidad .sp-logo { z-index: 2; }
+  html.event-halloween .sp-bar, html.event-halloween .sp-text, html.event-navidad .sp-bar, html.event-navidad .sp-text { position: relative; z-index: 2; }
+  html.event-halloween .sp-back { stroke: #ffb35c; }
+  html.event-halloween .sp-front rect { fill: #ff7a1a; }
+  html.event-halloween .sp-play { fill: #ffe08a; animation: sp-pop .35s cubic-bezier(.3,1.6,.5,1) .95s both, hw-candle 1.4s steps(1) 1.4s infinite; }
+  html.event-halloween .sp-mark { filter: drop-shadow(0 0 18px rgba(255, 122, 26, .55)); animation: hw-glow 2.2s ease-in-out 1.2s infinite alternate; }
+  html.event-halloween .sp-name b { color: #ff7a1a; text-shadow: 0 0 14px rgba(255, 122, 26, .6); }
+  html.event-halloween .sp-bar { background: #2c1d33; }
+  html.event-halloween .sp-bar i { background: linear-gradient(90deg, #ff7a1a, #c44bd6); box-shadow: 0 0 10px rgba(255, 122, 26, .7); }
+  html.event-halloween .sp-text { color: #d6b8e6; }
+  .hw-star { fill: #fff; animation: hw-twinkle 2.4s ease-in-out infinite alternate; }
+  .hw-moon { animation: hw-rise 1.6s cubic-bezier(.2,.8,.2,1) both; }
+  .hw-moon-glow { animation: hw-moonglow 3s ease-in-out 1.6s infinite alternate; transform-origin: 300px 170px; }
+  .hw-bat { animation: hw-fly 3.6s cubic-bezier(.45,.05,.55,.95) both; }
+  .hw-bat .wing { animation: hw-flap .18s ease-in-out infinite alternate; transform-box: fill-box; }
+  .hw-bat .wing.l { transform-origin: 100% 40%; }
+  .hw-bat .wing.r { transform-origin: 0% 40%; }
+  .hw-fog { position: absolute; left: -50%; width: 200%; height: 140px; border-radius: 50%; filter: blur(18px);
+    background: radial-gradient(ellipse at center, rgba(200, 170, 230, .22), rgba(200, 170, 230, 0) 70%); animation: hw-drift 9s linear infinite; }
+  .hw-spider { position: absolute; left: calc(50% + 46px); top: 0; width: 22px; z-index: 3; animation: hw-drop 1.4s cubic-bezier(.3,1.4,.5,1) .6s both, hw-swing 2.6s ease-in-out 2s infinite alternate; transform-origin: 50% 0; }
+  .hw-spider i { display: block; width: 1px; height: calc(42vh - 100px); margin: 0 auto; background: rgba(230, 220, 240, .55); }
+  .hw-spider svg { display: block; width: 22px; height: 22px; margin-top: -2px; }
+  @keyframes hw-twinkle { from { opacity: .25; } to { opacity: 1; } }
+  @keyframes hw-rise { from { opacity: 0; transform: translateY(70px); } to { opacity: 1; transform: none; } }
+  @keyframes hw-moonglow { from { opacity: .55; transform: scale(.95); } to { opacity: 1; transform: scale(1.05); } }
+  @keyframes hw-fly { 0% { opacity: 0; transform: translate(var(--x0), var(--y0)) scale(.5); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--x1), var(--y1)) scale(var(--s)); } }
+  @keyframes hw-flap { from { transform: scaleY(1); } to { transform: scaleY(.25); } }
+  @keyframes hw-drift { from { transform: translateX(0); } to { transform: translateX(25%); } }
+  @keyframes hw-drop { from { transform: translateY(-100%); } to { transform: none; } }
+  @keyframes hw-swing { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+  @keyframes hw-candle { 0%, 100% { opacity: 1; } 30% { opacity: .75; } 55% { opacity: .95; } 70% { opacity: .6; } }
+  @keyframes hw-glow { from { filter: drop-shadow(0 0 12px rgba(255, 122, 26, .4)); } to { filter: drop-shadow(0 0 26px rgba(255, 140, 40, .8)); } }
+
+  html.event-navidad #splash { background: linear-gradient(180deg, #08131f 0%, #0f2233 50%, #16283a 80%, #1c2d3c 100%); }
+  html.event-navidad #splash::before { background: radial-gradient(closest-side, rgba(255, 215, 120, .22), rgba(255, 215, 120, 0)); }
+  html.event-navidad .sp-name b { color: #e0414b; }
+  html.event-navidad .sp-bar { background: #20384d; }
+  html.event-navidad .sp-bar i { background: repeating-linear-gradient(135deg, #e0414b 0 8px, #fff 8px 16px); }
+  html.event-navidad .sp-text { color: #cfe3f2; }
+  .xm-ribbon { fill: #f2d39b; transform-origin: 36px 34px; animation: sp-pop .4s cubic-bezier(.3,1.6,.5,1) 1.1s both; }
+  .xm-bow { fill: #f2d39b; stroke: #c9a45e; stroke-width: .8; transform-origin: 36px 34px; animation: xm-bow .6s cubic-bezier(.3,1.7,.5,1) 1.3s both; }
+  .xm-cap { fill: #fff; transform-origin: 36px 14px; animation: xm-cap .6s ease 1.5s both; }
+  .xm-flake { position: absolute; top: -12px; width: var(--d); height: var(--d); border-radius: 50%; background: #fff; opacity: .85; animation: xm-fall var(--t) linear var(--w) infinite; }
+  .xm-bulb { animation: xm-blink 1.2s steps(1) infinite; }
+  @keyframes xm-bow { from { transform: scale(0) rotate(-30deg); } to { transform: none; } }
+  @keyframes xm-cap { from { opacity: 0; transform: scaleY(0); } to { opacity: 1; transform: none; } }
+  @keyframes xm-fall { from { transform: translate(0, 0); } to { transform: translate(var(--x), 105vh); } }
+  @keyframes xm-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .sp-scene * { animation: none !important; } .hw-bat, .xm-flake { display: none; } }
 </style>
 
 </head>
@@ -109,6 +166,65 @@
     document.addEventListener("touchmove", function (e) { if (e.touches && e.touches.length > 1) stop(e); }, { passive: false });
     document.addEventListener("gesturestart", stop, { passive: false });
   })();
+  // Escena de los eventos: noche de Halloween (luna, murciélagos, niebla, cementerio y una araña) o Navidad
+  // (nieve, guirnalda de luces y el cartel envuelto como un regalo)
+  (function () {
+    var cls = document.documentElement.classList, box = document.getElementById("splash");
+    var NS = "http://www.w3.org/2000/svg";
+    var scene = document.createElement("div");
+    scene.className = "sp-scene";
+    if (cls.contains("event-halloween")) {
+      var stars = "";
+      for (var i = 0; i < 40; i++) stars += '<circle class="hw-star" cx="' + Math.round(Math.random() * 400) + '" cy="' + Math.round(Math.random() * 420) + '" r="' + (Math.random() * 1.3 + .4).toFixed(1) + '" style="animation-delay:' + (Math.random() * 2.4).toFixed(2) + 's"/>';
+      var bat = function (x0, y0, x1, y1, sc, delay) {
+        return '<g class="hw-bat" style="--x0:' + x0 + 'px;--y0:' + y0 + 'px;--x1:' + x1 + 'px;--y1:' + y1 + 'px;--s:' + sc + ';animation-delay:' + delay + 's">'
+          + '<path class="wing l" fill="#0a0610" d="M0 4c-6-6-14-6-20-2 4 0 6 2 6 5-3-2-7-2-9 0 3 1 5 3 5 6 5-5 12-6 18-6z"/>'
+          + '<path class="wing r" fill="#0a0610" d="M0 4c6-6 14-6 20-2-4 0-6 2-6 5 3-2 7-2 9 0-3 1-5 3-5 6-5-5-12-6-18-6z"/>'
+          + '<ellipse fill="#0a0610" cx="0" cy="6" rx="3" ry="4.5"/></g>';
+      };
+      scene.innerHTML =
+        '<svg viewBox="0 0 400 800" preserveAspectRatio="xMidYMax slice" aria-hidden="true">'
+        + '<defs><radialGradient id="hw-mg"><stop offset="0" stop-color="#ffe9b8" stop-opacity=".55"/><stop offset="1" stop-color="#ffe9b8" stop-opacity="0"/></radialGradient></defs>'
+        + stars
+        + '<g class="hw-moon"><circle class="hw-moon-glow" cx="300" cy="170" r="120" fill="url(#hw-mg)"/>'
+        + '<circle cx="300" cy="170" r="58" fill="#f7e6bd"/><circle cx="282" cy="152" r="10" fill="#e8d3a2"/><circle cx="318" cy="186" r="14" fill="#ead6a6"/><circle cx="312" cy="146" r="6" fill="#e8d3a2"/></g>'
+        + bat(300, 170, -40, 60, 2.6, .8) + bat(300, 180, 160, -60, 1.8, 1.2) + bat(300, 160, 20, -40, 1.5, 1.6) + bat(300, 175, -60, 250, 3, 2.1) + bat(300, 170, 420, 120, 2.2, 2.6)
+        + '<path fill="#120a18" d="M0 690c40-14 70-22 110-14s70 10 100 4 60-20 100-16 60 12 90 6v130H0z"/>'
+        + '<g fill="#0a0610"><path d="M40 700v-28c0-12 22-12 22 0v28z"/><path d="M76 704v-20c0-9 16-9 16 0v20z"/><path d="M322 700v-30c0-13 24-13 24 0v30z"/>'
+        + '<path d="M280 704h4v-22h-8v-4h8v-8h4v8h8v4h-8v22z"/>'
+        + '<path d="M150 704c-2-40 4-70 0-96l6-2c4 20 2 40 4 56 6-16 16-30 30-38l3 5c-14 8-24 24-28 42 10-6 20-8 30-6l-1 5c-12-1-22 3-30 12 0 8 0 16 2 22z"/>'
+        + '<path d="M0 740h400v60H0z"/></g>'
+        + '<g transform="translate(206 676)"><ellipse cx="0" cy="12" rx="17" ry="13" fill="#ff7a1a"/><path d="M-2-1c0-5 3-7 6-8" stroke="#4a7a2a" stroke-width="3" fill="none"/>'
+        + '<path fill="#ffe08a" class="hw-face" d="M-9 8l4-4 3 4zM9 8l-4-4-3 4zM-10 15c6 6 14 6 20 0l-3 1-2-2-2 2-2-2-2 2-2-2-2 2z"/></g>'
+        + '</svg>'
+        + '<div class="hw-fog" style="bottom:40px;opacity:.9"></div><div class="hw-fog" style="bottom:-30px;animation-duration:13s;animation-direction:reverse"></div>'
+        + '<div class="hw-spider"><i></i><svg viewBox="0 0 22 22"><g stroke="#0a0610" stroke-width="1.4" fill="none"><path d="M11 9 3 4M11 10 2 10M11 12 3 17M11 13 6 21M11 9l8-5M11 10l9 0M11 12l8 5M11 13l5 8"/></g><circle cx="11" cy="11" r="4.5" fill="#0a0610"/><circle cx="9.5" cy="10" r=".9" fill="#ff7a1a"/><circle cx="12.5" cy="10" r=".9" fill="#ff7a1a"/></svg></div>';
+      box.insertBefore(scene, box.firstChild);
+    } else if (cls.contains("event-navidad")) {
+      var flakes = "";
+      for (var k = 0; k < 46; k++) {
+        flakes += '<span class="xm-flake" style="left:' + (Math.random() * 100).toFixed(1) + '%;--d:' + (Math.random() * 4 + 2).toFixed(1) + 'px;--t:' + (Math.random() * 5 + 5).toFixed(1) + 's;--w:-' + (Math.random() * 8).toFixed(1) + 's;--x:' + Math.round(Math.random() * 80 - 40) + 'px"></span>';
+      }
+      var bulbs = "", colors = ["#e0414b", "#f2d39b", "#3fb36b", "#59a8ff"];
+      for (var b = 0; b < 11; b++) {
+        var x = 20 + b * 36, y = 20 + Math.sin((b / 10) * Math.PI) * 26;
+        bulbs += '<g class="xm-bulb" style="animation-delay:' + (b % 3) * .4 + 's"><rect x="' + (x - 2) + '" y="' + (y - 2) + '" width="4" height="5" fill="#3a3a3a"/><ellipse cx="' + x + '" cy="' + (y + 9) + '" rx="5" ry="8" fill="' + colors[b % 4] + '" style="filter:drop-shadow(0 0 6px ' + colors[b % 4] + ')"/></g>';
+      }
+      scene.innerHTML = flakes + '<svg class="xm-lights" viewBox="0 0 400 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0 14Q200 70 400 14" stroke="#2d4a2f" stroke-width="2" fill="none"/>' + bulbs + '</svg>'
+        + '<svg viewBox="0 0 400 800" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><path fill="#eaf3fb" d="M0 720c60-20 120-26 200-16s140 4 200-10v106H0z"/><path fill="#d5e6f3" d="M0 760c80-14 160-10 240 0s120 0 160-8v48H0z"/></svg>';
+      box.insertBefore(scene, box.firstChild);
+      // El cartel rojo se envuelve como un regalo y le cae nieve encima
+      var front = box.querySelector(".sp-front");
+      var g = document.createElementNS(NS, "g");
+      g.innerHTML = '<g clip-path="url(#sp-clip)"><rect class="xm-ribbon" x="34" y="10" width="4" height="48"/><rect class="xm-ribbon" x="18" y="32" width="36" height="4"/></g>'
+        + '<path class="xm-bow" d="M36 34c-4-6-11-6-10-1 1 3 6 3 10 1zm0 0c4-6 11-6 10-1-1 3-6 3-10 1zm0 0c-3 2-5 6-5 9l2 1c1-3 2-6 3-10zm0 0c3 2 5 6 5 9l-2 1c-1-3-2-6-3-10z"/>';
+      front.appendChild(g);
+      var cap = document.createElementNS(NS, "path");
+      cap.setAttribute("class", "xm-cap");
+      cap.setAttribute("d", "M21 18c0-4 2-6 6-6 2-2 5-2 7 0 1-1 4-1 5 0 2-1 6-1 8 1 3 0 4 2 4 5-3 1-5-1-7 1-2-1-4 0-6-1-3 1-5 0-8 1-3-1-6 0-9-1z");
+      front.appendChild(cap);
+    }
+  })();
   // Mensajes y barra de la pantalla de carga; app.js llama a __splash.done() cuando ya se puede usar
   (function () {
     var box = document.getElementById("splash"), bar = document.getElementById("splash-bar"), text = document.getElementById("splash-text");
@@ -125,12 +241,12 @@
         if (ended) return;
         ended = true;
         bar.style.width = "100%";
-        // Que se vea entera la entrada del logo (1,3 s) aunque la app ya esté lista
+        // Que se vea entera la entrada del logo (1,3 s; 2,6 s con la escena de un evento) aunque la app ya esté lista
         setTimeout(function () {
           clearInterval(tick);
           box.className = "out";
           setTimeout(function () { box.remove(); }, 500);
-        }, Math.max(150, 1300 - (Date.now() - start)));
+        }, Math.max(150, (cls.contains("event-halloween") || cls.contains("event-navidad") ? 2600 : 1300) - (Date.now() - start)));
       },
     };
   })();

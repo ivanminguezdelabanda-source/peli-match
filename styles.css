@@ -925,9 +925,4 @@ html.event-navidad .event-row { background: linear-gradient(160deg, rgba(200, 32
 .event-go { width: 100%; margin-top: 12px; justify-content: center; }
 html.event-halloween .event-go { background: linear-gradient(135deg, #ff7a1a, #b0378f); color: #fff; }
 
-/* Pantalla de carga de Halloween: niebla morada y barra de calabaza */
-html.event-halloween #splash { background: radial-gradient(ellipse 80% 50% at 50% 40%, #2a1834, #120d14 70%); }
-html.event-halloween .sp-bar i { background: linear-gradient(90deg, #ff7a1a, #b0378f); }
-html.event-halloween #splash::after { content: "🦇"; position: absolute; top: 18%; left: -10%; font-size: 26px; animation: ev-bat 3.2s ease-in-out infinite; }
-@keyframes ev-bat { 0% { transform: translate(0, 0) scale(.8); } 50% { transform: translate(60vw, -40px) scale(1); } 100% { transform: translate(120vw, 10px) scale(.8); } }
-@media (prefers-reduced-motion: reduce) { html.event-halloween .brand-name::after, html.event-halloween #splash::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { html.event-halloween .brand-name::after { animation: none; } }
