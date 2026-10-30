@@ -44,7 +44,7 @@ public class WeeklyWidget extends AppWidgetProvider {
             String reason = p.getString("reason", "");
             v.setTextViewText(R.id.widget_reason, reason);
             v.setViewVisibility(R.id.widget_reason, reason.isEmpty() ? View.GONE : View.VISIBLE);
-            Bitmap poster = loadPoster(ctx);
+            Bitmap poster = loadPoster(new File(ctx.getFilesDir(), CinderNativePlugin.POSTER));
             if (poster != null) {
                 v.setImageViewBitmap(R.id.widget_poster, poster);
                 v.setViewVisibility(R.id.widget_poster, View.VISIBLE);
@@ -61,8 +61,7 @@ public class WeeklyWidget extends AppWidgetProvider {
     }
 
     // Cartel reducido (los widgets no aceptan imágenes muy grandes)
-    private static Bitmap loadPoster(Context ctx) {
-        File f = new File(ctx.getFilesDir(), CinderNativePlugin.POSTER);
+    static Bitmap loadPoster(File f) {
         if (!f.exists()) return null;
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inSampleSize = 2;

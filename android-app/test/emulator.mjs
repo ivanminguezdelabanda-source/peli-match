@@ -248,6 +248,19 @@ async function main() {
     step("enlace del widget", { want: wid, sheetOpen: await visible(".sheet"), title: await page.eval(`document.querySelector("#sheet-title")?.textContent`), shot: await snap("widget-ficha") });
   }
 
+  // Widgets de la Caja y de noticias: la app les pasa las pelis y Android descarga los titulares
+  const prefsOf = (name) => { try { return adb("shell", "run-as", PKG, "cat", `shared_prefs/${name}.xml`); } catch (e) { return "sin datos: " + e.message.slice(0, 80); } };
+  const box = prefsOf("cinder_box");
+  step("widget caja", { items: (box.match(/&quot;id&quot;/g) || []).length, pick: (box.match(/name="pick">([^<]{0,200})/) || [])[1] || "", poster: files.includes("box_poster") || adb("shell", "run-as", PKG, "ls", "files").includes("box_poster") });
+  step("widget noticias", { news: prefsOf("cinder_news").slice(0, 600) });
+  for (const [host, want] of [["novedades", "#novedades"], ["caja", "#ruleta"]]) {
+    await page.eval(`location.hash = "#descubrir"`);
+    await sleep(800);
+    adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", `io.github.ivanminguez.cinder://${host}`, PKG);
+    await sleep(2500);
+    step(`enlace ${host}`, { want, hash: await page.eval(`location.hash`), shot: await snap(`widget-${host}`) });
+  }
+
   // Volver a abrir la app: sigue donde estaba
   adb("shell", "am", "force-stop", PKG);
   adb("shell", "am", "start", "-W", "-n", `${PKG}/.MainActivity`);

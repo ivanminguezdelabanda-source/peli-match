@@ -74,7 +74,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   state.reported = state.reported || [];
   let afterPersist = null; // con cuenta: sube los cambios a la nube (se activa más abajo)
   let afterSave = null;    // en la app de Android: vuelve a programar los avisos de estreno
-  const persist = () => { store.save(state); if (afterPersist) afterPersist(); if (afterSave) afterSave(); };
+  const persist = () => { store.save(state); if (afterPersist) afterPersist(); if (afterSave) afterSave(); queueBox(); };
   persist();
 
   const inLibrary = (id) => state.library.some((l) => l.id === id);
@@ -1182,6 +1182,26 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     }).catch((e) => console.warn("Widget:", e));
   }
 
+  // El widget de la Caja sortea entre tus matches por ver (o, si tienes pocos, entre pelis bien valoradas)
+  var boxSent = "", boxTimer = 0; // var: persist() puede llamar a queueBox antes de llegar aquí
+  function queueBox() { clearTimeout(boxTimer); boxTimer = setTimeout(pushBox, 1500); }
+  function pushBox() {
+    const native = NATIVE && plugin("CinderNative");
+    if (!native?.setBox) return;
+    const pending = state.library.filter((l) => !l.watched).map((l) => byId[l.id]).filter(Boolean);
+    const mine = pending.length >= 2;
+    const pool = mine ? pending : MOVIES.filter((m) => m.poster && (m.rating ?? 0) >= 7 && !entry(m.id)?.watched);
+    const items = shuffle(pool).slice(0, 60).map((m) => ({
+      id: m.id, title: m.title, poster: m.poster ? m.poster.replace("/w500/", "/w342/") : "",
+      meta: [m.year, fmtTime(m.runtime), mine ? "de tus matches" : "al azar"].filter(Boolean).join(" · "),
+    }));
+    // Si no cambia el conjunto de pelis, no se reenvía (y el widget conserva la que ya había salido)
+    const key = (mine ? "m:" : "a:") + (mine ? pending.map((m) => m.id).sort().join(",") : "");
+    if (key === boxSent) return;
+    boxSent = key;
+    native.setBox({ items }).catch((e) => console.warn("Widget Caja:", e));
+  }
+
   function renderWeekly(box) {
     ensureWeekly();
     const w = state.weekly;
@@ -1709,6 +1729,9 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   }
   // Widget de la pantalla de inicio: io.github.ivanminguez.cinder://peli/<id> abre la ficha
   function openFromWidget(url) {
+    // cinder://novedades y cinder://caja (widgets de noticias y de la Caja) abren esas pantallas
+    const view = String(url || "").match(/^io\.github\.ivanminguez\.cinder:\/\/(novedades|caja)\/?$/);
+    if (view) { location.hash = view[1] === "caja" ? "#ruleta" : "#novedades"; return true; }
     const m = String(url || "").match(/^io\.github\.ivanminguez\.cinder:\/\/peli\/(.*)$/);
     if (!m) return false;
     const id = decodeURIComponent(m[1]);
@@ -3391,7 +3414,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
     // los datos de la cuenta tampoco pueden bloquear el arranque: como mucho 8 s más
     .then(() => Promise.race([accountLoad, new Promise((r) => setTimeout(r, 8000))]))
-    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); checkAppUpdate(); checkArrivals(); ensureWeekly().then(pushWidget, pushWidget); });
+    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); checkAppUpdate(); checkArrivals(); ensureWeekly().then(pushWidget, pushWidget); pushBox(); if (NATIVE) plugin("CinderNative")?.refreshNews?.().catch(() => {}); });
 }
 
 // ---------- Descarga de datos con copia en el dispositivo ----------

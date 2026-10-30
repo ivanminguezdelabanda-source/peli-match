@@ -37,6 +37,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="io.github.ivanminguez.cinder" android:host="peli" />
+                <data android:host="caja" />
+                <data android:host="novedades" />
             </intent-filter>
 
         </activity>
@@ -47,6 +49,22 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_weekly_info" />
+        </receiver>
+
+        <!-- Widget «La Caja»: sortea una peli y vuelve a girar sin abrir la app -->
+        <receiver android:name=".BoxWidget" android:exported="false" android:label="@string/widget_box_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_box_info" />
+        </receiver>
+
+        <!-- Widget «Noticias de cine» -->
+        <receiver android:name=".NewsWidget" android:exported="false" android:label="@string/widget_news_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_news_info" />
         </receiver>
 
         <provider

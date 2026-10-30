@@ -4,5 +4,7 @@
     <string name="title_activity_main">Cinder</string>
     <string name="package_name">io.github.ivanminguez.cinder</string>
     <string name="widget_description">Tu peli de la semana de Cinder</string>
+    <string name="widget_box_description">La Caja: sortea qué ver desde la pantalla de inicio</string>
+    <string name="widget_news_description">Noticias de cine de Cinder</string>
     <string name="custom_url_scheme">io.github.ivanminguez.cinder</string>
 </resources>
