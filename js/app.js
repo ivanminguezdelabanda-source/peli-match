@@ -2033,6 +2033,154 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   }
 
   // Lo que el motor ha aprendido de ti, en palabras
+  // ---------- Tema: oscuro (el de siempre), claro o el del móvil ----------
+  const THEMES = [["oscuro", "Oscuro"], ["claro", "Claro"], ["auto", "Como el móvil"]];
+  const themePref = () => { try { return localStorage.getItem("cinder:tema") || "oscuro"; } catch (e) { return "oscuro"; } };
+  const lightQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+  function applyTheme() {
+    const pref = themePref();
+    const light = pref === "claro" || (pref === "auto" && Boolean(lightQuery?.matches));
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f7f1ea" : "#14100f");
+    plugin("SystemBars")?.setStyle?.({ style: light ? "LIGHT" : "DARK" }).catch?.(() => {});
+    plugin("CinderNative")?.setBars?.({ color: light ? "#f7f1ea" : "#14100f", light }).catch?.(() => {});
+  }
+  lightQuery?.addEventListener?.("change", applyTheme);
+  applyTheme();
+  function themeSection() {
+    const sec = accountSection("Tema");
+    const row = el("div", "filters wrap");
+    sec.append(el("p", "empty-text", "Cinder nació a oscuras, como una sala de cine, pero también la tienes en claro."));
+    const draw = () => chipRow(row, THEMES.map((t) => t[1]), THEMES.find((t) => t[0] === themePref())[1], (label) => {
+      try { localStorage.setItem("cinder:tema", THEMES.find((t) => t[1] === label)[0]); } catch (e) { /* sin almacenamiento */ }
+      applyTheme();
+      draw();
+    });
+    draw();
+    sec.append(row);
+    return sec;
+  }
+
+  // ---------- Panel de administración (#admin, solo @minguez y @adam) ----------
+  // Las cifras las prepara cada hora el mantenimiento (scripts/purge) en meta/admin
+  const agoText = (t) => {
+    const min = Math.round((Date.now() - t) / 60000);
+    return min < 1 ? "ahora mismo" : min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.round(min / 60)} h` : `hace ${Math.round(min / 1440)} días`;
+  };
+  const REASON_TEXT = { spam: "spam", ofensiva: "ofensiva", spoiler: "spoiler", otro: "otro motivo" };
+  async function renderAdmin() {
+    const box = $("#admin-body");
+    box.replaceChildren(el("h1", "page-title", "Panel de administración"), el("p", "empty-text", "Cargando cifras…"));
+    let d;
+    try { d = await cloud.adminStats(); } catch (e) { box.lastChild.textContent = "No se han podido cargar las cifras. " + cloudError(e); return; }
+    box.lastChild.remove();
+    if (!d) { box.append(el("p", "empty-text", "Todavía no hay cifras: las prepara el mantenimiento de cada hora. Vuelve en un rato.")); return; }
+    const a = d.accounts || {}, act = d.activity || {}, rv = d.reviews || {};
+    const fmt = (n) => Number(n || 0).toLocaleString("es-ES");
+    const head = el("div", "admin-head");
+    head.append(el("p", "admin-updated", `Actualizado ${agoText(d.at)} · se recalcula cada hora`));
+    const back = el("a", "link-btn", "← Mi cuenta");
+    back.href = "#cuenta";
+    head.append(back);
+    box.append(head);
+
+    const tile = (label, value, note) => `<div class="admin-tile"><p class="admin-label">${esc(label)}</p><p class="admin-value">${esc(value)}</p>${note ? `<p class="admin-note">${esc(note)}</p>` : ""}</div>`;
+    const group = (title, tiles) => {
+      const sec = el("section", "admin-group");
+      sec.append(el("h2", "news-section-title", esc(title)), el("div", "admin-tiles", tiles.join("")));
+      box.append(sec);
+    };
+    group("Cuentas", [
+      tile("Con perfil", fmt(a.ready), `de ${fmt(a.limit || 2000)} posibles`),
+      tile("Nuevas", fmt(a.new7), "últimos 7 días"),
+      tile("Con Google", fmt(a.google), `${a.total ? Math.round((a.google / a.total) * 100) : 0} % de las cuentas`),
+      tile("Sin verificar", fmt(a.unverified), "se borran a las 24 h"),
+    ]);
+    group("Actividad", [
+      tile("Hoy", fmt(a.active1), "cuentas que han entrado"),
+      tile("Esta semana", fmt(a.active7), "últimos 7 días"),
+      tile("Este mes", fmt(a.active30), "últimos 30 días"),
+      tile("Gestos", fmt(act.gestures), "cartas deslizadas en total"),
+    ]);
+    group("Pelis y reseñas", [
+      tile("Guardadas", fmt(act.saved), "matches por ver"),
+      tile("Vistas", fmt(act.watched), "marcadas como vistas"),
+      tile("Listas", fmt(act.lists), "creadas por usuarios"),
+      tile("Reseñas", fmt(rv.total), rv.avg != null ? `media de ${String(rv.avg).replace(".", ",")} ★` : "todavía ninguna"),
+    ]);
+
+    // Evolución: cuentas y activas por día (lo que va guardando el mantenimiento)
+    const hist = (d.history || []).slice(-14);
+    if (hist.length > 1) {
+      const sec = el("section", "admin-group");
+      sec.append(el("h2", "news-section-title", "Evolución (últimos días)"));
+      const t = el("table", "admin-table");
+      t.innerHTML = `<thead><tr><th>Día</th><th>Cuentas</th><th>Activas 7 días</th><th>Reseñas</th></tr></thead><tbody>${hist.slice().reverse().map((h) =>
+        `<tr><td>${esc(dayText(h.d))}</td><td>${fmt(h.users)}</td><td>${fmt(h.active7)}</td><td>${fmt(h.reviews)}</td></tr>`).join("")}</tbody>`;
+      sec.append(t);
+      box.append(sec);
+    }
+
+    // Pelis más guardadas (con cuántas cuentas la tienen)
+    const ranked = (title, items) => {
+      const ids = (items || []).map((x) => x.id).filter((id) => byId[id]);
+      const row = newsRow(title, ids, false);
+      if (!row) return;
+      const n = Object.fromEntries((items || []).map((x) => [x.id, x.n]));
+      [...row.querySelectorAll(".tile")].forEach((li, i) => li.querySelector(".tile-meta").textContent = `${i + 1}.º · ${fmt(n[ids[i]])} ${n[ids[i]] === 1 ? "cuenta" : "cuentas"}`);
+      box.append(row);
+    };
+    ranked("Las más guardadas", d.topSaved);
+    ranked("Las más vistas", d.topWatched);
+    ranked("Las más reseñadas", rv.topMovies);
+
+    // Denuncias abiertas: retirar la reseña o dejarla
+    const rep = el("section", "admin-group");
+    const open = (d.reports?.open || []);
+    rep.append(el("h2", "news-section-title", `Reseñas denunciadas (${open.length})`));
+    if (!open.length) rep.append(el("p", "empty-text", "No hay denuncias pendientes. Con 2 denuncias, la reseña se retira sola."));
+    open.forEach((r) => {
+      const card = el("div", "review admin-report", `
+        <p class="admin-report-movie">${esc(byId[r.movie]?.title || r.movie)}</p>
+        <p class="review-head"><b>@${esc(r.name)}</b> <span class="stars">${"★".repeat(r.stars || 0)}</span></p>
+        <p class="review-text">${esc(r.text || "(sin texto)")}</p>
+        <p class="admin-note">Denunciada por: ${esc(r.reasons.map((x) => REASON_TEXT[x] || x).join(", "))}</p>`);
+      const actions = el("div", "admin-actions");
+      const act2 = (label, cls, remove) => {
+        const b = el("button", "btn " + cls, label);
+        b.type = "button";
+        b.onclick = async () => {
+          actions.querySelectorAll("button").forEach((x) => (x.disabled = true));
+          try {
+            await cloud.adminModerate(r.movie, r.author, remove);
+            card.replaceChildren(el("p", "admin-note", remove ? "Reseña retirada." : "Denuncias descartadas: la reseña se queda."));
+          } catch (e) {
+            toast(cloudError(e));
+            actions.querySelectorAll("button").forEach((x) => (x.disabled = false));
+          }
+        };
+        actions.append(b);
+      };
+      act2("Retirar reseña", "btn-red", true);
+      act2("Dejarla", "btn-ghost", false);
+      card.append(actions);
+      rep.append(card);
+    });
+    box.append(rep);
+
+    // Últimas reseñas
+    const last = rv.latest || [];
+    if (last.length) {
+      const sec = el("section", "admin-group");
+      sec.append(el("h2", "news-section-title", "Últimas reseñas"));
+      last.forEach((r) => sec.append(el("div", "review", `
+        <p class="admin-report-movie">${esc(byId[r.movie]?.title || r.movie)} · <span class="admin-note">${esc(agoText(r.at))}</span></p>
+        <p class="review-head"><b>@${esc(r.name)}</b> <span class="stars">${"★".repeat(r.stars || 0)}</span></p>
+        ${r.text ? `<p class="review-text">${esc(r.text)}</p>` : ""}`)));
+      box.append(sec);
+    }
+  }
+
   function tasteSection() {
     const sec = accountSection("Tus gustos");
     const t = taste.summary();
@@ -2087,7 +2235,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       const enter = el("button", "btn btn-ghost", "Ya tengo cuenta: entrar");
       enter.type = "button";
       enter.onclick = () => leaveGuest("entrar");
-      box.append(create, enter, tasteSection(), el("p", "account-note", `${termsLink()} · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a>`), appLink());
+      box.append(create, enter, tasteSection(), themeSection(), el("p", "account-note", `${termsLink()} · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a>`), appLink());
       return;
     }
     if (u && !u.ready) {
@@ -2154,7 +2302,12 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         photoRow.append(rm);
       }
       prof.append(photoRow);
-      box.append(prof, tasteSection());
+      if (cloud.isAdmin) {
+        const adm = el("a", "btn btn-solid admin-link", "📊 Panel de administración");
+        adm.href = "#admin";
+        box.append(adm);
+      }
+      box.append(prof, tasteSection(), themeSection());
 
       // Seguridad
       const sec = accountSection("Seguridad");
@@ -3088,7 +3241,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   }
 
   // ---------- Navegación (#descubrir, #biblioteca, #ruleta) ----------
-  const VIEWS = ["descubrir", "novedades", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta"];
+  const VIEWS = ["descubrir", "novedades", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta", "admin"];
   let lastView = null;
   let premieresChecked = false;
   function route() {
@@ -3113,7 +3266,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       history.replaceState(null, "", "#para-ti");
     }
     if (locked && !draft) startSurvey(true);
-    const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "descubrir";
+    let view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "descubrir";
+    if (view === "admin" && !cloud?.isAdmin) { view = "cuenta"; history.replaceState(null, "", "#cuenta"); }
     // Al volver a Descubrir, ofrece empezar de cero con la biblioteca
     if (view === "descubrir" && lastView !== "descubrir" && state.library.length && tourIdx < 0) {
       const n = state.library.length;
@@ -3132,6 +3286,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     else if (view === "ruleta") { if (!spinning) resetSpin(); renderWheel(); }
     else if (view === "buscar") { renderSearch(); searchInput.focus(); }
     else if (view === "cuenta") renderAccount();
+    else if (view === "admin") renderAdmin();
     else if (view === "novedades") renderNews();
     else renderDeck();
     if (!booted || locked || tourIdx >= 0) return;

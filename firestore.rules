@@ -9,6 +9,8 @@ rules_version = '2';
 // - meta/stats cuenta las cuentas con perfil terminado. Como mucho 2000 (límite del plan gratis de Firebase):
 //   terminar el perfil exige sumar 1 a la cuenta en la misma escritura. Si cambias el límite, cámbialo
 //   también en js/cloud.js (MAX_USERS).
+// - Administración: las cuentas @minguez y @adam leen meta/admin (cifras que prepara el mantenimiento de cada hora)
+//   y pueden retirar reseñas y descartar denuncias.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedAs(uid) { return request.auth != null && request.auth.uid == uid; }
@@ -20,6 +22,12 @@ service cloud.firestore {
     function statsPath() { return /databases/$(database)/documents/meta/stats; }
     function usersBefore() { return exists(statsPath()) ? get(statsPath()).data.users : 0; }
     function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    // Administradores: los dueños de los nombres de usuario minguez y adam
+    function ownsName(n) {
+      return exists(/databases/$(database)/documents/usernames/$(n))
+        && get(/databases/$(database)/documents/usernames/$(n)).data.uid == request.auth.uid;
+    }
+    function isAdmin() { return request.auth != null && (ownsName('minguez') || ownsName('adam')); }
     function wasReady(uid) { return exists(userPath(uid)) && get(userPath(uid)).data.ready == true; }
 
     match /meta/stats {
@@ -34,6 +42,10 @@ service cloud.firestore {
           || (request.resource.data.users == usersBefore() - 1 && request.resource.data.users >= 0
             && wasReady(request.auth.uid) && !existsAfter(userPath(request.auth.uid)))
         );
+    }
+
+    match /meta/admin {
+      allow read: if isAdmin();
     }
 
     match /usernames/{name} {
@@ -73,7 +85,7 @@ service cloud.firestore {
 
     match /movies/{movieId}/reviews/{uid} {
       allow read: if true;
-      allow delete: if signedAs(uid);
+      allow delete: if signedAs(uid) || isAdmin();
       allow create, update: if signedAs(uid)
         && request.resource.data.keys().hasOnly(['name', 'photo', 'stars', 'text', 'at'])
         && getAfter(/databases/$(database)/documents/users/$(uid)).data.ready == true
@@ -86,6 +98,7 @@ service cloud.firestore {
     }
 
     match /reports/{id} {
+      allow read, delete: if isAdmin();
       allow create: if request.auth != null
         && id == request.resource.data.movie + '_' + request.resource.data.author + '_' + request.auth.uid
         && request.resource.data.keys().hasOnly(['movie', 'author', 'reporter', 'reason', 'at'])

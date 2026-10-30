@@ -16,6 +16,8 @@ export const VERIFY_HOURS = 24;
 export const MAX_USERS = 2000;
 // Tras pulsar el enlace de un correo (verificar, cambiar contraseña…), «Abrir Cinder» vuelve aquí
 const BACK = { url: new URL("./#cuenta", location.href).href };
+// Cuentas con panel de administración (también en firestore.rules: isAdmin)
+export const ADMINS = ["minguez", "adam"];
 export const USERNAME_RE = /^(?![.])[a-z0-9_.]{2,19}[a-z0-9_]$/;
 const V = "13.1.0";
 const SDK = `https://www.gstatic.com/firebasejs/${V}`;
@@ -219,6 +221,24 @@ export async function connect(config) {
       batch.update(userDoc(user.uid), { reviewed: F.arrayRemove(id) });
       await batch.commit();
       profile = { ...profile, reviewed: (profile?.reviewed || []).filter((x) => x !== id) };
+    },
+
+    // ---------- Administración (solo @minguez y @adam; las reglas lo comprueban) ----------
+    get isAdmin() { return ADMINS.includes(profile?.name); },
+    async adminStats() {
+      const snap = await F.getDoc(F.doc(db, "meta", "admin"));
+      if (!snap.exists()) return null;
+      const d = snap.data();
+      return { ...d, at: d.at?.toMillis?.() || 0 };
+    },
+    // Retirar una reseña denunciada (y sus denuncias) o dejarla y descartar las denuncias
+    async adminModerate(movieId, authorUid, removeReview) {
+      const movie = String(movieId);
+      const reports = await F.getDocs(F.query(F.collection(db, "reports"), F.where("movie", "==", movie), F.where("author", "==", authorUid)));
+      const batch = F.writeBatch(db);
+      if (removeReview) batch.delete(F.doc(reviewsOf(movie), authorUid));
+      reports.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
     },
   };
 }

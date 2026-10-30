@@ -12,6 +12,17 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Figtree:wght@400;500;700;800&family=DM+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="styles.css?v=dev">
+<script>
+  // Tema elegido en Mi cuenta (antes de pintar nada, para que no parpadee)
+  (function () {
+    try {
+      var t = localStorage.getItem("cinder:tema") || "oscuro";
+      var light = t === "claro" || (t === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches);
+      document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
+      if (light) document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f7f1ea");
+    } catch (e) { /* sin almacenamiento: oscuro */ }
+  })();
+</script>
 <style>
   /* Pantalla de carga: el logo se monta (cartel de atrás, cartel rojo, play y el nombre) mientras llegan las pelis */
   #splash {
@@ -248,6 +259,10 @@
         <p class="search-note" id="search-note" role="status"></p>
       </div>
       <ul class="grid" id="search-grid"></ul>
+    </section>
+    <!-- Panel de administración (solo @minguez y @adam) -->
+    <section class="view view-list" id="view-admin" aria-label="Panel de administración" hidden>
+      <div class="admin-body" id="admin-body"></div>
     </section>
     <!-- Cuenta -->
     <section class="view view-list" id="view-cuenta" aria-label="Mi cuenta" hidden>

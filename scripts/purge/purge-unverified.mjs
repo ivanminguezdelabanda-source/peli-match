@@ -2,7 +2,8 @@
 //   - las cuentas con correo que no lo han verificado 24 horas después de crearlas;
 //   - las cuentas que llevan más de 3 meses (90 días) sin usar Cinder.
 // Revisa las denuncias de reseñas: borra las reseñas con 2 denuncias o más (y sus denuncias) y las denuncias de más de 30 días.
-// Al final recuenta las cuentas con perfil terminado y lo guarda en meta/stats (el límite de cuentas lo usa).
+// Al final recuenta las cuentas con perfil terminado y lo guarda en meta/stats (el límite de cuentas lo usa)
+// y prepara las cifras del panel de administración en meta/admin (solo lo leen @minguez y @adam).
 // Lo ejecuta GitHub Actions cada hora (.github/workflows/purge-unverified.yml) con el secreto
 // FIREBASE_SERVICE_ACCOUNT (clave JSON de una cuenta de servicio del proyecto).
 // La última actividad es la última vez que la app renovó la sesión (cada hora de uso) o se entró.
@@ -45,6 +46,7 @@ async function purge(user) {
 }
 
 let checked = 0, purged = 0, inactive = 0, token;
+const people = []; // para el panel: cómo entra cada cuenta y cuándo la usó
 const alive = new Set();
 const now = Date.now();
 const time = (t) => (t ? Date.parse(t) || 0 : 0);
@@ -60,7 +62,7 @@ do {
     let why = null;
     if (usesPassword && !user.emailVerified && age >= LIMIT_MS) why = `creada hace ${Math.round(age / 3600000)} h, sin verificar`;
     else if (idle >= INACTIVE_MS) why = `${Math.round(idle / 86400000)} días sin usarse`;
-    if (!why) continue;
+    if (!why) { people.push({ created: time(m.creationTime), idle, google: user.providerData.some((p) => p.providerId === "google.com"), unverified: usesPassword && !user.emailVerified }); continue; }
     alive.delete(user.uid);
     if (!why.includes("verificar")) inactive++;
     console.log(`${DRY_RUN ? "[prueba] " : ""}Borrar ${user.uid} (${why})`);
@@ -110,6 +112,74 @@ for (const [key, docs] of byReview) {
   } else {
     open++;
   }
+}
+
+// ---------- Panel de administración (meta/admin) ----------
+// Cifras de un vistazo para el panel de la app: cuentas, actividad, pelis más guardadas, reseñas y denuncias
+if (!DRY_RUN) {
+  const DAY = 864e5;
+  const count = (map, key) => map.set(key, (map.get(key) || 0) + 1);
+  const top = (map, n) => [...map].sort((a, b) => b[1] - a[1]).slice(0, n);
+  const saved = new Map(), watched = new Map();
+  let lists = 0, gestures = 0;
+  for (const d of (await db.collection("tastes").get()).docs) {
+    if (!alive.has(d.id)) continue;
+    const t = d.data();
+    for (const l of t.lib || []) count(l.watched ? watched : saved, l.id);
+    lists += (t.lists || []).length;
+    gestures += t.n || 0;
+  }
+  const reviewDocs = (await db.collectionGroup("reviews").get()).docs;
+  const perMovie = new Map();
+  let stars = 0;
+  const reviews = reviewDocs.map((d) => {
+    const r = d.data();
+    const movie = d.ref.parent.parent.id;
+    count(perMovie, movie);
+    stars += r.stars || 0;
+    return { movie, author: d.id, name: r.name || "", stars: r.stars || 0, text: String(r.text || "").slice(0, 140), at: r.at?.toMillis?.() || 0 };
+  }).sort((a, b) => b.at - a.at);
+  // Denuncias que siguen abiertas (una sola, la reseña sigue publicada)
+  const pending = [];
+  for (const d of (await db.collection("reports").get()).docs) {
+    const r = d.data();
+    const key = `${r.movie}/${r.author}`;
+    let item = pending.find((x) => x.key === key);
+    if (!item) {
+      const rev = reviews.find((x) => x.movie === r.movie && x.author === r.author);
+      if (!rev) continue;
+      item = { key, movie: r.movie, author: r.author, name: rev.name, text: rev.text, stars: rev.stars, reasons: [] };
+      pending.push(item);
+    }
+    item.reasons.push(r.reason);
+  }
+  const prev = (await db.doc("meta/admin").get()).data() || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const day = { d: today, users, active7: people.filter((p) => p.idle < 7 * DAY).length, reviews: reviews.length };
+  const history = [...(prev.history || []).filter((h) => h.d !== today), day].slice(-60);
+  await db.doc("meta/admin").set({
+    at: new Date(),
+    accounts: {
+      total: people.length, ready: users, google: people.filter((p) => p.google).length,
+      unverified: people.filter((p) => p.unverified).length,
+      new7: people.filter((p) => now - p.created < 7 * DAY).length,
+      active1: people.filter((p) => p.idle < DAY).length,
+      active7: day.active7,
+      active30: people.filter((p) => p.idle < 30 * DAY).length,
+      limit: 2000,
+    },
+    activity: { saved: [...saved.values()].reduce((a, b) => a + b, 0), watched: [...watched.values()].reduce((a, b) => a + b, 0), lists, gestures: Math.round(gestures) },
+    topSaved: top(saved, 15).map(([id, n]) => ({ id, n })),
+    topWatched: top(watched, 10).map(([id, n]) => ({ id, n })),
+    reviews: {
+      total: reviews.length, avg: reviews.length ? Math.round((stars / reviews.length) * 10) / 10 : null,
+      topMovies: top(perMovie, 8).map(([id, n]) => ({ id, n })),
+      latest: reviews.slice(0, 10),
+    },
+    reports: { open: pending.slice(0, 30), removedNow: removed },
+    purgedNow: { unverified: purged - inactive, inactive },
+    history,
+  });
 }
 
 // Como aviso del workflow, para verlo en el resumen de la ejecución sin abrir el registro
