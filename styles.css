@@ -1,5 +1,11 @@
 /* Layout: app de una pantalla, mobile-first. Contenido arriba, barra de pestañas abajo; la ficha sube como hoja inferior. Estética de sala de cine: terciopelo, entrada y carteles. */
 :root {
+  /* Zonas que tapan el sistema (barra de estado, muesca, barra de navegación). En la app de Android
+     el plugin SystemBars las da también como --safe-area-inset-* por si el WebView no rellena env() */
+  --sa-t: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --sa-r: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+  --sa-b: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --sa-l: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --ink: #14100f;        /* fondo: sala a oscuras */
   --panel: #211a19;
   --panel-2: #2d2423;
@@ -36,7 +42,7 @@ body {
 }
 body::before {
   content: ""; position: fixed; top: 0; left: 0; right: 0;
-  height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ink);
+  height: var(--sa-t); z-index: 10; background: var(--ink);
 }
 a { color: inherit; }
 button { font: inherit; color: inherit; }
@@ -47,8 +53,9 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   height: 100%;
   display: flex; flex-direction: column;
   max-width: 560px; margin: 0 auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: var(--sa-t); /* que la barra de estado no tape el logo */
+  padding-left: max(16px, var(--sa-l));
+  padding-right: max(16px, var(--sa-r));
 }
 
 /* Cabecera */
@@ -64,7 +71,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* Barra de pestañas inferior */
 .tabbar {
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
-  padding-block: 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding-block: 8px calc(8px + var(--sa-b));
   border-top: 1px solid var(--line);
 }
 .tab {
@@ -248,7 +255,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sheet {
   position: fixed; z-index: 21; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 560px; max-height: 92%;
   background: var(--panel); border-radius: 22px 22px 0 0; overflow-y: auto; overscroll-behavior: contain;
-  animation: rise .28s cubic-bezier(.2,.8,.2,1); padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: rise .28s cubic-bezier(.2,.8,.2,1); padding-bottom: var(--sa-b);
 }
 @keyframes rise { from { transform: translateY(40%); opacity: 0; } }
 @keyframes fade { from { opacity: 0; } }
@@ -259,13 +266,13 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 }
 .sheet-top {
   display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: end;
-  padding: 20px max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px));
+  padding: 20px max(20px, var(--sa-r)) 0 max(20px, var(--sa-l));
 }
 .sheet-poster { position: relative; aspect-ratio: 2 / 3; border-radius: 12px; overflow: hidden; box-shadow: 0 12px 30px -10px rgba(0,0,0,.8); }
 .sheet-title { font-weight: 800; font-size: 26px; line-height: 1.05; margin: 0; text-wrap: balance; }
 .sheet-original { margin: 4px 0 0; color: var(--muted); font-size: 13px; font-style: italic; }
 .sheet-content {
-  padding-block: 18px 24px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 24px; padding-left: max(20px, var(--sa-l)); padding-right: max(20px, var(--sa-r));
   display: flex; flex-direction: column; gap: 16px;
 }
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border-radius: var(--r-sm); overflow: hidden; margin: 0; }
@@ -320,7 +327,7 @@ button.link-card { border: 0; font: inherit; color: inherit; text-align: left; c
 
 /* Aviso */
 .toast {
-  position: fixed; z-index: 30; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  position: fixed; z-index: 30; left: 50%; bottom: calc(84px + var(--sa-b)); transform: translateX(-50%);
   background: var(--text); color: var(--ink); font-weight: 700; font-size: 14px;
   padding: 10px 16px; border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
   display: flex; align-items: center; gap: 12px; white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis;
@@ -614,7 +621,7 @@ button.link-card { border: 0; font: inherit; color: inherit; text-align: left; c
   .match-intro { padding: 14px 16px; gap: 8px; font-size: 14px; }
   .opt { padding: 10px 12px; }
   .reel-item { width: 92px; }
-  .tabbar { padding-block: 4px calc(4px + env(safe-area-inset-bottom, 0px)); }
+  .tabbar { padding-block: 4px calc(4px + var(--sa-b)); }
   .tab { padding: 2px 0; }
   .tab svg { font-size: 20px; }
   .view-discover { gap: 8px; padding-bottom: 8px; }

@@ -14,7 +14,7 @@
   /* Páginas legales: texto largo, fácil de leer en el móvil (mismo estilo que los términos) */
   /* La app fija la pantalla (body sin scroll); esta página se desplaza dentro de su propia capa */
   .page-scroll { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-  .terms { width: min(100%, 720px); margin: 0 auto; padding: 24px 16px 64px; padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); line-height: 1.6; }
+  .terms { width: min(100%, 720px); margin: 0 auto; padding: 24px 16px 64px; padding: max(24px, var(--sa-t)) max(16px, var(--sa-r)) calc(64px + var(--sa-b)) max(16px, var(--sa-l)); line-height: 1.6; }
   .terms a.terms-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
   .terms-logo svg { width: 40px; height: 40px; }
   .terms-logo .brand-name { font-size: 26px; }
