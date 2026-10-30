@@ -76,6 +76,12 @@
   <p class="sp-text" id="splash-text"></p>
 </div>
 <script>
+  // Sin zoom: ni pellizcando con dos dedos (también en navegadores que ignoran user-scalable=no); el doble toque ya lo quita touch-action en styles.css
+  (function () {
+    var stop = function (e) { if (e.cancelable) e.preventDefault(); };
+    document.addEventListener("touchmove", function (e) { if (e.touches && e.touches.length > 1) stop(e); }, { passive: false });
+    document.addEventListener("gesturestart", stop, { passive: false });
+  })();
   // Mensajes y barra de la pantalla de carga; app.js llama a __splash.done() cuando ya se puede usar
   (function () {
     var box = document.getElementById("splash"), bar = document.getElementById("splash-bar"), text = document.getElementById("splash-text");
