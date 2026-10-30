@@ -1126,6 +1126,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const pick = cands[seed % Math.min(5, cands.length)].m;
     state.weekly = { week, id: pick.id, reason: localWeeklyReason(pick), ai: false };
     persist();
+    pushWidget();
     if (!AI_URL) return;
     weeklyBusy = true;
     try {
@@ -1143,6 +1144,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       if (top && state.weekly.week === week) {
         state.weekly = { week, id: top.id, reason: top.reason, ai: true };
         persist();
+        pushWidget();
         if (!$("#view-para-ti").hidden && !draft) renderMatch();
       }
     } catch (e) {
@@ -1150,6 +1152,22 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     } finally {
       weeklyBusy = false;
     }
+  }
+
+  // El widget de Android enseña la peli de la semana (y se actualiza cuando cambia)
+  let widgetSent = "";
+  function pushWidget() {
+    const w = state.weekly, m = w && byId[w.id];
+    const native = NATIVE && plugin("CinderNative");
+    if (!native || !m) return;
+    const key = `${w.week}|${m.id}|${w.reason}`;
+    if (key === widgetSent) return;
+    widgetSent = key;
+    native.setWidget({
+      id: m.id, title: m.title, poster: m.poster ? m.poster.replace("/w500/", "/w342/") : "",
+      meta: [m.year, fmtTime(m.runtime), m.rating != null ? `${m.rating.toFixed(1)}/10` : ""].filter(Boolean).join(" · "),
+      reason: String(w.reason || "").slice(0, 120), label: "Peli de la semana",
+    }).catch((e) => console.warn("Widget:", e));
   }
 
   function renderWeekly(box) {
@@ -1677,9 +1695,19 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       plugin("Browser").open({ url: new URL("login-app.html", location.href).href }).catch(fail);
     });
   }
+  // Widget de la pantalla de inicio: io.github.ivanminguez.cinder://peli/<id> abre la ficha
+  function openFromWidget(url) {
+    const m = String(url || "").match(/^io\.github\.ivanminguez\.cinder:\/\/peli\/(.*)$/);
+    if (!m) return false;
+    const id = decodeURIComponent(m[1]);
+    if (byId[id]) { pendingOpen = id; if (booted) route(); }
+    return true;
+  }
   if (NATIVE) {
+    plugin("App")?.getLaunchUrl?.().then((r) => r?.url && openFromWidget(r.url)).catch(() => {});
     plugin("App")?.addListener("appUrlOpen", ({ url }) => {
       // (sin new URL: los WebView antiguos no leen bien el host de los esquemas propios)
+      if (openFromWidget(url)) return;
       if (!String(url).startsWith("io.github.ivanminguez.cinder://auth")) return;
       plugin("Browser")?.close().catch(() => {});
       const token = new URLSearchParams(String(url).split("?")[1] || "").get("c");
@@ -3336,7 +3364,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
     // los datos de la cuenta tampoco pueden bloquear el arranque: como mucho 8 s más
     .then(() => Promise.race([accountLoad, new Promise((r) => setTimeout(r, 8000))]))
-    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); checkAppUpdate(); checkArrivals(); });
+    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); checkAppUpdate(); checkArrivals(); ensureWeekly().then(pushWidget, pushWidget); });
 }
 
 // ---------- Descarga de datos con copia en el dispositivo ----------

@@ -12,6 +12,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(CinderNativePlugin.class); // modo claro de las barras y widget de la peli de la semana
         super.onCreate(savedInstanceState);
         WebSettings settings = getBridge().getWebView().getSettings();
         // La letra grande del sistema no agranda la web: Cinder ya está pensada para leerse bien en el móvil

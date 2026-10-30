@@ -3,5 +3,6 @@
     <string name="app_name">Cinder</string>
     <string name="title_activity_main">Cinder</string>
     <string name="package_name">io.github.ivanminguez.cinder</string>
+    <string name="widget_description">Tu peli de la semana de Cinder</string>
     <string name="custom_url_scheme">io.github.ivanminguez.cinder</string>
 </resources>
