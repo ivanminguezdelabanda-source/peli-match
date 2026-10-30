@@ -682,6 +682,13 @@ button.link-card { border: 0; font: inherit; color: inherit; text-align: left; c
 @keyframes rotate-hint { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0deg); } }
 .news-body { display: flex; flex-direction: column; gap: 22px; }
 .news-body > * { flex-shrink: 0; }
+.news-carousel { position: relative; }
+.news-track { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; touch-action: pan-x pan-y; border-radius: 20px; }
+.news-track::-webkit-scrollbar { display: none; }
+.news-track > .news-hero { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+.news-dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+.news-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 99px; background: var(--line); transition: width .3s, background .3s; }
+.news-dot.on { width: 22px; background: var(--ticket); }
 .news-hero { position: relative; border-radius: 20px; overflow: hidden; background: var(--panel); min-height: 300px; display: flex; align-items: flex-end; }
 .news-hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .news-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(20,16,15,0) 15%, rgba(20,16,15,.75) 55%, var(--ink) 100%); }

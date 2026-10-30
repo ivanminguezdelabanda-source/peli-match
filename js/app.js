@@ -2806,6 +2806,70 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     row.append(go);
     return row;
   }
+  function heroSlide(f, first) {
+    const hero = el("div", "news-hero");
+    const img = new Image();
+    img.alt = "";
+    img.onerror = () => img.remove();
+    img.loading = first ? "eager" : "lazy";
+    img.src = f.backdrop || f.poster;
+    hero.append(img);
+    const body = el("div", "news-hero-body", `
+      <p class="result-label">${first ? "Destacada de la semana" : "En tendencia"}</p>
+      <h2 class="news-hero-title">${esc(f.title)}</h2>
+      <p class="tile-meta">${f.year}${f.genres.length ? " · " + esc(f.genres.slice(0, 2).join(", ")) : ""}${f.rating != null ? ` · ${f.rating.toFixed(1)}/10` : ""}</p>
+      ${f.desc ? `<p class="news-hero-desc">${esc(f.desc)}</p>` : ""}`);
+    const actions = el("div", "match-actions");
+    const more = el("button", "btn btn-solid", "Ver ficha");
+    more.type = "button";
+    more.onclick = () => openSheet(f.id, "news");
+    actions.append(more);
+    if (f.trailer) {
+      const tr = el("a", "btn btn-ghost", `${ICON.play} Tráiler`);
+      tr.href = f.trailer;
+      tr.target = "_blank";
+      tr.rel = "noopener";
+      if (ytKey(f.trailer)) tr.onclick = (ev) => { ev.preventDefault(); openSheet(f.id, "news", { trailer: true }); };
+      actions.append(tr);
+    }
+    body.append(actions);
+    hero.append(body);
+    return hero;
+  }
+  // Carrusel de destacadas: se desliza con el dedo y avanza solo cada 6 s (se para un rato si lo tocas)
+  let heroTimer = 0;
+  function heroCarousel(movies) {
+    clearInterval(heroTimer);
+    const wrap = el("div", "news-carousel");
+    const track = el("div", "news-track");
+    movies.forEach((m, i) => track.append(heroSlide(m, i === 0)));
+    wrap.append(track);
+    if (movies.length < 2) return wrap;
+    const dots = el("div", "news-dots");
+    movies.forEach((m, i) => {
+      const d = el("button", "news-dot");
+      d.type = "button";
+      d.setAttribute("aria-label", `Destacada ${i + 1}: ${m.title}`);
+      d.onclick = () => { hold(); go(i); };
+      dots.append(d);
+    });
+    wrap.append(dots);
+    const current = () => Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    const mark = () => [...dots.children].forEach((d, i) => d.classList.toggle("on", i === current()));
+    const go = (i) => track.scrollTo({ left: i * track.clientWidth, behavior: "smooth" });
+    let heldUntil = 0;
+    const hold = () => { heldUntil = Date.now() + 12000; };
+    track.addEventListener("scroll", mark, { passive: true });
+    track.addEventListener("touchstart", hold, { passive: true });
+    track.addEventListener("pointerdown", hold);
+    mark();
+    heroTimer = setInterval(() => {
+      if (!wrap.isConnected) { clearInterval(heroTimer); return; }
+      if ($("#view-novedades").hidden || document.hidden || Date.now() < heldUntil || document.querySelector(".sheet:not([hidden])")) return;
+      go((current() + 1) % movies.length);
+    }, 6000);
+    return wrap;
+  }
   function renderNews() {
     const box = $("#news-body");
     box.replaceChildren(el("h1", "page-title", "Novedades"));
@@ -2813,39 +2877,10 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       box.append(el("p", "empty-text", "Todavía no hay novedades. Vuelve en un rato."));
       return;
     }
-    // Destacada: la peli más en tendencia, en grande
-    const f = byId[NEWS.featured];
-    if (f) {
-      const hero = el("div", "news-hero");
-      if (f.backdrop || f.poster) {
-        const img = new Image();
-        img.alt = "";
-        img.onerror = () => img.remove();
-        img.src = f.backdrop || f.poster;
-        hero.append(img);
-      }
-      const body = el("div", "news-hero-body", `
-        <p class="result-label">Destacada de la semana</p>
-        <h2 class="news-hero-title">${esc(f.title)}</h2>
-        <p class="tile-meta">${f.year}${f.genres.length ? " · " + esc(f.genres.slice(0, 2).join(", ")) : ""}${f.rating != null ? ` · ${f.rating.toFixed(1)}/10` : ""}</p>
-        ${f.desc ? `<p class="news-hero-desc">${esc(f.desc)}</p>` : ""}`);
-      const actions = el("div", "match-actions");
-      const more = el("button", "btn btn-solid", "Ver ficha");
-      more.type = "button";
-      more.onclick = () => openSheet(f.id, "news");
-      actions.append(more);
-      if (f.trailer) {
-        const tr = el("a", "btn btn-ghost", `${ICON.play} Tráiler`);
-        tr.href = f.trailer;
-        tr.target = "_blank";
-        tr.rel = "noopener";
-        if (ytKey(f.trailer)) tr.onclick = (ev) => { ev.preventDefault(); openSheet(f.id, "news", { trailer: true }); };
-        actions.append(tr);
-      }
-      body.append(actions);
-      hero.append(body);
-      box.append(hero);
-    }
+    // Destacadas: la peli más en tendencia y las siguientes, en grande; van pasando solas
+    const slides = [NEWS.featured, ...(NEWS.trending || [])].filter((id, i, a) => a.indexOf(id) === i)
+      .map((id) => byId[id]).filter((m) => m && (m.backdrop || m.poster)).slice(0, 6);
+    if (slides.length) box.append(heroCarousel(slides));
     // Los próximos estrenos que tienes guardados o con aviso, por fecha
     const mine = premiereMovies().filter(upcoming).sort((a, b) => a.release.localeCompare(b.release)).map((m) => m.id);
     [EVENT ? eventRow() : null, newsRow("Tus próximos estrenos", mine, true, true), newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true),

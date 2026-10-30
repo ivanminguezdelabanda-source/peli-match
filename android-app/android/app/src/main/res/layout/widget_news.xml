@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget «Noticias de cine»: cabecera (abre Novedades) y los tres últimos titulares -->
+<!-- Widget «Novedades»: destacadas que van pasando solas (como en la app) y los dos últimos titulares -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,32 +11,44 @@
         android:id="@+id/news_head"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="4dp"
-        android:text="📰  NOTICIAS DE CINE"
+        android:paddingBottom="6dp"
+        android:text="NOVEDADES DE CINE"
         android:textColor="#F2D39B"
         android:textSize="11sp"
         android:letterSpacing="0.08"
         android:fontFamily="monospace" />
 
-    <TextView
-        android:id="@+id/news_empty"
+    <ViewFlipper
+        android:id="@+id/news_flipper"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:minHeight="90dp"
+        android:autoStart="true"
+        android:flipInterval="5000"
+        android:inAnimation="@anim/widget_slide_in"
+        android:outAnimation="@anim/widget_slide_out"
+        android:background="@drawable/widget_bg">
+
+        <!-- Las destacadas se añaden desde NewsWidget (widget_news_slide) -->
+    </ViewFlipper>
+
+    <TextView
+        android:id="@+id/news_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="Cargando titulares…"
+        android:paddingTop="6dp"
+        android:text="Cargando novedades…"
         android:textColor="#B3A49A"
         android:textSize="13sp" />
 
     <LinearLayout
         android:id="@+id/news_row1"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
+        android:paddingTop="6dp">
 
         <TextView
             android:id="@+id/news_src1"
@@ -61,12 +73,9 @@
     <LinearLayout
         android:id="@+id/news_row2"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
+        android:paddingTop="6dp">
 
         <TextView
             android:id="@+id/news_src2"
@@ -80,36 +89,6 @@
 
         <TextView
             android:id="@+id/news_title2"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:textColor="#F6ECE0"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/news_row3"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="vertical"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
-
-        <TextView
-            android:id="@+id/news_src3"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:textColor="#E8875B"
-            android:textSize="10sp"
-            android:letterSpacing="0.06"
-            android:fontFamily="monospace" />
-
-        <TextView
-            android:id="@+id/news_title3"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"

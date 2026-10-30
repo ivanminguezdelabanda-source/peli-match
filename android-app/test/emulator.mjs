@@ -252,7 +252,8 @@ async function main() {
   const prefsOf = (name) => { try { return adb("shell", "run-as", PKG, "cat", `shared_prefs/${name}.xml`); } catch (e) { return "sin datos: " + e.message.slice(0, 80); } };
   const box = prefsOf("cinder_box");
   step("widget caja", { items: (box.match(/&quot;id&quot;/g) || []).length, pick: (box.match(/name="pick">([^<]{0,200})/) || [])[1] || "", poster: files.includes("box_poster") || adb("shell", "run-as", PKG, "ls", "files").includes("box_poster") });
-  step("widget noticias", { news: prefsOf("cinder_news").slice(0, 600) });
+  await sleep(6000); // las destacadas del widget de Novedades se descargan en segundo plano
+  step("widget noticias", { news: prefsOf("cinder_news").slice(0, 900), files: adb("shell", "run-as", PKG, "ls", "files") });
   for (const [host, want] of [["novedades", "#novedades"], ["caja", "#ruleta"]]) {
     await page.eval(`location.hash = "#descubrir"`);
     await sleep(800);
