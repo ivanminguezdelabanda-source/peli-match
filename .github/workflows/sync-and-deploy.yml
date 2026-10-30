@@ -88,7 +88,7 @@ jobs:
           npx -y esbuild@0.24.2 styles.css --target=chrome69,safari12,firefox68 --outfile=styles.css --allow-overwrite --log-level=warning
       # Cada publicación pide CSS y JS nuevos, para que el navegador no mezcle versiones
       - name: Marcar la versión de los archivos
-        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" index.html accion.html terminos.html login-app.html privacidad.html borrar-cuenta.html js/app.js
+        run: echo "${GITHUB_SHA::8}" > version.txt && sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" index.html accion.html terminos.html login-app.html privacidad.html borrar-cuenta.html js/app.js
       - name: No publicar las dependencias del Worker ni el proyecto de Android
         run: rm -rf worker/node_modules android-app
       - uses: actions/configure-pages@v5

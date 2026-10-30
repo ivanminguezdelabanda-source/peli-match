@@ -524,6 +524,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   }
 
   function chipRow(box, options, current, onPick) {
+    const x = box.scrollLeft; // al volver a pintar la fila no salta al principio (el chip elegido no «desaparece»)
     box.replaceChildren();
     options.forEach((o) => {
       const b = el("button", "filter", esc(o));
@@ -532,6 +533,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       b.onclick = () => onPick(o);
       box.append(b);
     });
+    box.scrollLeft = x;
   }
 
   function renderLibrary() {
@@ -606,7 +608,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   function wheelPool() {
     return wheelBase()
       .filter((m) => (wheelGenre === "Todas" || m.genres.includes(wheelGenre)) && m.runtime <= wheelTime.max)
-      .filter((m) => wheelProvider === "Cualquier sitio" || (m.providers || []).includes(wheelProvider));
+      .filter((m) => wheelProvider === "Cualquier sitio" || platformsOf(m).includes(wheelProvider));
   }
 
   function renderWheel() {
@@ -625,6 +627,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     // Las listas se eligen por id: dos listas pueden llamarse igual
     const listBox = $("#wheel-lists");
     listBox.hidden = false;
+    const listX = listBox.scrollLeft;
     const listOpts = [{ id: null, name: "Mis matches" }, ...state.lists, { id: ANY, name: ANY_LABEL }];
     listBox.replaceChildren();
     listOpts.forEach((l) => {
@@ -634,10 +637,11 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       b.onclick = () => { wheelAuto = false; wheelList = l.id; resetSpin(); renderWheel(); };
       listBox.append(b);
     });
+    listBox.scrollLeft = listX;
 
     const providers = wheelList === ANY
-      ? PROVIDERS // en todo el catálogo, solo las plataformas principales
-      : [...new Set(pendingMovies.flatMap((m) => m.providers || []))].sort();
+      ? ALL_PLATFORMS // en todo el catálogo, todas las plataformas con pelis suficientes
+      : [...new Set(pendingMovies.flatMap(platformsOf))].sort((a, b) => ALL_PLATFORMS.indexOf(a) - ALL_PLATFORMS.indexOf(b));
     if (!providers.includes(wheelProvider)) wheelProvider = "Cualquier sitio";
     const provBox = $("#wheel-providers");
     provBox.hidden = providers.length === 0;
@@ -842,11 +846,20 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   // URL del Worker de Cloudflare que consulta a Claude (js/config.js, lo genera el despliegue).
   // Sin URL, «Para ti» funciona igual con el recomendador local.
   const AI_URL = String(window.PELIMATCH_AI_URL || "").trim();
-  const PROVIDERS = (() => {
+  // «Netflix Standard with Ads», «Crunchyroll Amazon Channel»… cuentan como la plataforma de siempre
+  const platform = (name) => String(name).trim()
+    .replace(/\s+(Standard\s+)?with Ads$/i, "")
+    .replace(/\s+(Amazon|Apple TV) Channel$/i, "")
+    .replace(/^Movistar Plus\+ Ficción Total$/, "Movistar Plus+")
+    .replace(/^AMC\+$/, "AMC Plus");
+  const platformsOf = (m) => [...new Set((m.providers || []).map(platform))];
+  // Plataformas de todo el catálogo, de más a menos pelis (las que tienen muy pocas no se ofrecen)
+  const ALL_PLATFORMS = (() => {
     const count = {};
-    MOVIES.forEach((m) => (m.providers || []).forEach((p) => (count[p] = (count[p] || 0) + 1)));
-    return Object.keys(count).sort((a, b) => count[b] - count[a]).slice(0, 12);
+    MOVIES.forEach((m) => platformsOf(m).forEach((p) => (count[p] = (count[p] || 0) + 1)));
+    return Object.keys(count).filter((p) => count[p] >= 10).sort((a, b) => count[b] - count[a]);
   })();
+  const PROVIDERS = ALL_PLATFORMS.slice(0, 12);
   const MOOD_GENRES = {
     "Reírme": ["Comedia"],
     "Emocionarme": ["Drama", "Romance"],
@@ -928,7 +941,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     if (m.rating != null) s += add((m.rating - 6.3) * 1.1, m.rating >= 7.8 ? `Muy bien valorada: ${m.rating.toFixed(1)}/10` : "");
 
     if (p.platforms.length) {
-      const on = (m.providers || []).filter((x) => p.platforms.includes(x));
+      const on = platformsOf(m).filter((x) => p.platforms.includes(x));
       s += on.length ? add(2.2, `La tienes en ${on[0]}`) : -1.2;
     }
 

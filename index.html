@@ -76,6 +76,18 @@
   <p class="sp-text" id="splash-text"></p>
 </div>
 <script>
+  // Si el móvil tiene guardada una versión vieja de la web (la caché dura unos minutos), se carga la nueva al momento.
+  // El despliegue cambia «?v=dev» por el commit y escribe version.txt con el mismo valor.
+  (function () {
+    var mine = "?v=dev".slice(3);
+    if (mine === "dev" || !window.fetch) return;
+    fetch("version.txt?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; }).then(function (v) {
+      v = v.trim();
+      if (!/^[0-9a-f]{8}$/.test(v) || v === mine) return;
+      try { if (sessionStorage.getItem("cinder:recarga") === v) return; sessionStorage.setItem("cinder:recarga", v); } catch (e) { return; }
+      location.replace(location.pathname + "?v=" + v + location.hash);
+    }).catch(function () {});
+  })();
   // Sin zoom: ni pellizcando con dos dedos (también en navegadores que ignoran user-scalable=no); el doble toque ya lo quita touch-action en styles.css
   (function () {
     var stop = function (e) { if (e.cancelable) e.preventDefault(); };
