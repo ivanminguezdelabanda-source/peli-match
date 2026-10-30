@@ -1,4 +1,4 @@
-function startApp(MOVIES, NEWS, LOGOS) {
+function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   "use strict";
   LOGOS = LOGOS || {};
 
@@ -1421,9 +1421,9 @@ function startApp(MOVIES, NEWS, LOGOS) {
   let cloudError = () => "Algo ha fallado. Inténtalo otra vez.";
   let MAX_USERS = 2000;
   let afterLogin = null; // peli cuya ficha se reabre al entrar
-  const cloudReady = window.CINDER_FIREBASE
-    ? import("./cloud.js?v=dev")
-      .then((m) => { cloudError = m.errorText; MAX_USERS = m.MAX_USERS || MAX_USERS; return m.connect(window.CINDER_FIREBASE); })
+  const cloudReady = cloudBoot
+    ? cloudBoot
+      .then(({ m, c }) => { cloudError = m.errorText; MAX_USERS = m.MAX_USERS || MAX_USERS; return c; })
       .then(async (c) => {
         if (forceSignOut) {
           // Cierre de sesión único de esta actualización: antes de que la app use la sesión guardada
@@ -1640,6 +1640,26 @@ function startApp(MOVIES, NEWS, LOGOS) {
       if (same) location.href = url.href;
       else plugin("Browser").open({ url: url.href });
     }, true);
+  }
+
+  // Actualizaciones de la app: casi todo llega solo con la web; si se publica una APK nueva (cambios nativos),
+  // la app lo ve en las releases de GitHub (android-1.<versionCode>) y ofrece descargarla e instalarla encima
+  async function checkAppUpdate() {
+    if (!NATIVE || !plugin("App")?.getInfo) return;
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      if (localStorage.getItem("cinder:update-check") === day) return; // como mucho un aviso al día
+      const [info, rel] = await Promise.all([
+        plugin("App").getInfo(),
+        fetch("https://api.github.com/repos/ivanminguezdelabanda-source/peli-match/releases/latest", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      const latest = Number(String(rel?.tag_name || "").split(".").pop());
+      if (!latest || !(latest > Number(info.build))) return;
+      localStorage.setItem("cinder:update-check", day);
+      toast("Hay una versión nueva de la app", "Actualizar", () => plugin("Browser").open({ url: APK_URL }), 15000);
+    } catch (e) {
+      console.warn("No se pudo mirar si hay actualización:", e);
+    }
   }
 
   // ---------- Botón oficial «Continuar con Google» (Google Identity Services) ----------
@@ -2870,6 +2890,7 @@ function startApp(MOVIES, NEWS, LOGOS) {
   function route() {
     takeSharedLink();
     document.body.classList.remove("booting");
+    window.__splash?.done();
     document.getElementById("boot-error")?.remove();
     gated = needLogin();
     if (gated) {
@@ -2956,15 +2977,80 @@ function startApp(MOVIES, NEWS, LOGOS) {
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
     // los datos de la cuenta tampoco pueden bloquear el arranque: como mucho 8 s más
     .then(() => Promise.race([accountLoad, new Promise((r) => setTimeout(r, 8000))]))
-    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); });
+    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); checkAppUpdate(); });
+}
+
+// ---------- Descarga de datos con copia en el dispositivo ----------
+// El catálogo pesa unos 8 MB (2,7 MB comprimido): la primera vez se descarga enseñando el avance en la pantalla de carga
+// y se guarda; las siguientes veces se abre al momento con la copia guardada y la nueva se descarga por detrás.
+const DATA_CACHE = "cinder-datos-v1";
+const openCache = () => (window.caches ? caches.open(DATA_CACHE).catch(() => null) : Promise.resolve(null));
+async function download(url, onProgress) {
+  const res = await fetch(url, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  if (!onProgress || !res.body || !res.body.getReader) return res.text();
+  // Avance aproximado: el servidor manda el archivo comprimido y aquí llegan los bytes ya descomprimidos
+  let expected = 8.5e6;
+  try { expected = Number(localStorage.getItem("cinder:catalog-size")) || expected; } catch (e) { /* sin almacenamiento */ }
+  const reader = res.body.getReader(), parts = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value);
+    got += value.length;
+    onProgress(Math.min(0.95, got / expected));
+  }
+  try { localStorage.setItem("cinder:catalog-size", String(got)); } catch (e) { /* sin almacenamiento */ }
+  const all = new Uint8Array(got);
+  let at = 0;
+  for (const p of parts) { all.set(p, at); at += p.length; }
+  return new TextDecoder().decode(all);
+}
+async function saveCopy(cache, url, text) {
+  if (cache) await cache.put(url, new Response(text, { headers: { "content-type": "application/json", "x-guardado": String(Date.now()) } })).catch(() => {});
+}
+// Novedades (pequeño y cambia varias veces al día): siempre la versión nueva; sin red, la última guardada
+async function loadData(url) {
+  const cache = await openCache();
+  try {
+    const text = await download(url);
+    saveCopy(cache, url, text);
+    return JSON.parse(text);
+  } catch (e) {
+    const old = cache && (await cache.match(url).catch(() => null));
+    return old ? old.json().catch(() => null) : null;
+  }
+}
+// Catálogo: la copia guardada al momento (y si tiene más de 6 horas se renueva para la próxima vez); si no hay copia, se descarga
+async function loadCatalog() {
+  const url = "data/movies.json";
+  const cache = await openCache();
+  const old = cache && (await cache.match(url).catch(() => null));
+  if (old && Date.now() - Number(old.headers.get("x-guardado") || 0) < 6 * 3600e3) {
+    const data = await old.json().catch(() => null);
+    if (data) return data;
+  }
+  const fresh = download(url, old ? null : (p) => window.__splash?.progress(p))
+    .then(async (text) => { await saveCopy(cache, url, text); return text; });
+  if (old) {
+    fresh.catch(() => {});
+    const data = await old.json().catch(() => null);
+    if (data) return data;
+  }
+  return fresh.then((t) => JSON.parse(t)).catch(() => null); // abierto como archivo o sin red
 }
 
 // Carga las pelis de TMDB (data/movies.json, generado por scripts/sync-tmdb.mjs).
 // Si no existe o no hay red, usa la selección local de js/movies.js.
 (async () => {
   let movies = window.MOVIES;
-  const load = (url) => fetch(url, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null); // abierto como archivo o sin red
-  const [data, news] = await Promise.all([load("data/movies.json"), load("data/news.json")]);
+  // Las cuentas (Firebase) empiezan a conectarse a la vez que se descargan las pelis, no después
+  const cloudBoot = window.CINDER_FIREBASE
+    ? import("./cloud.js?v=dev").then((m) => ({ m, c: m.connect(window.CINDER_FIREBASE) }))
+    : null;
+  cloudBoot?.catch(() => {}); // el error se trata en startApp
+  const [data, news] = await Promise.all([loadCatalog(), loadData("data/news.json")]);
   if (data && Array.isArray(data.movies) && data.movies.length) movies = data.movies;
   // Las pelis de Novedades que aún no están en el catálogo (estrenos recientes o próximos) se añaden
   if (news && Array.isArray(news.movies)) {
@@ -2976,5 +3062,5 @@ function startApp(MOVIES, NEWS, LOGOS) {
     }
     movies = movies.concat(news.movies.filter((m) => m && m.id && !have.has(m.id) && m.title && m.year && Array.isArray(m.genres) && m.genres.length && m.c));
   }
-  startApp(movies, news && Array.isArray(news.movies) ? news : null, { ...data?.logos, ...news?.logos });
+  startApp(movies, news && Array.isArray(news.movies) ? news : null, { ...data?.logos, ...news?.logos }, cloudBoot);
 })();

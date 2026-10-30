@@ -12,9 +12,92 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Figtree:wght@400;500;700;800&family=DM+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="styles.css?v=dev">
+<style>
+  /* Pantalla de carga: el logo se monta (cartel de atrás, cartel rojo, play y el nombre) mientras llegan las pelis */
+  #splash {
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 100; background: #14100f; color: #f6ece0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+    transition: opacity .45s ease, visibility .45s; font-family: "Figtree", system-ui, -apple-system, sans-serif;
+  }
+  #splash::before {
+    content: ""; position: absolute; left: 50%; top: 42%; width: 420px; height: 420px; margin: -210px 0 0 -210px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(224, 65, 75, .28), rgba(224, 65, 75, 0)); animation: sp-glow 2.6s ease-in-out .9s infinite alternate;
+  }
+  #splash.out { opacity: 0; visibility: hidden; }
+  #splash.out .sp-logo { transform: scale(1.12); }
+  .sp-logo { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; transition: transform .45s ease; }
+  .sp-mark { width: 132px; height: 132px; overflow: visible; }
+  .sp-back { fill: none; stroke: #f2d39b; stroke-width: 3; stroke-dasharray: 140; stroke-dashoffset: 140; transform-origin: 28px 30px;
+    animation: sp-draw .7s cubic-bezier(.6,0,.3,1) forwards, sp-tilt-back .5s cubic-bezier(.2,.9,.3,1.3) .35s both; }
+  .sp-front { transform-origin: 36px 34px; animation: sp-card .65s cubic-bezier(.2,.9,.25,1.25) .45s both, sp-float 2.4s ease-in-out 1.3s infinite alternate; }
+  .sp-front rect { fill: #e0414b; }
+  .sp-play { fill: #14100f; transform-origin: 37px 34px; animation: sp-pop .35s cubic-bezier(.3,1.6,.5,1) .95s both; }
+  .sp-shine { fill: url(#sp-sheen); animation: sp-sheen 2.4s ease-in-out 1.4s infinite; }
+  .sp-name { font-family: "Anton", Impact, "Arial Narrow", sans-serif; font-size: 44px; letter-spacing: .04em; line-height: 1; display: flex; overflow: hidden; padding-bottom: 2px; }
+  .sp-name span, .sp-name b { display: inline-block; font-weight: 400; animation: sp-rise .5s cubic-bezier(.2,.8,.2,1) both; }
+  .sp-name span { animation-delay: 1.05s; }
+  .sp-name b { color: #e0414b; animation-delay: 1.18s; }
+  .sp-bar { width: min(220px, 60vw); height: 4px; border-radius: 4px; background: #2d2423; overflow: hidden; animation: sp-fade .4s ease 1.2s both; }
+  .sp-bar i { display: block; height: 100%; width: 8%; border-radius: 4px; background: linear-gradient(90deg, #e0414b, #f2d39b); transition: width .35s ease; }
+  .sp-text { margin: -14px 0 0; min-height: 1.4em; font-size: 14px; color: #b3a49a; animation: sp-fade .4s ease 1.3s both; }
+  @keyframes sp-draw { to { stroke-dashoffset: 0; } }
+  @keyframes sp-tilt-back { from { transform: rotate(0deg); } to { transform: rotate(-12deg); } }
+  @keyframes sp-card { from { opacity: 0; transform: translate(18px, 26px) rotate(38deg) scale(.7); } to { opacity: 1; transform: rotate(10deg); } }
+  @keyframes sp-float { from { transform: rotate(10deg) translateY(0); } to { transform: rotate(7deg) translateY(-2px); } }
+  @keyframes sp-pop { from { transform: scale(0); } to { transform: scale(1); } }
+  @keyframes sp-sheen { 0% { transform: translateX(-40px); } 60%, 100% { transform: translateX(40px); } }
+  @keyframes sp-rise { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: none; } }
+  @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes sp-glow { from { opacity: .55; transform: scale(.92); } to { opacity: 1; transform: scale(1.06); } }
+  @media (prefers-reduced-motion: reduce) {
+    #splash *, #splash::before { animation-duration: .01s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; }
+  }
+</style>
 
 </head>
 <body class="booting">
+<div id="splash" aria-hidden="true">
+  <div class="sp-logo">
+    <svg class="sp-mark" viewBox="0 0 64 64">
+      <defs>
+        <linearGradient id="sp-sheen" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+        <clipPath id="sp-clip"><rect x="22" y="14" width="28" height="40" rx="5"/></clipPath>
+      </defs>
+      <rect class="sp-back" x="14" y="10" width="28" height="40" rx="5"/>
+      <g class="sp-front">
+        <rect x="22" y="14" width="28" height="40" rx="5"/>
+        <g clip-path="url(#sp-clip)"><rect class="sp-shine" x="16" y="10" width="16" height="48" transform="skewX(-18)"/></g>
+        <path class="sp-play" d="M32 27v14l11-7z"/>
+      </g>
+    </svg>
+    <div class="sp-name"><span>CIN</span><b>DER</b></div>
+  </div>
+  <div class="sp-bar"><i id="splash-bar"></i></div>
+  <p class="sp-text" id="splash-text"></p>
+</div>
+<script>
+  // Mensajes y barra de la pantalla de carga; app.js llama a __splash.done() cuando ya se puede usar
+  (function () {
+    var box = document.getElementById("splash"), bar = document.getElementById("splash-bar"), text = document.getElementById("splash-text");
+    var lines = ["Apagando las luces…", "Preparando la cartelera…", "Haciendo palomitas…", "Buscando tu butaca…"], n = 0, start = Date.now(), ended = false;
+    text.textContent = lines[0];
+    var tick = setInterval(function () { text.textContent = lines[++n % lines.length]; }, 1700);
+    window.__splash = {
+      progress: function (p) { if (!ended) bar.style.width = Math.max(8, Math.min(100, Math.round(p * 100))) + "%"; },
+      done: function () {
+        if (ended) return;
+        ended = true;
+        bar.style.width = "100%";
+        // Que se vea entera la entrada del logo (1,3 s) aunque la app ya esté lista
+        setTimeout(function () {
+          clearInterval(tick);
+          box.className = "out";
+          setTimeout(function () { box.remove(); }, 500);
+        }, Math.max(150, 1300 - (Date.now() - start)));
+      },
+    };
+  })();
+</script>
 <div class="app">
   <header class="topbar">
     <div class="brand">
@@ -201,9 +284,10 @@
   (function () {
     function show(msg) {
       if (!document.body.classList.contains("booting") || document.getElementById("boot-error")) return;
+      if (window.__splash) window.__splash.done();
       var box = document.createElement("div");
       box.id = "boot-error";
-      box.style.cssText = "position:fixed;left:16px;right:16px;bottom:24px;padding:16px;border-radius:14px;background:#2d2423;color:#f6ece0;font:14px/1.45 system-ui;z-index:99";
+      box.style.cssText = "position:fixed;left:16px;right:16px;bottom:24px;padding:16px;border-radius:14px;background:#2d2423;color:#f6ece0;font:14px/1.45 system-ui;z-index:101";
       box.innerHTML = "<b>Cinder no ha podido arrancar.</b><br>Recarga la página. Si sigue igual, manda una captura de esto:<br><code style=\"word-break:break-all;color:#f2d39b\"></code>";
       box.querySelector("code").textContent = String(msg).slice(0, 300);
       document.body.appendChild(box);
