@@ -81,7 +81,26 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const entry = (id) => state.library.find((l) => l.id === id);
   const FOR_YOU = "✨ Para ti";
   let mood = "Todo";
-  const matchesMood = (m) => mood === "Todo" || mood === FOR_YOU || m.genres.includes(mood);
+  // Filtros especiales de Descubrir: «Corta y buena» siempre y un ciclo de temporada según la fecha
+  const SPECIAL = { "⏱️ Corta y buena": (m) => m.runtime > 0 && m.runtime < 100 && (m.rating || 0) >= 7 };
+  (() => {
+    const d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
+    const tagged = (m, s) => (m.season || []).includes(s);
+    const CYCLES = [
+      { name: "🎃 Halloween", from: 1010, to: 1102, ok: (m) => tagged(m, "halloween") || m.genres.includes("Terror") },
+      { name: "🎄 Navidad", from: 1201, to: 107, ok: (m) => tagged(m, "navidad") || /navidad|papá noel|santa claus|nochebuena|reyes magos/i.test(`${m.title} ${m.desc}`) },
+      { name: "💘 San Valentín", from: 201, to: 214, ok: (m) => m.genres.includes("Romance") && (m.rating || 0) >= 6.5 },
+      { name: "🏆 Temporada de premios", from: 215, to: 315, ok: (m) => (m.rating || 0) >= 7.8 },
+      { name: "☀️ Verano", from: 621, to: 831, ok: (m) => tagged(m, "verano") || (m.genres.includes("Aventura") && m.genres.includes("Comedia")) },
+    ];
+    // Los ciclos van antes que «Corta y buena»; el de Navidad cruza el cambio de año
+    CYCLES.filter((c) => (c.from <= c.to ? md >= c.from && md <= c.to : md >= c.from || md <= c.to)).forEach((c) => {
+      const rest = { ...SPECIAL };
+      Object.keys(SPECIAL).forEach((k) => delete SPECIAL[k]);
+      Object.assign(SPECIAL, { [c.name]: c.ok }, rest);
+    });
+  })();
+  const matchesMood = (m) => mood === "Todo" || mood === FOR_YOU || (SPECIAL[mood] ? SPECIAL[mood](m) : m.genres.includes(mood));
   // Motor de gustos de la cuenta (js/taste.js): aprende de cada gesto y ordena Descubrir
   const taste = createTaste(MOVIES);
   if (state.taste) taste.importModel(state.taste);
@@ -214,7 +233,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   };
 
   // ---------- Filtro de humor (Descubrir) ----------
-  const MOODS = ["Todo", ...genresOf(MOVIES).slice(0, 12)];
+  const MOODS = ["Todo", ...Object.keys(SPECIAL), ...genresOf(MOVIES).slice(0, 12)];
   function renderMoods() {
     const box = $("#moods");
     box.replaceChildren();
@@ -281,7 +300,9 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       ? "Ya has visto todas. Abre la caja con tu biblioteca o vuelve a ver las que descartaste."
       : mood === FOR_YOU
         ? "Ya has visto toda tu selección. Repite la encuesta en «Para ti» para conseguir más."
-        : `No quedan pelis de ${mood.toLowerCase()}. Prueba con otro género o vuelve a ver las descartadas.`;
+        : SPECIAL[mood]
+          ? `No quedan pelis en «${mood}». Prueba con otro filtro o vuelve a ver las descartadas.`
+          : `No quedan pelis de ${mood.toLowerCase()}. Prueba con otro género o vuelve a ver las descartadas.`;
     $("#btn-nope").disabled = $("#btn-like").disabled = $("#btn-seen").disabled = $("#btn-info").disabled = empty;
     $("#btn-undo").disabled = state.history.length === 0;
     $("#reset-passed").hidden = state.passed.length === 0;
@@ -1554,7 +1575,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     Object.assign(state, {
       taste: null, profile: null, tourDone: false, weekly: null, library: [], passed: [], lists: [], history: [],
       myReviews: {}, reviewSignals: {}, order: shuffle(MOVIES.map((m) => m.id)), owner: null, savedAt: 0,
-      alerts: {}, alerted: [], blocked: [], reported: [],
+      alerts: {}, alerted: [], blocked: [], reported: [], provSeen: null,
     });
     personal = discovery = results = null;
     forYou = [];
@@ -2638,6 +2659,60 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   let lastFocus = null;
 
   const opened = new Set();
+  // ---------- Pelis parecidas y maratones (en la ficha) ----------
+  const directorsOf = (m) => String(m.director || "").split(", ").filter((d) => d && d !== "Desconocido");
+  // Parecidas: lo que comparten (director, saga, reparto, géneros), cerca en el tiempo y bien valoradas
+  function similarTo(m, n = 12) {
+    const g = new Set(m.genres), cast = new Set(m.cast || []), dirs = new Set(directorsOf(m));
+    return MOVIES.filter((o) => o.id !== m.id).map((o) => {
+      let s = 0;
+      o.genres.forEach((x) => { if (g.has(x)) s += 1.2; });
+      if (m.genres[0] && o.genres[0] === m.genres[0]) s += 0.8;
+      directorsOf(o).forEach((d) => { if (dirs.has(d)) s += 2.5; });
+      (o.cast || []).forEach((a) => { if (cast.has(a)) s += 1.2; });
+      if (m.saga && o.saga && o.saga[0] === m.saga[0]) s += 3;
+      s -= Math.abs((o.year || 0) - (m.year || 0)) / 15;
+      s += ((o.rating || 6) - 6) * 0.35;
+      return { o, s };
+    }).filter((x) => x.s > 2.2).sort((a, b) => b.s - a.s).slice(0, n).map((x) => x.o.id);
+  }
+  // Maratón: la saga entera en orden de estreno y, si dirige alguien con 3 pelis o más, su filmografía
+  function marathonsOf(m) {
+    const out = [];
+    const byYear = (a, b) => (a.year || 9999) - (b.year || 9999) || (a.release || "").localeCompare(b.release || "");
+    if (m.saga) {
+      const ids = MOVIES.filter((o) => o.saga && o.saga[0] === m.saga[0]).sort(byYear).map((o) => o.id);
+      if (ids.length >= 2) out.push({ title: `Maratón de ${m.saga[1]}`, name: m.saga[1], ids });
+    }
+    const dir = directorsOf(m)[0];
+    if (dir) {
+      const ids = MOVIES.filter((o) => directorsOf(o).includes(dir)).sort(byYear).map((o) => o.id);
+      if (ids.length >= 3) out.push({ title: `Maratón ${dir}`, name: `Maratón ${dir}`, ids });
+    }
+    return out;
+  }
+  function marathonBlock(mar) {
+    const list = mar.ids.map((id) => byId[id]);
+    const seen = list.filter((x) => entry(x.id)?.watched).length;
+    const total = list.reduce((t, x) => t + (x.runtime || 0), 0);
+    const sec = newsRow(mar.title, mar.ids, false);
+    sec.classList.add("marathon");
+    [...sec.querySelectorAll(".tile")].forEach((li, i) => li.querySelector(".tile-meta").textContent = `${i + 1}.º · ${list[i].year}`);
+    const info = el("p", "marathon-info", `${list.length} pelis · ${shortTime(total)} en total${seen ? ` · has visto ${seen}` : ""}`);
+    const save = el("button", "btn btn-ghost marathon-save", `${ICON.plus} Guardar como lista`);
+    save.type = "button";
+    save.onclick = () => {
+      const have = state.lists.find((l) => l.name === mar.name);
+      const target = have || createList(mar.name);
+      target.ids = [...new Set([...target.ids, ...mar.ids])];
+      persist();
+      toast(`Guardada en «${target.name}», en el orden para verlas`);
+      save.disabled = true;
+    };
+    sec.append(info, save);
+    return sec;
+  }
+
   function openSheet(id, from, opts = {}) {
     const m = byId[id];
     if (!opened.has(id)) { opened.add(id); taste.learn(m, 0.15); }
@@ -2687,6 +2762,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         </button>
       </div>
       <div class="sheet-actions" id="sheet-actions"></div>
+      <div class="sheet-more" id="sheet-more"></div>
       <section class="reviews" id="sheet-reviews" aria-label="Reseñas"></section>
       ${m.tmdb ? `<p class="credit">Datos e imágenes de TMDB. Plataformas: JustWatch.</p>` : ""}`);
     body.append(content);
@@ -2695,6 +2771,11 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const trailerLink = content.querySelector("#sheet-trailer");
     if (ytKey(m.trailer)) trailerLink.onclick = (ev) => { ev.preventDefault(); playTrailer(m, content); };
     content.querySelector("#sheet-share").onclick = () => shareMovie(m);
+    // Maratones y pelis parecidas
+    const more = content.querySelector("#sheet-more");
+    marathonsOf(m).forEach((mar) => more.append(marathonBlock(mar)));
+    const like = newsRow("Pelis parecidas", similarTo(m), false);
+    if (like) more.append(like);
     // Aviso del estreno (solo si aún no se ha estrenado)
     const releaseBox = content.querySelector(".release-box");
     const drawAlert = () => {
@@ -2861,6 +2942,46 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   }
   // En la app de Android: notificación el día del estreno a las 10:00 (aunque la app esté cerrada)
   let scheduleTimer;
+  // ---------- Aviso de llegada a plataformas ----------
+  // Las pelis por ver (matches y listas) recuerdan en qué plataformas estaban; si al abrir la app
+  // alguna ha llegado a una nueva (de las tuyas, si las marcaste en la encuesta), se avisa
+  const ARRIVAL_ID = 300000000;
+  function checkArrivals() {
+    const mine = new Set([...state.library.filter((l) => !l.watched).map((l) => l.id), ...state.lists.flatMap((l) => l.ids)]);
+    const wanted = state.profile?.platforms?.length ? new Set(state.profile.platforms.map(platform)) : null;
+    const first = !state.provSeen;
+    const seen = state.provSeen || {};
+    const arrived = [];
+    mine.forEach((id) => {
+      const m = byId[id];
+      if (!m || entry(id)?.watched || !m.providers) return;
+      const now = platformsOf(m);
+      const before = seen[id];
+      if (before && !first) {
+        const added = now.filter((p) => !before.includes(p) && (!wanted || wanted.has(p)));
+        if (added.length) arrived.push({ m, where: added[0] });
+      }
+      seen[id] = now;
+    });
+    Object.keys(seen).forEach((id) => { if (!mine.has(id)) delete seen[id]; });
+    state.provSeen = seen;
+    persist();
+    if (!arrived.length) return;
+    const one = arrived[0];
+    toast(arrived.length === 1 ? `«${one.m.title}» ya está en ${one.where}` : `${arrived.length} pelis de tus listas han llegado a plataformas: «${one.m.title}» (${one.where})…`, "Ver", () => openSheet(one.m.id), 7000);
+    const ln = NATIVE && plugin("LocalNotifications");
+    if (!ln) return;
+    ln.checkPermissions().then(({ display }) => display === "granted" && ln.schedule({ notifications: arrived.slice(0, 5).map(({ m, where }, i) => ({
+      id: ARRIVAL_ID + ((Number(m.tmdb) || i) % 90000000),
+      title: `«${m.title}» ya está en ${where}`,
+      body: "La tenías guardada en Cinder. Toca para ver la ficha.",
+      schedule: { at: new Date(Date.now() + 1500 + i * 500), allowWhileIdle: true },
+      smallIcon: "ic_stat_cinder",
+      iconColor: "#E0414B",
+      extra: { id: m.id },
+    })) })).catch((e) => console.warn("Aviso de plataformas:", e));
+  }
+
   function scheduleAlerts(ask) {
     const ln = NATIVE && plugin("LocalNotifications");
     if (!ln) return;
@@ -2877,7 +2998,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         }
         if (perm !== "granted") { if (ask) toast("Activa las notificaciones de Cinder en Ajustes para recibir el aviso"); return; }
         const pending = (await ln.getPending()).notifications || [];
-        if (pending.length) await ln.cancel({ notifications: pending.map((n) => ({ id: n.id })) });
+        const premieres = pending.filter((n) => n.id < ARRIVAL_ID); // los avisos de «ya está en…» no se tocan
+        if (premieres.length) await ln.cancel({ notifications: premieres.map((n) => ({ id: n.id })) });
         if (!items.length) return;
         await ln.schedule({ notifications: items.map(({ m, at }, i) => ({
           id: Number(m.tmdb) || 100000 + i,
@@ -3059,7 +3181,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   Promise.race([cloudReady.then(() => cloud?.ready), new Promise((r) => setTimeout(r, 6000))])
     // los datos de la cuenta tampoco pueden bloquear el arranque: como mucho 8 s más
     .then(() => Promise.race([accountLoad, new Promise((r) => setTimeout(r, 8000))]))
-    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); checkAppUpdate(); });
+    .then(() => { booted = true; signedIn = Boolean(cloud?.user); route(); watchPremieres(); checkAppUpdate(); checkArrivals(); });
 }
 
 // ---------- Descarga de datos con copia en el dispositivo ----------

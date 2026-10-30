@@ -824,3 +824,10 @@ button.link-card { border: 0; font: inherit; color: inherit; text-align: left; c
   .app { max-width: 1600px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 }
+
+/* Ficha: maratones y pelis parecidas */
+.sheet-more { display: grid; gap: 22px; min-width: 0; }
+.sheet-more .news-section { min-width: 0; }
+.marathon-info { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.marathon-save { margin-top: 10px; width: 100%; justify-content: center; gap: 8px; }
+.marathon-save svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2.4; fill: none; }

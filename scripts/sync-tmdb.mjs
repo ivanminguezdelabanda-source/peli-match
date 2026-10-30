@@ -45,6 +45,19 @@ function pickTrailer(videos = []) {
 export const LOGOS = {};
 const names = (list = []) => list.map((p) => { if (p.logo_path) LOGOS[p.provider_name] = p.logo_path; return p.provider_name; });
 
+// Palabras clave de TMDB que marcan pelis de temporada (ciclos de Halloween, Navidad y verano en Descubrir)
+const SEASONS = {
+  navidad: ["christmas", "santa claus", "christmas eve", "christmas party", "christmas tree", "elf", "reindeer"],
+  halloween: ["halloween", "haunted house", "witch", "ghost", "vampire", "zombie", "slasher", "pumpkin", "trick or treating", "exorcism", "demonic possession", "werewolf"],
+  verano: ["summer", "summer vacation", "summer camp", "beach", "road trip"],
+};
+const seasonsOf = (kws = []) => {
+  const names = new Set(kws.map((k) => k.name.toLowerCase()));
+  return Object.keys(SEASONS).filter((s) => SEASONS[s].some((k) => names.has(k)));
+};
+// «Harry Potter - Colección» → «Harry Potter»
+const sagaName = (name) => String(name).replace(/\s*[-–:]\s*Colecci[oó]n$/i, "").replace(/^Colecci[oó]n:?\s*/i, "").replace(/\s*\(Colecci[oó]n\)$/i, "").trim();
+
 export function toMovie(d, genreNames) {
   const es = d["watch/providers"]?.results?.ES;
   const flatrate = names(es?.flatrate);
@@ -68,6 +81,8 @@ export function toMovie(d, genreNames) {
     providers: flatrate,
     ...(pay.length ? { pay } : {}),
     providersLink: es?.link || null,
+    ...(d.belongs_to_collection ? { saga: [d.belongs_to_collection.id, sagaName(d.belongs_to_collection.name)] } : {}),
+    ...(seasonsOf(d.keywords?.keywords).length ? { season: seasonsOf(d.keywords?.keywords) } : {}),
     c: colorsFor(d.title),
   };
 }
@@ -100,7 +115,7 @@ async function main() {
     try {
       const d = await tmdb(`/movie/${id}`, {
         language: "es-ES",
-        append_to_response: "videos,credits,watch/providers",
+        append_to_response: "videos,credits,watch/providers,keywords",
         include_video_language: "es,en",
       });
       const m = toMovie(d, genreNames);

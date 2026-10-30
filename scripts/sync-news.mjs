@@ -68,7 +68,7 @@ async function movies(genreNames) {
   for (const m of [...pop(nowPlaying).slice(0, 70), ...pop(upcoming).slice(0, 70), ...trending.slice(0, 20)]) {
     if (full.has(m.id)) continue;
     try {
-      const d = await tmdb(`/movie/${m.id}`, { language: "es-ES", append_to_response: "videos,credits,watch/providers,release_dates", include_video_language: "es,en" });
+      const d = await tmdb(`/movie/${m.id}`, { language: "es-ES", append_to_response: "videos,credits,watch/providers,release_dates,keywords", include_video_language: "es,en" });
       const movie = toMovie(d, genreNames);
       // Fecha de estreno en cines de España si la hay (la de TMDB es la mundial)
       const es = d.release_dates?.results?.find((r) => r.iso_3166_1 === "ES")?.release_dates?.filter((r) => r.type === 3 || r.type === 2)
