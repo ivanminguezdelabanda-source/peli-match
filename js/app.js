@@ -81,25 +81,33 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const entry = (id) => state.library.find((l) => l.id === id);
   const FOR_YOU = "✨ Para ti";
   let mood = "Todo";
-  // Filtros especiales de Descubrir: «Corta y buena» siempre y un ciclo de temporada según la fecha
-  const SPECIAL = { "⏱️ Corta y buena": (m) => m.runtime > 0 && m.runtime < 100 && (m.rating || 0) >= 7 };
-  (() => {
+  // Filtros especiales de Descubrir: «Corta y buena» siempre y un evento de temporada según la fecha.
+  // Mientras dura un evento (Halloween, Navidad…) también tiene su apartado en la Caja y en Novedades
+  // y cambia la estética (clase event-<key> en <html>, ver styles.css)
+  const SPECIAL = {};
+  const EVENT = (() => {
     const d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
     const tagged = (m, s) => (m.season || []).includes(s);
     const CYCLES = [
-      { name: "🎃 Halloween", from: 1010, to: 1102, ok: (m) => tagged(m, "halloween") || m.genres.includes("Terror") },
-      { name: "🎄 Navidad", from: 1201, to: 107, ok: (m) => tagged(m, "navidad") || /navidad|papá noel|santa claus|nochebuena|reyes magos/i.test(`${m.title} ${m.desc}`) },
-      { name: "💘 San Valentín", from: 201, to: 214, ok: (m) => m.genres.includes("Romance") && (m.rating || 0) >= 6.5 },
-      { name: "🏆 Temporada de premios", from: 215, to: 315, ok: (m) => (m.rating || 0) >= 7.8 },
-      { name: "☀️ Verano", from: 621, to: 831, ok: (m) => tagged(m, "verano") || (m.genres.includes("Aventura") && m.genres.includes("Comedia")) },
+      // Terror, o con brujas, fantasmas, zombis… (sin las pelis familiares que solo tienen alguna bruja)
+      { key: "halloween", name: "🎃 Halloween", from: 1010, to: 1102, ok: (m) => m.genres.includes("Terror") || (tagged(m, "halloween") && !m.genres.includes("Familia")) },
+      { key: "navidad", name: "🎄 Navidad", from: 1201, to: 107, ok: (m) => tagged(m, "navidad") || /navidad|papá noel|santa claus|nochebuena|reyes magos/i.test(`${m.title} ${m.desc}`) },
+      { key: "sanvalentin", name: "💘 San Valentín", from: 201, to: 214, ok: (m) => m.genres.includes("Romance") && (m.rating || 0) >= 6.5 },
+      { key: "premios", name: "🏆 Temporada de premios", from: 215, to: 315, ok: (m) => (m.rating || 0) >= 7.8 },
+      { key: "verano", name: "☀️ Verano", from: 621, to: 831, ok: (m) => tagged(m, "verano") || (m.genres.includes("Aventura") && m.genres.includes("Comedia")) },
     ];
-    // Los ciclos van antes que «Corta y buena»; el de Navidad cruza el cambio de año
-    CYCLES.filter((c) => (c.from <= c.to ? md >= c.from && md <= c.to : md >= c.from || md <= c.to)).forEach((c) => {
-      const rest = { ...SPECIAL };
-      Object.keys(SPECIAL).forEach((k) => delete SPECIAL[k]);
-      Object.assign(SPECIAL, { [c.name]: c.ok }, rest);
-    });
+    // el de Navidad cruza el cambio de año
+    return CYCLES.find((c) => (c.from <= c.to ? md >= c.from && md <= c.to : md >= c.from || md <= c.to)) || null;
   })();
+  if (EVENT) {
+    SPECIAL[EVENT.name] = EVENT.ok;
+    document.documentElement.classList.add("event-" + EVENT.key);
+  }
+  SPECIAL["⏱️ Corta y buena"] = (m) => m.runtime > 0 && m.runtime < 100 && (m.rating || 0) >= 7;
+  // Las del evento, primero las más del evento (etiqueta de TMDB y, en Halloween, de terror) y luego las mejor valoradas
+  const eventMovies = () => !EVENT ? [] : MOVIES.filter((m) => EVENT.ok(m))
+    .map((m) => ({ m, s: ((m.season || []).includes(EVENT.key) ? 1 : 0) + (EVENT.key === "halloween" && m.genres.includes("Terror") ? 1 : 0) }))
+    .sort((a, b) => b.s - a.s || (b.m.rating || 0) - (a.m.rating || 0)).map((x) => x.m);
   const matchesMood = (m) => mood === "Todo" || mood === FOR_YOU || (SPECIAL[mood] ? SPECIAL[mood](m) : m.genres.includes(mood));
   // Motor de gustos de la cuenta (js/taste.js): aprende de cada gesto y ordena Descubrir
   const taste = createTaste(MOVIES);
@@ -238,7 +246,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const box = $("#moods");
     box.replaceChildren();
     (state.profile ? [FOR_YOU, ...MOODS] : MOODS).forEach((g) => {
-      const b = el("button", "filter", esc(g));
+      const b = el("button", "filter" + (EVENT && g === EVENT.name ? " filter-event" : ""), esc(g));
       b.type = "button";
       b.setAttribute("aria-pressed", String(g === mood));
       b.onclick = () => {
@@ -618,9 +626,11 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   // Pelis base de la caja: las de la lista elegida, o los matches por ver
   const ANY = "any"; // sorteo entre todo el catálogo, sin matches
   const ANY_LABEL = "🎲 Cualquier peli";
+  const EVENT_LIST = "event"; // el evento de temporada (Halloween…): su propia caja
   let wheelAuto = true; // si no hay matches, empieza en «Cualquier peli»
   function wheelBase() {
     if (wheelList === ANY) return MOVIES.filter((m) => !entry(m.id)?.watched);
+    if (wheelList === EVENT_LIST) return EVENT ? MOVIES.filter((m) => EVENT.ok(m) && !entry(m.id)?.watched) : [];
     const list = listById(wheelList);
     return list
       ? list.ids.filter((id) => !entry(id)?.watched).map((id) => byId[id])
@@ -633,7 +643,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   }
 
   function renderWheel() {
-    if (wheelList && wheelList !== ANY && !listById(wheelList)) wheelList = null;
+    if (wheelList === EVENT_LIST && !EVENT) wheelList = null;
+    if (wheelList && wheelList !== ANY && wheelList !== EVENT_LIST && !listById(wheelList)) wheelList = null;
     if (wheelAuto && !wheelList && state.library.filter((l) => !l.watched).length < 2) wheelList = ANY;
     const pendingMovies = wheelBase();
     const genres = genresOf(pendingMovies);
@@ -649,10 +660,10 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const listBox = $("#wheel-lists");
     listBox.hidden = false;
     const listX = listBox.scrollLeft;
-    const listOpts = [{ id: null, name: "Mis matches" }, ...state.lists, { id: ANY, name: ANY_LABEL }];
+    const listOpts = [{ id: null, name: "Mis matches" }, ...(EVENT ? [{ id: EVENT_LIST, name: EVENT.name, event: true }] : []), ...state.lists, { id: ANY, name: ANY_LABEL }];
     listBox.replaceChildren();
     listOpts.forEach((l) => {
-      const b = el("button", "filter", esc(l.name));
+      const b = el("button", "filter" + (l.event ? " filter-event" : ""), esc(l.name));
       b.type = "button";
       b.setAttribute("aria-pressed", String(l.id === (wheelList || null)));
       b.onclick = () => { wheelAuto = false; wheelList = l.id; resetSpin(); renderWheel(); };
@@ -660,6 +671,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     });
     listBox.scrollLeft = listX;
 
+    document.querySelector("#view-ruleta").classList.toggle("event-box", wheelList === EVENT_LIST);
     const providers = wheelList === ANY
       ? ALL_PLATFORMS // en todo el catálogo, todas las plataformas con pelis suficientes
       : [...new Set(pendingMovies.flatMap(platformsOf))].sort((a, b) => ALL_PLATFORMS.indexOf(a) - ALL_PLATFORMS.indexOf(b));
@@ -2756,6 +2768,20 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     sec.append(ul);
     return sec;
   }
+  // Novedades durante un evento: una fila especial, ordenada por tus gustos entre las mejores del evento
+  const EVENT_TITLE = { halloween: "🎃 Especial Halloween", navidad: "🎄 Especial Navidad", sanvalentin: "💘 Para San Valentín", premios: "🏆 Temporada de premios", verano: "☀️ Pelis de verano" };
+  function eventRow() {
+    const pool = eventMovies().filter((m) => !entry(m.id)?.watched).slice(0, 300);
+    const ids = (taste.events >= PERSONAL_FROM ? taste.rank(pool).map((x) => x.m.id) : pool.map((m) => m.id)).slice(0, 20);
+    const row = newsRow(EVENT_TITLE[EVENT.key] || EVENT.name, ids, false);
+    if (!row) return null;
+    row.classList.add("event-row");
+    const go = el("button", "btn btn-solid event-go", `Abrir la caja de ${esc(EVENT.name.replace(/^\S+\s/, ""))}`);
+    go.type = "button";
+    go.onclick = () => { wheelAuto = false; wheelList = EVENT_LIST; location.hash = "#ruleta"; };
+    row.append(go);
+    return row;
+  }
   function renderNews() {
     const box = $("#news-body");
     box.replaceChildren(el("h1", "page-title", "Novedades"));
@@ -2798,7 +2824,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     }
     // Los próximos estrenos que tienes guardados o con aviso, por fecha
     const mine = premiereMovies().filter(upcoming).sort((a, b) => a.release.localeCompare(b.release)).map((m) => m.id);
-    [newsRow("Tus próximos estrenos", mine, true, true), newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true),
+    [EVENT ? eventRow() : null, newsRow("Tus próximos estrenos", mine, true, true), newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true),
       newsRow("Tendencias de la semana", NEWS.trending)]
       .forEach((sec) => sec && box.append(sec));
 

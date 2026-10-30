@@ -20,6 +20,10 @@
       var light = t === "claro" || (t === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches);
       document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
       if (light) document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f7f1ea");
+      // Halloween (10 oct – 2 nov) y Navidad (1 dic – 7 ene): estética especial desde la pantalla de carga
+      var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
+      if (md >= 1010 && md <= 1102) document.documentElement.classList.add("event-halloween");
+      else if (md >= 1201 || md <= 107) document.documentElement.classList.add("event-navidad");
     } catch (e) { /* sin almacenamiento: oscuro */ }
   })();
 </script>
@@ -108,7 +112,11 @@
   // Mensajes y barra de la pantalla de carga; app.js llama a __splash.done() cuando ya se puede usar
   (function () {
     var box = document.getElementById("splash"), bar = document.getElementById("splash-bar"), text = document.getElementById("splash-text");
-    var lines = ["Apagando las luces…", "Preparando la cartelera…", "Haciendo palomitas…", "Buscando tu butaca…"], n = 0, start = Date.now(), ended = false;
+    var cls = document.documentElement.classList;
+    var lines = cls.contains("event-halloween") ? ["Encendiendo las calabazas…", "Despertando a los vampiros…", "Buscando fantasmas en la sala…", "Repartiendo caramelos…"]
+      : cls.contains("event-navidad") ? ["Colgando las luces…", "Preparando el turrón…", "Buscando a Papá Noel…", "Envolviendo las pelis…"]
+      : ["Apagando las luces…", "Preparando la cartelera…", "Haciendo palomitas…", "Buscando tu butaca…"];
+    var n = 0, start = Date.now(), ended = false;
     text.textContent = lines[0];
     var tick = setInterval(function () { text.textContent = lines[++n % lines.length]; }, 1700);
     window.__splash = {

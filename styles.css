@@ -884,3 +884,50 @@ html[data-theme="light"] .tabbar { background: var(--panel); }
 .admin-actions { display: flex; gap: 8px; margin-top: 8px; }
 .admin-actions .btn { flex: 1; }
 .admin-link { justify-content: center; text-decoration: none; }
+
+/* ---------- Eventos de temporada (clase event-<key> en <html>, la pone app.js según la fecha) ---------- */
+/* Halloween: calabaza y morado, niebla en la sala y murciélagos junto al logo */
+html.event-halloween:not([data-theme="light"]) {
+  --ticket: #ffad5c;
+  --like: #ffad5c;
+  --panel: #1f1820;
+  --panel-2: #2c2230;
+  --line: #3e3044;
+}
+html.event-halloween[data-theme="light"] { --ticket: #c2540a; --like: #c2540a; }
+html.event-halloween:not([data-theme="light"]) body {
+  background:
+    radial-gradient(ellipse 90% 40% at 50% 0%, rgba(124, 58, 180, .22), transparent 70%),
+    radial-gradient(ellipse 80% 30% at 50% 100%, rgba(255, 122, 26, .12), transparent 70%),
+    var(--ink);
+  background-attachment: fixed;
+}
+html.event-halloween .brand-name::after { content: "🎃"; font-family: var(--f-body); font-size: 17px; margin-left: 6px; vertical-align: 3px; display: inline-block; animation: ev-bob 2.6s ease-in-out infinite; }
+html.event-navidad .brand-name::after { content: "🎄"; font-family: var(--f-body); font-size: 17px; margin-left: 6px; vertical-align: 3px; display: inline-block; }
+@keyframes ev-bob { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-3px) rotate(6deg); } }
+
+/* Chips del evento (Descubrir y Caja): degradado de calabaza */
+.filter.filter-event { background: linear-gradient(135deg, #ff7a1a, #b0378f); color: #fff; box-shadow: none; }
+.filter.filter-event[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px #ff9a4a; }
+html.event-navidad .filter.filter-event { background: linear-gradient(135deg, #c8202c, #1f7a3e); }
+
+/* Caja de Halloween: tira con luz morada y marcador naranja */
+html.event-halloween .event-box .reel-wrap { background: radial-gradient(ellipse at center, #3a1f48 0%, var(--ink) 75%); }
+html.event-halloween .event-box .reel-marker { background: #ff7a1a; }
+html.event-halloween .event-box .reel-marker::before { border-top-color: #ff7a1a; }
+html.event-halloween .event-box .reel-marker::after { border-bottom-color: #ff7a1a; }
+html.event-halloween .event-box .reel-open { background: linear-gradient(135deg, #ff7a1a, #b0378f); }
+html.event-navidad .event-box .reel-wrap { background: radial-gradient(ellipse at center, #173a26 0%, var(--ink) 75%); }
+
+/* Fila especial de Novedades */
+.event-row { padding: 14px; margin: 0 -2px; border-radius: 20px; background: linear-gradient(160deg, rgba(255, 122, 26, .16), rgba(124, 58, 180, .16)); box-shadow: 0 0 0 1px rgba(255, 154, 74, .25) inset; }
+html.event-navidad .event-row { background: linear-gradient(160deg, rgba(200, 32, 44, .16), rgba(31, 122, 62, .16)); box-shadow: 0 0 0 1px rgba(200, 32, 44, .3) inset; }
+.event-go { width: 100%; margin-top: 12px; justify-content: center; }
+html.event-halloween .event-go { background: linear-gradient(135deg, #ff7a1a, #b0378f); color: #fff; }
+
+/* Pantalla de carga de Halloween: niebla morada y barra de calabaza */
+html.event-halloween #splash { background: radial-gradient(ellipse 80% 50% at 50% 40%, #2a1834, #120d14 70%); }
+html.event-halloween .sp-bar i { background: linear-gradient(90deg, #ff7a1a, #b0378f); }
+html.event-halloween #splash::after { content: "🦇"; position: absolute; top: 18%; left: -10%; font-size: 26px; animation: ev-bat 3.2s ease-in-out infinite; }
+@keyframes ev-bat { 0% { transform: translate(0, 0) scale(.8); } 50% { transform: translate(60vw, -40px) scale(1); } 100% { transform: translate(120vw, 10px) scale(.8); } }
+@media (prefers-reduced-motion: reduce) { html.event-halloween .brand-name::after, html.event-halloween #splash::after { animation: none; } }
