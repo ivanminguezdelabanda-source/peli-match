@@ -661,7 +661,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       ? (wheelList === null && !state.library.some((l) => !l.watched)
         ? "Aún no tienes matches por ver. Elige «Cualquier peli» o desliza en Descubrir."
         : "Ninguna peli encaja con estos filtros.")
-      : `${pool.length.toLocaleString("es-ES")} ${pool.length === 1 ? "peli entra" : "pelis entran"} en la caja.`;
+      : `${pool.length.toLocaleString("es-ES")} ${pool.length === 1 ? "peli entra" : "pelis entran"} en la caja. Desliza la tira o pulsa el botón para abrirla.`;
     if (!spinning) drawReel(shuffle(pool).slice(0, 24));
   }
 
@@ -839,6 +839,31 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     box.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
   $("#wheel-spin").onclick = spin;
+  // También se abre deslizando la caja con el dedo, en cualquier dirección (como lanzar la tira)
+  (() => {
+    const wrap = $("#wheel-wrap");
+    let from = null;
+    wrap.addEventListener("pointerdown", (e) => {
+      if (spinning || !e.isPrimary || $("#wheel-spin").disabled) return;
+      from = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, base: new DOMMatrixReadOnly(getComputedStyle(reelEl).transform).m41 };
+      wrap.setPointerCapture(e.pointerId);
+    });
+    wrap.addEventListener("pointermove", (e) => {
+      if (!from || e.pointerId !== from.id) return;
+      reelEl.style.transition = "none";
+      reelEl.style.transform = `translateX(${from.base + (e.clientX - from.x) * 0.35}px)`; // la tira sigue un poco al dedo
+    });
+    const release = (e) => {
+      if (!from || e.pointerId !== from.id) return;
+      const dx = e.clientX - from.x, dy = e.clientY - from.y, dt = performance.now() - from.t;
+      const base = from.base;
+      from = null;
+      if (e.type === "pointerup" && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && (Math.abs(dx) > 90 || Math.abs(dx) / dt > 0.4)) spin();
+      else { reelEl.style.transition = "transform .25s ease-out"; reelEl.style.transform = `translateX(${base}px)`; }
+    };
+    wrap.addEventListener("pointerup", release);
+    wrap.addEventListener("pointercancel", release);
+  })();
   window.addEventListener("resize", () => { if (!$("#view-ruleta").hidden && !spinning) drawReel(shuffle(wheelItems).slice(0, 24)); });
 
   // ---------- Para ti: encuesta y match personalizado ----------

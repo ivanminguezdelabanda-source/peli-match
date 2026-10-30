@@ -224,7 +224,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* Ruleta */
 .wheel-filters { display: flex; flex-direction: column; gap: 8px; }
-.reel-wrap { position: relative; margin: 6px -16px 0; padding: 14px 0; background: radial-gradient(ellipse at center, #2d2423 0%, var(--ink) 75%);
+.reel-wrap { touch-action: pan-y; cursor: grab; position: relative; margin: 6px -16px 0; padding: 14px 0; background: radial-gradient(ellipse at center, #2d2423 0%, var(--ink) 75%);
   border-block: 1px solid var(--line); }
 .reel-window { overflow: hidden; -webkit-mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); }
 .reel { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; width: max-content; will-change: transform; }
