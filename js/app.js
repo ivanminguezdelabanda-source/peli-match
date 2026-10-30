@@ -1768,15 +1768,16 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   async function checkAppUpdate() {
     if (!NATIVE || !plugin("App")?.getInfo) return;
     try {
-      const day = new Date().toISOString().slice(0, 10);
-      if (localStorage.getItem("cinder:update-aviso") === day) return; // como mucho un aviso al día
       const [info, rel] = await Promise.all([
         plugin("App").getInfo(),
         fetch("https://api.github.com/repos/ivanminguezdelabanda-source/peli-match/releases/latest", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)),
       ]);
       const latest = Number(String(rel?.tag_name || "").split(".").pop());
       if (!latest || !(latest > Number(info.build))) return;
-      localStorage.setItem("cinder:update-aviso", day);
+      // Cada versión nueva avisa nada más salir; si dices «Más tarde», esa misma vuelve a avisar al día siguiente
+      const day = new Date().toISOString().slice(0, 10), seen = `${latest}|${day}`;
+      if (localStorage.getItem("cinder:update-aviso") === seen) return;
+      localStorage.setItem("cinder:update-aviso", seen);
       showUpdate(`1.${latest}`);
     } catch (e) {
       console.warn("No se pudo mirar si hay actualización:", e);
