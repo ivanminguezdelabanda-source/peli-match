@@ -1,0 +1,553 @@
+{
+  "name": "api30-pequeno",
+  "fontScale": "1.0",
+  "steps": [
+    {
+      "label": "device",
+      "size": "Physical size: 1080x1920",
+      "density": "Physical density: 420",
+      "sdk": "30"
+    },
+    {
+      "label": "gate",
+      "hash": "#cuenta",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": null,
+      "topbar": [
+        16,
+        0,
+        396,
+        30
+      ],
+      "overflowX": [],
+      "ua": true,
+      "native": true,
+      "shot": "01-gate.png"
+    },
+    {
+      "label": "encuesta",
+      "hash": "#para-ti",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": null,
+      "topbar": [
+        16,
+        0,
+        396,
+        30
+      ],
+      "overflowX": [],
+      "ua": true,
+      "native": true,
+      "shot": "02-encuesta.png"
+    },
+    {
+      "label": "tras encuesta",
+      "hash": "#para-ti",
+      "shot": "03-tras-encuesta.png"
+    },
+    {
+      "label": "tour",
+      "count": "1 de 9",
+      "title": "Tu peli de la semana",
+      "card": [
+        242,
+        445
+      ],
+      "hole": [
+        34,
+        230
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "04-tour-1.png"
+    },
+    {
+      "label": "tour",
+      "count": "2 de 9",
+      "title": "Desliza para decidir",
+      "card": [
+        449,
+        652
+      ],
+      "hole": [
+        67,
+        552
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": true,
+      "shot": "05-tour-2.png"
+    },
+    {
+      "label": "tour",
+      "count": "3 de 9",
+      "title": "O usa los botones",
+      "card": [
+        346,
+        528
+      ],
+      "hole": [
+        540,
+        616
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "06-tour-3.png"
+    },
+    {
+      "label": "tour",
+      "count": "4 de 9",
+      "title": "¿Qué te apetece?",
+      "card": [
+        91,
+        274
+      ],
+      "hole": [
+        34,
+        79
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "07-tour-4.png"
+    },
+    {
+      "label": "tour",
+      "count": "5 de 9",
+      "title": "Busca cualquier peli",
+      "card": [
+        58,
+        240
+      ],
+      "hole": [
+        4,
+        46
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "08-tour-5.png"
+    },
+    {
+      "label": "tour",
+      "count": "6 de 9",
+      "title": "Novedades",
+      "card": [
+        377,
+        601
+      ],
+      "hole": [
+        613,
+        656
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "09-tour-6.png"
+    },
+    {
+      "label": "tour",
+      "count": "7 de 9",
+      "title": "Tu biblioteca",
+      "card": [
+        113,
+        316
+      ],
+      "hole": [
+        34,
+        101
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "10-tour-7.png"
+    },
+    {
+      "label": "tour",
+      "count": "8 de 9",
+      "title": "¿No sabes cuál ver?",
+      "card": [
+        86,
+        310
+      ],
+      "hole": [
+        34,
+        74
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "11-tour-8.png"
+    },
+    {
+      "label": "tour",
+      "count": "9 de 9",
+      "title": "Tu cuenta",
+      "card": [
+        58,
+        282
+      ],
+      "hole": [
+        4,
+        46
+      ],
+      "vh": 660,
+      "cardFits": true,
+      "overlap": false,
+      "shot": "12-tour-9.png"
+    },
+    {
+      "label": "tab descubrir",
+      "tapped": "same",
+      "hash": "#descubrir",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": [
+        16,
+        618,
+        396,
+        660
+      ],
+      "topbar": [
+        16,
+        0,
+        396,
+        40
+      ],
+      "overflowX": [
+        "filter",
+        "filter",
+        "filter",
+        "filter",
+        "filter"
+      ],
+      "ua": true,
+      "native": true,
+      "shot": "13-descubrir.png"
+    },
+    {
+      "label": "tab novedades",
+      "tapped": "changed",
+      "hash": "#novedades",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": [
+        16,
+        618,
+        396,
+        660
+      ],
+      "topbar": [
+        16,
+        0,
+        396,
+        40
+      ],
+      "overflowX": [
+        "news-hero",
+        "IMG",
+        "news-hero-body",
+        "result-label",
+        "news-hero-title"
+      ],
+      "ua": true,
+      "native": true,
+      "shot": "14-novedades.png"
+    },
+    {
+      "label": "tab biblioteca",
+      "tapped": "changed",
+      "hash": "#biblioteca",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": [
+        16,
+        618,
+        396,
+        660
+      ],
+      "topbar": [
+        16,
+        0,
+        396,
+        40
+      ],
+      "overflowX": [],
+      "ua": true,
+      "native": true,
+      "shot": "15-biblioteca.png"
+    },
+    {
+      "label": "tab para-ti",
+      "tapped": "changed",
+      "hash": "#para-ti",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": [
+        16,
+        618,
+        396,
+        660
+      ],
+      "topbar": [
+        16,
+        0,
+        396,
+        40
+      ],
+      "overflowX": [],
+      "ua": true,
+      "native": true,
+      "shot": "16-para-ti.png"
+    },
+    {
+      "label": "tab ruleta",
+      "tapped": "changed",
+      "hash": "#ruleta",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": [
+        16,
+        618,
+        396,
+        660
+      ],
+      "topbar": [
+        16,
+        0,
+        396,
+        40
+      ],
+      "overflowX": [
+        "filter",
+        "filter",
+        "filter",
+        "filter",
+        "filter"
+      ],
+      "ua": true,
+      "native": true,
+      "shot": "17-ruleta.png"
+    },
+    {
+      "label": "lateral ruleta",
+      "izq": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "der": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "shot": "18-lateral-ruleta.png"
+    },
+    {
+      "label": "lateral biblioteca",
+      "izq": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "der": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "shot": "19-lateral-biblioteca.png"
+    },
+    {
+      "label": "lateral cuenta",
+      "izq": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "der": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "shot": "20-lateral-cuenta.png"
+    },
+    {
+      "label": "lateral descubrir",
+      "izq": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "der": {
+        "sx": 0,
+        "vx": 0,
+        "scale": 1,
+        "appLeft": 0,
+        "moved": []
+      },
+      "shot": "21-lateral-descubrir.png"
+    },
+    {
+      "label": "pellizco",
+      "sx": 0,
+      "vx": 0,
+      "scale": 1,
+      "appLeft": 0,
+      "moved": [],
+      "aviso": true,
+      "shot": "22-pellizco.png"
+    },
+    {
+      "label": "swipe derecha",
+      "lib": 1,
+      "shot": "23-swipe.png"
+    },
+    {
+      "label": "ficha",
+      "open": true,
+      "shot": "24-ficha.png"
+    },
+    {
+      "label": "atrás desde ficha",
+      "hash": "#descubrir",
+      "sheetOpen": false,
+      "shot": "25-atras.png"
+    },
+    {
+      "label": "caja",
+      "result": true,
+      "shot": "26-caja.png"
+    },
+    {
+      "label": "buscar",
+      "query": "dune",
+      "results": 6,
+      "shot": "27-buscar.png"
+    },
+    {
+      "label": "cuenta",
+      "hash": "#cuenta",
+      "inner": [
+        412,
+        660
+      ],
+      "dpr": 2.625,
+      "scrollW": 412,
+      "tabbar": [
+        16,
+        618,
+        396,
+        660
+      ],
+      "topbar": [
+        16,
+        0,
+        396,
+        40
+      ],
+      "overflowX": [],
+      "ua": true,
+      "native": true,
+      "shot": "28-cuenta.png"
+    },
+    {
+      "label": "widget",
+      "prefs": "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n    <string name=\"reason\">De las mejor valoradas que encajan con tus respuestas: 9.0/10.</string>\n    <string name=\"id\">tmdb-1789549</string>\n    <string name=\"label\">Peli de la semana</string>\n    <string name=\"title\">Das Geschenk</string>\n    <string name=\"posterUrl\">https://image.tmdb.org/t/p/w342/4sc5p6NiMKpv5Ef9iShXplJsY3G.jpg</string>\n    <string name=\"meta\">2026 · 1 h 26 min · 9.0/10</string>\n</map>",
+      "files": "total 232\n-rw------- 1 u0_a167 u0_a167 76527 2026-10-30 13:56 box_poster.jpg\n-rw------- 1 u0_a167 u0_a167 23520 2026-10-30 13:56 news_slide0.jpg\n-rw------- 1 u0_a167 u0_a167 13343 2026-10-30 13:56 news_slide1.jpg\n-rw------- 1 u0_a167 u0_a167 18247 2026-10-30 13:56 news_slide2.jpg\n-rw------- 1 u0_a167 u0_a167  3671 2026-10-30 13:56 news_slide3.jpg\n-rw------- 1 u0_a167 u0_a167 16227 2026-10-30 13:56 news_slide4.jpg\n-rw------- 1 u0_a167 u0_a167 48511 2026-10-30 13:56 widget_poster.jpg",
+      "shot": "29-para-ti-widget.png"
+    },
+    {
+      "label": "enlace del widget",
+      "want": "tmdb-1789549",
+      "sheetOpen": true,
+      "title": "Das Geschenk",
+      "shot": "30-widget-ficha.png"
+    },
+    {
+      "label": "widget caja",
+      "items": 61,
+      "pick": "{&quot;id&quot;:&quot;tmdb-17814&quot;,&quot;title&quot;:&quot;Asalto a la comisaría del distrito 13&quot;,&quot;poster&quot;:&quot;https:\\/\\/image.tmdb.org\\/t\\/p\\/w342\\/tks6ZQlE4AMiwROj39aPBktE92m.jp",
+      "poster": true
+    },
+    {
+      "label": "widget noticias",
+      "news": "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n    <string name=\"news\">[{&quot;title&quot;:&quot;Patrick Stewart: \\&quot;Los Simpson y Barrio Sésamo son los dos trabajos más distinguidos que he hecho\\&quot;&quot;,&quot;source&quot;:&quot;Espinof&quot;,&quot;link&quot;:&quot;https:\\/\\/www.espinof.com\\/actores-y-actrices\\/patrick-stewart-simpson-barrio-sesamo-dos-trabajos-distinguidos-que-he-hecho&quot;},{&quot;title&quot;:&quot;Tenemos que hablar de 'Elsinore', la película que podría quitar el Oscar a Matt Damon y 'La odisea' para dárselo a un Andrew Scott \\&quot;brillante\\&quot;&quot;,&quot;source&quot;:&quot;Fotogramas&quot;,&quot;link&quot;:&quot;https:\\/\\/www.fotogramas.es\\/noticias-cine\\/a74277117\\/elsinore-pelicula-andrew-scott-actor-premios-oscar-seminci-valladolid-opinion\\/&quot;}]</string>\n    <string name=\"slides\">[{&quot;id&quot;:&quot;tmdb-1507696&quot;,&quot;t",
+      "files": "box_poster.jpg\nnews_slide0.jpg\nnews_slide1.jpg\nnews_slide2.jpg\nnews_slide3.jpg\nnews_slide4.jpg\nwidget_poster.jpg"
+    },
+    {
+      "label": "enlace novedades",
+      "want": "#novedades",
+      "hash": "#novedades",
+      "shot": "31-widget-novedades.png"
+    },
+    {
+      "label": "enlace caja",
+      "want": "#ruleta",
+      "hash": "#ruleta",
+      "shot": "32-widget-caja.png"
+    },
+    {
+      "label": "reabrir",
+      "shot": "33-reabrir.png"
+    }
+  ],
+  "errors": [],
+  "console": [],
+  "layout": {
+    "webview": [
+      0,
+      63,
+      1080,
+      1794
+    ],
+    "screen": "Physical size: 1080x1920",
+    "cssH": 660,
+    "dpr": 2.625
+  }
+}
