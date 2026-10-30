@@ -1594,11 +1594,12 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const TERMS = "terminos.html";
   // Enlace a la APK de Android (la publica el workflow android.yml en las releases de GitHub); no sale dentro de la app
   const APK_URL = "https://github.com/ivanminguezdelabanda-source/peli-match/releases/latest/download/cinder.apk";
+  const WEB_VERSION = "?v=dev".slice(3); // el despliegue pone aquí el commit publicado
   const appLink = () => {
-    if (!NATIVE) return el("p", "account-note", `<a href="${APK_URL}">📱 Descarga Cinder para Android</a>`);
-    // En la app se ve qué versión hay instalada (para saber si ya se actualizó)
-    const note = el("p", "account-note", "");
-    plugin("App")?.getInfo?.().then((i) => { note.textContent = `Cinder para Android ${i.version}`; }).catch(() => {});
+    if (!NATIVE) return el("p", "account-note", `<a href="${APK_URL}">📱 Descarga Cinder para Android</a> · versión ${WEB_VERSION}`);
+    // En la app se ve qué versión hay instalada y de qué día es la web (para saber si ya se actualizó)
+    const note = el("p", "account-note", `Versión ${WEB_VERSION}`);
+    plugin("App")?.getInfo?.().then((i) => { note.textContent = `Cinder para Android ${i.version} · versión ${WEB_VERSION}`; }).catch(() => {});
     return note;
   };
   const termsLink = (text = "Términos y condiciones") => `<a href="${TERMS}" target="_blank" rel="noopener">${text}</a>`;
