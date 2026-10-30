@@ -1612,6 +1612,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     // Botón «atrás» de Android: primero cierra la ficha o el tutorial; luego vuelve a la pantalla anterior;
     // en la pantalla principal deja la app en segundo plano (como el resto de apps)
     plugin("App")?.addListener("backButton", ({ canGoBack }) => {
+      const upd = document.querySelector(".update-modal [data-later]");
+      if (upd) return upd.click();
       if (!sheet.hidden) return closeSheet();
       if (tourIdx >= 0) return endTour();
       if (canGoBack && location.hash && location.hash !== "#descubrir") return history.back();
@@ -1648,18 +1650,40 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     if (!NATIVE || !plugin("App")?.getInfo) return;
     try {
       const day = new Date().toISOString().slice(0, 10);
-      if (localStorage.getItem("cinder:update-check") === day) return; // como mucho un aviso al día
+      if (localStorage.getItem("cinder:update-aviso") === day) return; // como mucho un aviso al día
       const [info, rel] = await Promise.all([
         plugin("App").getInfo(),
         fetch("https://api.github.com/repos/ivanminguezdelabanda-source/peli-match/releases/latest", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)),
       ]);
       const latest = Number(String(rel?.tag_name || "").split(".").pop());
       if (!latest || !(latest > Number(info.build))) return;
-      localStorage.setItem("cinder:update-check", day);
-      toast("Hay una versión nueva de la app", "Actualizar", () => plugin("Browser").open({ url: APK_URL }), 15000);
+      localStorage.setItem("cinder:update-aviso", day);
+      showUpdate(`1.${latest}`);
     } catch (e) {
       console.warn("No se pudo mirar si hay actualización:", e);
     }
+  }
+
+  // Ventana en medio de la pantalla con la versión nueva
+  function showUpdate(version) {
+    if (document.querySelector(".update-modal")) return;
+    const wrap = el("div", "update-modal", `
+      <div class="update-card" role="dialog" aria-modal="true" aria-labelledby="update-title">
+        <svg class="update-logo" viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="10" width="28" height="40" rx="5" fill="none" stroke="#f2d39b" stroke-width="3" transform="rotate(-12 28 30)"/><rect x="22" y="14" width="28" height="40" rx="5" fill="#e0414b" transform="rotate(10 36 34)"/><path fill="#14100f" d="M32 27v14l11-7z" transform="rotate(10 36 34)"/></svg>
+        <p class="update-kicker">Versión ${esc(version)}</p>
+        <h2 class="update-title" id="update-title">¡Hay una versión nueva de Cinder!</h2>
+        <p class="update-text">Trae mejoras y arreglos. Se instala encima de la que tienes y no pierdes nada: tu cuenta, tus matches y tus listas siguen igual.</p>
+        <div class="update-actions">
+          <button class="btn btn-solid" type="button" data-go>Actualizar ahora</button>
+          <button class="btn btn-ghost" type="button" data-later>Más tarde</button>
+        </div>
+        <p class="update-note">Se descarga la app; ábrela y pulsa «Instalar».</p>
+      </div>`);
+    const close = () => { wrap.classList.add("out"); setTimeout(() => wrap.remove(), 250); };
+    wrap.querySelector("[data-go]").onclick = () => { plugin("Browser").open({ url: APK_URL }); close(); };
+    wrap.querySelector("[data-later]").onclick = close;
+    document.body.append(wrap);
+    wrap.querySelector("[data-go]").focus();
   }
 
   // ---------- Botón oficial «Continuar con Google» (Google Identity Services) ----------
