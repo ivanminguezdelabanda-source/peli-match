@@ -185,21 +185,32 @@ async function main() {
   // una búsqueda por segundo; se guardan en geo.json para no repetirlas) para que salgan en la lista igualmente,
   // sin cartelera. Así se encuentran todos aunque FilmAffinity no nos deje bajarlos todos el mismo día.
   const geo = JSON.parse(await readFile(`${PREV}/geo.json`, "utf8").catch(() => "{}"));
-  const geoUntil = Date.now() + 12 * 60e3;
+  // Varios cines en el mismo punto exacto: es el centro del pueblo, no su calle
+  const same = {};
+  for (const v of Object.values(geo)) same[v[0] + "," + v[1]] = (same[v[0] + "," + v[1]] || 0) + 1;
+  for (const v of Object.values(geo)) if (same[v[0] + "," + v[1]] > 1) v[2] = 1;
+  const geoUntil = Date.now() + 15 * 60e3;
   const listed = new Set(index.map((x) => x.id));
   for (const t of theaters) {
     if (listed.has(t.id) || LOCAL) continue;
-    if (!geo[t.id] && Date.now() < geoUntil) {
-      for (const q of [`street=${encodeURIComponent(t.addr.replace(/\s*\(.*?\)/g, ""))}&city=${encodeURIComponent(t.city)}`, `q=${encodeURIComponent(`${t.city}, ${t.prov}`)}`]) {
+    // Si solo se sabe el pueblo (tercer valor = 1), se vuelve a probar con la calle cuando sobra tiempo
+    if ((!geo[t.id] || geo[t.id][2]) && Date.now() < geoUntil) {
+      // «Avenida Diagonal, 508 (Centro)» → «508 Avenida Diagonal», que es como lo entiende la búsqueda por calle
+      const a = t.addr.replace(/\s*\(.*?\)/g, "").replace(/\b(s\/n|local|planta|c\.?\s*c\.?|centro comercial).*$/i, "").trim();
+      const m = a.match(/^(.*?),?\s+(\d+[a-z]?)\b/i);
+      const street = m ? `${m[2]} ${m[1].replace(/,$/, "")}` : a.replace(/,.*$/, "");
+      const tries = [[`street=${encodeURIComponent(street)}&city=${encodeURIComponent(t.city)}`, 0],
+        [`q=${encodeURIComponent(`${t.name}, ${t.city}`)}`, 0], [`q=${encodeURIComponent(`${t.city}, ${t.prov}`)}`, 1]];
+      for (const [q, approx] of geo[t.id] ? tries.slice(0, 2) : tries) {
         const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=es&${q}`,
           { headers: { "User-Agent": "Cinder-TFG/1.0 (github.com/ivanminguezdelabanda-source/peli-match)" } }).then((x) => x.json()).catch(() => []);
         await sleep(1100);
-        if (r[0]) { geo[t.id] = [+(+r[0].lat).toFixed(5), +(+r[0].lon).toFixed(5)]; break; }
+        if (r[0]) { geo[t.id] = [+(+r[0].lat).toFixed(5), +(+r[0].lon).toFixed(5), ...(approx ? [1] : [])]; break; }
       }
-      stats.geocoded = (stats.geocoded || 0) + (geo[t.id] ? 1 : 0);
+      stats.geocoded = (stats.geocoded || 0) + (geo[t.id] && !geo[t.id][2] ? 1 : 0);
     }
     if (!geo[t.id]) continue;
-    index.push({ id: t.id, name: t.name, city: t.city, prov: t.prov, addr: t.addr, lat: geo[t.id][0], lon: geo[t.id][1], screens: null, films: 0, pending: 1 });
+    index.push({ id: t.id, name: t.name, city: t.city, prov: t.prov, addr: t.addr, lat: geo[t.id][0], lon: geo[t.id][1], screens: null, films: 0, pending: 1, ...(geo[t.id][2] ? { approx: 1 } : {}) });
     await writeFile(`${OUT}/${t.id}.json`, JSON.stringify({ id: t.id, name: t.name, city: t.city, addr: t.addr, web: "", screens: null, pending: true, films: [] }));
     pending++;
   }

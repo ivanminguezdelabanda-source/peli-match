@@ -3814,7 +3814,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
           const li = el("li", "cine");
           const b = el("button", "cine-main", `
             <span class="cine-name">${esc(c.name)}</span>
-            <span class="cine-meta">${kmText(c.km)} · ${esc(c.city)}${c.addr ? " · " + esc(c.addr) : ""}</span>
+            <span class="cine-meta">${c.approx ? "" : kmText(c.km) + " · "}${esc(c.city)}${c.addr ? " · " + esc(c.addr) : ""}</span>
             <span class="cine-go">${c.films ? `${c.films} ${c.films === 1 ? "peli" : "pelis"} en cartelera` : c.pending ? "Ver horarios" : "Horarios en su web"} ›</span>`);
           b.type = "button";
           b.onclick = () => openCinema(c, m);
@@ -3838,7 +3838,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         const li = el("li", "cine");
         const head = el("button", "cine-main", `
           <span class="cine-name">${esc(c.name)}</span>
-          <span class="cine-meta">${kmText(c.km)} · ${esc(c.city)}</span>
+          <span class="cine-meta">${c.approx ? "" : kmText(c.km) + " · "}${esc(c.city)}</span>
           <span class="cine-day">${dayLabel(date)}</span>`);
         head.type = "button";
         head.onclick = () => openCinema(c, m);
