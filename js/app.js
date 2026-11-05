@@ -3652,20 +3652,52 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         (e) => reject(e), { enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60e3 });
     });
   }
-  // Sugerencias mientras escribes: calles, códigos postales, barrios y pueblos de España
-  async function placeSuggestions(q) {
+  // Sugerencias mientras escribes: primero los pueblos y ciudades con cine (de la propia lista, sin red),
+  // luego calles, códigos postales y barrios de España (Photon; si falla o no encuentra nada, Nominatim)
+  const normPlace = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  async function photonPlaces(q) {
     const r = await fetch(`https://photon.komoot.io/api/?limit=8&bbox=${SPAIN_BOX}&q=${encodeURIComponent(q)}`);
-    if (!r.ok) return [];
-    const seen = new Set();
+    if (!r.ok) throw new Error("photon " + r.status);
     return ((await r.json()).features || []).filter((f) => !f.properties.countrycode || f.properties.countrycode === "ES").map((f) => {
       const p = f.properties;
       const street = p.street ? `${p.street}${p.housenumber ? " " + p.housenumber : ""}` : "";
-      const main = p.osm_value === "postcode" ? `${p.name || p.postcode}` : street && p.name && p.name !== p.street ? p.name : street || p.name || p.postcode || "";
-      const sub = [main !== street ? street : "", p.postcode && p.postcode !== main ? p.postcode : "", p.city && p.city !== main ? p.city : "", p.state || p.county]
-        .filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(", ");
+      const isCode = p.osm_value === "postcode";
+      const main = isCode ? `${p.name || p.postcode}` : street && p.name && p.name !== p.street ? p.name : street || p.name || p.postcode || "";
+      const sub = [main !== street ? street : "", p.postcode && p.postcode !== main ? p.postcode : "", p.city && p.city !== main ? p.city : "", p.state || p.county];
       const [lon, lat] = f.geometry.coordinates;
-      return { main, sub, lat, lon, name: p.osm_value === "postcode" ? `${main}${p.city ? " · " + p.city : ""}` : main };
-    }).filter((s) => s.main && !seen.has(s.main + s.sub) && seen.add(s.main + s.sub)).slice(0, 6);
+      return { main, sub, lat, lon, name: isCode ? `${main}${p.city ? " · " + p.city : ""}` : main };
+    });
+  }
+  async function nominatimPlaces(q) {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=es&accept-language=es&q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error("nominatim " + r.status);
+    return (await r.json()).map((h) => {
+      const a = h.address || {};
+      const street = a.road ? `${a.road}${a.house_number ? " " + a.house_number : ""}` : "";
+      const city = a.city || a.town || a.village || a.municipality || "";
+      const main = street || a.postcode && /^\d{5}$/.test(q.trim()) && a.postcode || h.name || city || h.display_name.split(",")[0];
+      return { main, sub: [a.postcode !== main ? a.postcode : "", city !== main ? city : "", a.state], lat: +h.lat, lon: +h.lon, name: main };
+    });
+  }
+  async function placeSuggestions(q) {
+    const nq = normPlace(q);
+    const idx = await loadCinesIndex();
+    const towns = new Map();
+    (idx?.cinemas || []).forEach((c) => {
+      if (!normPlace(c.city).startsWith(nq) && !normPlace(c.prov).startsWith(nq)) return;
+      const key = normPlace(c.city).startsWith(nq) ? c.city : c.prov;
+      const t = towns.get(key) || { main: key, n: 0, lat: 0, lon: 0 };
+      t.n++; t.lat += c.lat; t.lon += c.lon;
+      towns.set(key, t);
+    });
+    const local = [...towns.values()].sort((a, b) => b.n - a.n).slice(0, 3)
+      .map((t) => ({ main: t.main, sub: [`${t.n} ${t.n === 1 ? "cine" : "cines"}`], lat: t.lat / t.n, lon: t.lon / t.n, name: t.main }));
+    let remote = [];
+    try { remote = await photonPlaces(q); } catch (e) { console.warn("Photon:", e); }
+    if (!remote.length) try { remote = await nominatimPlaces(q); } catch (e) { console.warn("Nominatim:", e); }
+    const seen = new Set();
+    return local.concat(remote).map((s) => ({ ...s, sub: s.sub.filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(", ") }))
+      .filter((s) => s.main && !seen.has(normPlace(s.main + s.sub)) && seen.add(normPlace(s.main + s.sub))).slice(0, 7);
   }
   // La peli de la cartelera en el catálogo de Cinder (para abrir su ficha): mismo título y año (±1)
   let filmIndex = null;
@@ -3783,7 +3815,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
           const b = el("button", "cine-main", `
             <span class="cine-name">${esc(c.name)}</span>
             <span class="cine-meta">${kmText(c.km)} · ${esc(c.city)}${c.addr ? " · " + esc(c.addr) : ""}</span>
-            <span class="cine-go">${c.films ? `${c.films} ${c.films === 1 ? "peli" : "pelis"} en cartelera` : "Sin cartelera publicada"} ›</span>`);
+            <span class="cine-go">${c.films ? `${c.films} ${c.films === 1 ? "peli" : "pelis"} en cartelera` : "Horarios en su web"} ›</span>`);
           b.type = "button";
           b.onclick = () => openCinema(c, m);
           li.append(b);
@@ -3847,8 +3879,13 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     films.append(el("li", "cines-loading", "Cargando la cartelera…"));
     sheet.scrollTop = 0;
     const data = await loadCine(c.id);
-    if (!data?.films?.length) { films.replaceChildren(el("li", "cines-msg", "Este cine no tiene cartelera publicada estos días.")); return; }
-    if (data.web) links.insertAdjacentHTML("beforeend", `<a href="${esc(data.web)}" target="_blank" rel="noopener">Web del cine</a>`);
+    if (data?.web) links.insertAdjacentHTML("beforeend", `<a href="${esc(data.web)}" target="_blank" rel="noopener">Web del cine</a>`);
+    if (!data?.films?.length) {
+      films.replaceChildren(el("li", "cines-msg", data?.web
+        ? `Este cine no publica sus horarios en FilmAffinity. Los tienes en <a href="${esc(data.web)}" target="_blank" rel="noopener">su web</a>.`
+        : "Este cine no tiene cartelera publicada estos días."));
+      return;
+    }
     // Los días con pases (hoy, solo si queda alguno por empezar)
     const all = [...new Set(data.films.flatMap((f) => f.versions.flatMap((v) => Object.keys(v.days))))].sort()
       .filter((d) => d >= todayISO() && (d !== todayISO() || data.films.some((f) => f.versions.some((v) => (v.days[d] || []).some((t) => t[0] >= nowHM())))));
