@@ -132,29 +132,37 @@ async function main() {
   const deadline = Date.now() + (Number(process.env.CINES_MINUTES) || 70) * 60e3;
   const index = [];
   const done = new Set();
-  let next = 0, withFilms = 0;
+  let next = 0, withFilms = 0, strikes = 0;
   const failed = [];
   let queue = theaters;
   async function worker() {
     while (next < queue.length && Date.now() < deadline) {
       const t = queue[next++];
       const html = await get(`theater-showtimes.php?id=${t.id}`);
-      if (!html) { failed.push(t); continue; }
+      // Si la web nos frena, devuelve una página de comprobación (con código 200) en vez de la del cine:
+      // se cuenta como fallo y se espera cada vez más antes de seguir
+      if (!html || !/bing\.com\/maps|movie-showtimes|no hay sesiones|data-sess-date/.test(html)) {
+        if (html) stats.blocked = (stats.blocked || 0) + 1;
+        failed.push(t);
+        if (!LOCAL) await sleep(Math.min(120000, 15000 * ++strikes));
+        continue;
+      }
+      strikes = 0;
       const d = parseTheater(html, today, last);
-      if (d.lat == null) { stats.nomap = (stats.nomap || 0) + 1; continue; } // sin sitio en el mapa no se puede ordenar por distancia
+      if (d.lat == null) stats.nomap = (stats.nomap || 0) + 1; // se le pone luego el sitio de otro cine de su ciudad
       done.add(t.id);
       index.push({ id: t.id, name: t.name, city: t.city, prov: t.prov, addr: t.addr, lat: d.lat, lon: d.lon, screens: d.screens, films: d.films.length });
       if (d.films.length) withFilms++;
       await writeFile(`${OUT}/${t.id}.json`, JSON.stringify({ id: t.id, name: t.name, city: t.city, addr: t.addr, web: d.web, screens: d.screens, updated: today, films: d.films }));
-      if (!LOCAL) await sleep(900);
+      if (!LOCAL) await sleep(1800);
     }
   }
-  await Promise.all(Array.from({ length: LOCAL ? 1 : 2 }, worker));
+  await worker(); // de uno en uno: más rápido la web empieza a frenar
   // Los que han fallado, otra vez al final y de uno en uno, tras una pausa
   if (failed.length && !LOCAL && Date.now() < deadline - 5 * 60e3) {
     console.log(`${failed.length} cines fallidos, se reintentan`, stats);
-    await sleep(60000);
-    queue = failed.splice(0); next = 0;
+    await sleep(90000);
+    queue = failed.splice(0); next = 0; strikes = 0;
     await worker();
   }
   console.log("Errores:", stats, `sin descargar: ${failed.length}`);
@@ -171,6 +179,12 @@ async function main() {
     if (p.file.films.length) withFilms++;
     kept++;
   }
+  // Cines sin mapa: el sitio de otro cine de su misma ciudad (o se quitan si no hay ninguno)
+  for (const c of index.filter((x) => x.lat == null)) {
+    const near = index.find((x) => x.lat != null && x.city === c.city && x.prov === c.prov);
+    if (near) { c.lat = near.lat; c.lon = near.lon; }
+  }
+  for (let i = index.length - 1; i >= 0; i--) if (index[i].lat == null) index.splice(i, 1);
   index.sort((a, b) => a.id - b.id);
   await writeFile(`${OUT}/index.json`, JSON.stringify({ updated: today, source: "FilmAffinity", cinemas: index }));
   console.log(`::notice::Cines: ${theaters.length} en la lista, ${index.length} guardados, ${withFilms} con cartelera, de la vez anterior ${kept}, sin descargar ${failed.length + Math.max(0, queue.length - next)}, errores ${JSON.stringify(stats)}`);
