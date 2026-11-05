@@ -6,3 +6,9 @@ gdo.html 000 0 https://www.guiadelocio.com/cine/cartelera
 gdo.html FAIL
 abc.html 200 289215 https://www.abc.es/play/cine/
 photon.json 200 1220 https://photon.komoot.io/api/?q=28013&limit=3
+fa-m.html 200 385031 https://www.filmaffinity.com/es/theaters.php?state=ES-M
+fa-235.html 200 597502 https://www.filmaffinity.com/es/theater-showtimes.php?id=235
+fa-robots.txt 200 163 https://www.filmaffinity.com/robots.txt
+sc-E0284.html 200 483495 https://www.sensacine.com/cines/cine/E0284/
+sc-robots.txt 200 896 https://www.sensacine.com/robots.txt
+ph.json 200 2045 https://photon.komoot.io/api/?q=calle%20mayor%2010&limit=5&bbox=-18.2,27.6,4.4,43.9
