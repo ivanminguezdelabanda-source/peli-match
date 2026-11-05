@@ -987,23 +987,48 @@ details.season.current .season-mark { color: var(--ticket); font-weight: 700; }
 .link-icon.cine { background: var(--panel-2); font-size: 20px; }
 .cine-near { margin-top: 10px; align-self: flex-start; text-decoration: none; }
 
-/* Cines cerca: lista de cines por distancia, cada uno lleva a su cartelera */
+/* Cines cerca: buscador con sugerencias, cines por distancia y la cartelera de cada uno */
 .cines { padding: 20px max(20px, var(--sa-r)) 24px max(20px, var(--sa-l)); }
 .cines .sheet-title { padding-right: 48px; }
 .cines-sub { color: var(--muted); margin: 4px 0 14px; line-height: 1.4; }
-.cines-status { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
-.cines-msg, .cines-loading { color: var(--muted); margin: 0; line-height: 1.4; }
+.cines-search { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.cines-field { position: relative; }
+.cines-field input { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: inherit; font: inherit; }
+.cines-suggest { margin: 6px 0 0; padding: 4px; list-style: none;
+  background: var(--panel, #241c1b); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.cines-suggest button { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 9px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.cines-suggest button:hover, .cines-suggest button:focus-visible { background: var(--panel-2); }
+.cines-suggest span { color: var(--muted); font-size: .85rem; }
+.cines-none { padding: 10px; color: var(--muted); }
+.cines-gps { align-self: flex-start; }
+.cines-status { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.cines-msg, .cines-loading { color: var(--muted); margin: 0; line-height: 1.4; list-style: none; }
 .cines-loading::before { content: "⏳ "; }
-.cines-here { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; font-weight: 600; }
-.cines-change { background: none; border: 0; color: var(--ticket); font: inherit; font-weight: 600; cursor: pointer; padding: 6px 0; }
-.cines-where { display: flex; gap: 8px; }
-.cines-where input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line, #3a2f2c); background: var(--panel-2); color: inherit; font: inherit; }
-.cines-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.cine { background: var(--panel-2); border-radius: 14px; overflow: hidden; }
-.cine-main { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 8px; color: inherit; text-decoration: none; }
+.cines-here { margin: 0; font-weight: 600; }
+.cines-list, .cine-films { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.cine { background: var(--panel-2); border-radius: 14px; overflow: hidden; padding-bottom: 4px; }
+.cine-main { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 12px 14px 8px; color: inherit; text-decoration: none; text-align: left; background: none; border: 0; font: inherit; cursor: pointer; }
 .cine-name { font-weight: 700; font-size: 1.02rem; }
 .cine-meta { color: var(--muted); font-size: .86rem; line-height: 1.35; }
-.cine-go { color: var(--ticket); font-weight: 600; font-size: .9rem; margin-top: 4px; }
-.cine-links { display: flex; gap: 16px; padding: 0 14px 12px; font-size: .86rem; }
-.cine-links a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
-.cines-now { margin-top: 22px; }
+.cine-go, .cine-day { color: var(--ticket); font-weight: 600; font-size: .9rem; margin-top: 4px; }
+.cine .cine-version, .cine .cine-times { padding: 0 14px; }
+.cine .cine-times { padding-bottom: 10px; }
+.cine-links { display: flex; gap: 16px; margin: -6px 0 14px; font-size: .9rem; }
+.cine-links a { color: var(--ticket); text-decoration: underline; text-underline-offset: 2px; }
+.cines-back { background: none; border: 0; padding: 0 0 8px; color: var(--ticket); font: inherit; font-weight: 600; cursor: pointer; }
+.cine-days { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; scrollbar-width: none; }
+.cine-day-btn { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.cine-day-btn.on { background: var(--ticket); color: var(--on-ticket); border-color: var(--ticket); }
+.cine-film { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 12px; background: var(--panel-2); border-radius: 14px; }
+.cine-film-poster { width: 64px; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--line); }
+.cine-film-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cine-film-title { display: block; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; font-size: 1rem; text-align: left; line-height: 1.25; }
+button.cine-film-title { cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.cine-film-meta { color: var(--muted); font-size: .84rem; margin: 3px 0 0; line-height: 1.35; }
+.cine-version { margin: 8px 0 0; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.cine-times { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cine-time { display: inline-flex; flex-direction: column; align-items: center; min-width: 54px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--ticket);
+  color: var(--ticket); font-weight: 700; text-decoration: none; line-height: 1.1; }
+.cine-time small { font-weight: 500; font-size: .68rem; color: var(--muted); margin-top: 2px; }
+.cine-time.past { border-color: var(--line); color: var(--muted); opacity: .6; }
+.cines-source { color: var(--muted); font-size: .78rem; margin: 16px 0 0; }
