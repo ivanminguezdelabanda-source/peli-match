@@ -973,3 +973,16 @@ details.season.done { background: color-mix(in srgb, var(--ok) 14%, var(--panel)
 details.season.done .season-mark { color: var(--ok); font-weight: 700; }
 details.season.current { box-shadow: 0 0 0 1px var(--ticket) inset; }
 details.season.current .season-mark { color: var(--ticket); font-weight: 700; }
+.show-left { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.45; }
+.show-left b { color: var(--text); }
+.ep-list { display: grid; gap: 4px; padding: 2px 8px 10px; }
+.ep.ep-row { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; text-align: left; padding: 8px 10px;
+  font-family: var(--f-body); font-weight: 600; color: var(--text); }
+.ep.ep-row.on { background: color-mix(in srgb, var(--ok) 18%, var(--panel-2)); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 50%, transparent) inset; }
+.ep-n { font-family: var(--f-mono); font-size: 12px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); color: var(--muted); }
+.ep.on .ep-n { background: var(--ok); color: var(--ink); }
+.ep-title { font-size: 13.5px; line-height: 1.3; min-width: 0; }
+.ep-title small { display: block; font-size: 11.5px; color: var(--ticket); font-weight: 700; }
+.ep-rate { font-family: var(--f-mono); font-size: 12px; color: var(--ticket); white-space: nowrap; }
+.link-icon.cine { background: var(--panel-2); font-size: 20px; }
+.cine-near { margin-top: 10px; align-self: flex-start; text-decoration: none; }

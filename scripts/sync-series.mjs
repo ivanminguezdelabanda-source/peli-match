@@ -150,6 +150,16 @@ const seasonParts = (numbers) => {
           Object.assign(eps, episodesOf(await tmdb(`/tv/${id}`, { language: "es-ES", append_to_response: part.join(",") })));
           await sleep(40);
         }
+        // Muchos capítulos no tienen título en español («Episodio 3»): esas temporadas se piden en inglés
+        const generic = (t) => !t || /^(Episodio|Capítulo|Episode) \d+$/i.test(t);
+        const untitled = Object.keys(eps).filter((k) => eps[k].filter((x) => generic(x[0])).length > eps[k].length / 2);
+        for (const part of seasonParts(untitled)) {
+          const en = episodesOf(await tmdb(`/tv/${id}`, { language: "en-US", append_to_response: part.join(",") }));
+          for (const [k, list] of Object.entries(en)) {
+            list.forEach((x, i) => { if (eps[k]?.[i] && generic(eps[k][i][0]) && !generic(x[0])) eps[k][i][0] = x[0]; });
+          }
+          await sleep(40);
+        }
         await writeFile(join(EPS_DIR, `${d.id}.json`), JSON.stringify(eps));
       }
     } catch (e) {

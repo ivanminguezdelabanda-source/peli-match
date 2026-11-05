@@ -196,6 +196,12 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   // Los próximos estrenos pueden no tener duración todavía
   const fmtTime = (min) => (!min ? "Duración por confirmar" : min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min` : `${min} min`);
   const shortTime = (min) => (!min ? "—" : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}`);
+  // Modo cine: las pelis en cartelera llevan a sus horarios en los cines de alrededor (Google los saca con tu
+  // ubicación) y Novedades tiene un acceso a los cines más cercanos en el mapa
+  const inCinemas = (m) => m.kind !== "tv" && (NEWS?.nowPlaying?.includes(m.id)
+    || (m.release && m.release <= todayISO() && m.release >= isoDay(new Date(Date.now() - 45 * 864e5)) && !(m.providers || []).length));
+  const showtimesUrl = (m) => `https://www.google.com/search?q=${encodeURIComponent(`${m.title} horarios cines cerca`)}`;
+  const CINEMAS_URL = "https://www.google.com/maps/search/cines+cerca+de+mi";
   // Años y duración: una peli dice «2019 · 2 h 05 min»; una serie, «2019–2023 · 4 temporadas»
   const yearText = (m) => m.kind !== "tv" ? m.year : m.end ? (m.end === m.year ? m.year : `${m.year}–${m.end}`) : `${m.year}–`;
   const lenText = (m) => m.kind === "tv" ? `${m.seasons.length} ${m.seasons.length === 1 ? "temporada" : "temporadas"}` : fmtTime(m.runtime);
@@ -1834,6 +1840,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     // Al tocar el aviso de un estreno, se abre su ficha
     plugin("LocalNotifications")?.addListener("localNotificationActionPerformed", ({ notification }) => {
       const id = notification?.extra?.id;
+      if (id && !byId[id] && String(id).startsWith("tv-") !== SERIES_MODE) return switchMode(SERIES_MODE ? "pelis" : "series", "#peli/" + encodeURIComponent(id));
       if (!byId[id]) return;
       pendingOpen = id;
       if (booted) route();
@@ -3073,6 +3080,17 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         newsRow("Tendencias de la semana", NEWS.trending)]
       : [EVENT ? eventRow() : null, newsRow("Tus próximos estrenos", mine, true, true), newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true),
         newsRow("Tendencias de la semana", NEWS.trending)])
+      .map((sec) => {
+        // Bajo «En cines», el acceso a los cines de alrededor
+        if (sec && !SERIES_MODE && sec.querySelector(".news-section-title")?.textContent === "En cines") {
+          const go = el("a", "btn btn-ghost cine-near", "🎟️ Cines cerca de ti y sus horarios");
+          go.href = CINEMAS_URL;
+          go.target = "_blank";
+          go.rel = "noopener";
+          sec.append(go);
+        }
+        return sec;
+      })
       .forEach((sec) => sec && box.append(sec));
 
     // Noticias de webs de cine: titular, foto y un trozo; se leen en la web original
@@ -3213,6 +3231,10 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
           <span class="link-icon where">${ICON.tv}</span>
           <span class="link-text"><b>Dónde verla</b><span>Todas las opciones</span></span>
         </a>
+        ${inCinemas(m) ? `<a class="link-card" href="${esc(showtimesUrl(m))}" target="_blank" rel="noopener">
+          <span class="link-icon cine">🎟️</span>
+          <span class="link-text"><b>Horarios en cines</b><span>Cerca de ti, hoy</span></span>
+        </a>` : ""}
         <button class="link-card" id="sheet-share" type="button">
           <span class="link-icon share">${ICON.share}</span>
           <span class="link-text"><b>Compartir</b><span>Mándasela a alguien</span></span>
@@ -3350,12 +3372,33 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     persist();
     refreshViews();
   }
-  function drawEpisodes(m, box, onChange) {
+  // Título, nota y fecha de cada capítulo (data/eps/<id>.json, lo prepara la sincronización de series)
+  const epsInfo = {};
+  function loadEpsInfo(m) {
+    if (!epsInfo[m.tmdb]) epsInfo[m.tmdb] = fetch(`data/eps/${m.tmdb}.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    return epsInfo[m.tmdb];
+  }
+  const minText = (min) => min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${String(min % 60).padStart(2, "0")}` : ""}`;
+  function drawEpisodes(m, box, onChange, info) {
+    if (!info) {
+      // Primero sin títulos (al momento) y, cuando llegan, otra vez con títulos y notas
+      loadEpsInfo(m).then((data) => { if (box.isConnected && Object.keys(data || {}).length) drawEpisodes(m, box, onChange, data); });
+      info = {};
+    }
     const e = entry(m.id);
     const seen = seenCount(m, e), nx = nextEp(m, e);
     box.replaceChildren(el("p", "section-label", `Capítulos · ${seen} de ${m.episodes} vistos`));
     box.append(el("div", "show-bar", `<span style="width:${((seen * 100) / (m.episodes || 1)).toFixed(1)}%"></span>`));
-    const redraw = () => { drawEpisodes(m, box, onChange); onChange?.(); };
+    // Lo que te queda: capítulos, horas y cuándo la acabas a dos capítulos por día
+    const left = m.episodes - seen;
+    if (left > 0 && seen > 0) {
+      const end = new Date(Date.now() + Math.ceil(left / 2) * 864e5);
+      box.append(el("p", "show-left", `Te quedan <b>${left} ${left === 1 ? "capítulo" : "capítulos"}</b>${m.episodeTime ? ` · unas <b>${minText(left * m.episodeTime)}</b>` : ""}.
+        A dos por día la acabas el <b>${esc(end.toLocaleDateString("es-ES", { day: "numeric", month: "long" }))}</b>.`));
+    } else if (left > 0 && m.episodeTime) {
+      box.append(el("p", "show-left", `Entera son <b>${minText(m.episodes * m.episodeTime)}</b>: a dos capítulos por día, ${Math.ceil(m.episodes / 2)} días.`));
+    }
+    const redraw = () => { drawEpisodes(m, box, onChange, Object.keys(info).length ? info : null); onChange?.(); };
     if (nx) {
       const go = el("button", "btn btn-solid", `${ICON.check} Visto T${nx[0]} · E${nx[1]}`);
       go.type = "button";
@@ -3376,13 +3419,18 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       d.open = Boolean(nx && nx[0] === n);
       d.append(el("summary", "", `<span class="season-n">T${n}</span><span class="season-txt">${c} capítulos${y ? ` · ${y}` : ""}</span>
         <span class="season-mark">${count === c ? "✓ Vista" : `${count}/${c}`}</span>`));
-      const grid = el("div", "ep-grid");
+      const names = info[n] || [];
+      const grid = el("div", names.length ? "ep-list" : "ep-grid");
       for (let i = 1; i <= c; i++) {
         const on = str[i - 1] === "1";
-        const b = el("button", "ep" + (on ? " on" : ""), String(i));
+        const [title, rating, date] = names[i - 1] || [];
+        const future = date && date > todayISO();
+        const b = el("button", "ep" + (on ? " on" : "") + (names.length ? " ep-row" : ""), names.length
+          ? `<span class="ep-n">${on ? "✓" : i}</span><span class="ep-title">${esc(title || `Capítulo ${i}`)}${future ? `<small>Sale el ${esc(dayText(date))}</small>` : ""}</span>${rating ? `<span class="ep-rate">★ ${rating.toFixed(1)}</span>` : ""}`
+          : String(i));
         b.type = "button";
         b.setAttribute("aria-pressed", String(on));
-        b.setAttribute("aria-label", `Temporada ${n}, capítulo ${i}: ${on ? "visto" : "sin ver"}`);
+        b.setAttribute("aria-label", `Temporada ${n}, capítulo ${i}${title ? `, ${title}` : ""}: ${on ? "visto" : "sin ver"}`);
         b.onclick = () => {
           const cur = epsOf(entry(m.id), n, c).split("");
           cur[i - 1] = cur[i - 1] === "1" ? "0" : "1";
@@ -3456,9 +3504,12 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   function upcoming(m) { return Boolean(m && m.release && m.release > todayISO()); }
   const savedAnywhere = (id) => inLibrary(id) || state.lists.some((l) => l.ids.includes(id));
   function wantsAlert(id) { const v = state.alerts[id]; return v === undefined ? savedAnywhere(id) : v; }
+  // Fecha del aviso: el estreno de una peli o, en modo Series, el próximo capítulo de la serie
+  const premiereDate = (m) => m.kind === "tv" ? m.next?.date : m.release;
   function premiereMovies() {
     const ids = new Set([...Object.keys(state.alerts), ...state.library.map((l) => l.id), ...state.lists.flatMap((l) => l.ids)]);
-    return [...ids].map((id) => byId[id]).filter((m) => m && m.release && wantsAlert(m.id));
+    // De las series, solo las que no has terminado de ver
+    return [...ids].map((id) => byId[id]).filter((m) => m && premiereDate(m) && wantsAlert(m.id) && !(m.kind === "tv" && entry(m.id)?.watched && m.status !== "En emisión"));
   }
   function toggleAlert(id) {
     const on = !wantsAlert(id);
@@ -3469,18 +3520,21 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   // Dentro de la app: al abrirla, aviso de lo que se ha estrenado esta semana (una vez por peli)
   function checkPremieres() {
     const today = todayISO(), weekAgo = isoDay(new Date(Date.now() - 7 * 864e5));
-    const due = premiereMovies().filter((m) => m.release <= today && m.release >= weekAgo && !state.alerted.includes(m.id));
+    const key = (m) => m.kind === "tv" ? `${m.id}@${premiereDate(m)}` : m.id; // cada capítulo nuevo avisa otra vez
+    const due = premiereMovies().filter((m) => premiereDate(m) <= today && premiereDate(m) >= weekAgo && !state.alerted.includes(key(m)));
     if (!due.length) return;
-    state.alerted = [...state.alerted, ...due.map((m) => m.id)].slice(-200);
+    state.alerted = [...state.alerted, ...due.map(key)].slice(-200);
     persist();
     const m = due[0], more = due.length > 1 ? ` y ${due.length - 1} más` : "";
-    toast(`${m.release === today ? "¡Hoy se estrena" : "Ya está en cines"} «${m.title}»${more}!`, "Ver", () => openSheet(m.id, "alert"), 9000);
+    toast(m.kind === "tv"
+      ? `${premiereDate(m) === today ? "¡Hoy sale" : "Ya está"} el capítulo T${m.next.s} · E${m.next.e} de «${m.title}»${more}!`
+      : `${m.release === today ? "¡Hoy se estrena" : "Ya está en cines"} «${m.title}»${more}!`, "Ver", () => openSheet(m.id, "alert"), 9000);
   }
   // Tras cada cambio se reprograman; el permiso solo se pide cuando entra un estreno nuevo (al guardarlo)
   function watchPremieres() {
     let known = null;
     afterSave = () => {
-      const ids = premiereMovies().filter(upcoming).map((m) => m.id);
+      const ids = premiereMovies().filter((m) => premiereDate(m) > todayISO()).map((m) => m.id);
       const fresh = known !== null && ids.some((id) => !known.has(id));
       known = new Set(ids);
       scheduleAlerts(fresh);
@@ -3493,6 +3547,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   // Las pelis por ver (matches y listas) recuerdan en qué plataformas estaban; si al abrir la app
   // alguna ha llegado a una nueva (de las tuyas, si las marcaste en la encuesta), se avisa
   const ARRIVAL_ID = 300000000;
+  const SHOW_ID = 200000000; // avisos de capítulos nuevos de series
   function checkArrivals() {
     const mine = new Set([...state.library.filter((l) => !l.watched).map((l) => l.id), ...state.lists.flatMap((l) => l.ids)]);
     const wanted = state.profile?.platforms?.length ? new Set(state.profile.platforms.map(platform)) : null;
@@ -3536,7 +3591,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     scheduleTimer = setTimeout(async () => {
       try {
         const soon = Date.now() + 60e3;
-        const items = premiereMovies().map((m) => ({ m, at: new Date(m.release + "T10:00:00") })).filter((x) => x.at.getTime() > soon)
+        const items = premiereMovies().map((m) => ({ m, at: new Date(premiereDate(m) + "T10:00:00") })).filter((x) => x.at.getTime() > soon)
           .sort((a, b) => a.at - b.at).slice(0, 40);
         let perm = (await ln.checkPermissions()).display;
         if (perm !== "granted" && perm !== "denied") {
@@ -3545,13 +3600,15 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         }
         if (perm !== "granted") { if (ask) toast("Activa las notificaciones de Cinder en Ajustes para recibir el aviso"); return; }
         const pending = (await ln.getPending()).notifications || [];
-        const premieres = pending.filter((n) => n.id < ARRIVAL_ID); // los avisos de «ya está en…» no se tocan
+        // Cada modo reprograma solo los suyos (pelis por debajo de SHOW_ID, series entre SHOW_ID y ARRIVAL_ID);
+        // los avisos de «ya está en…» no se tocan
+        const premieres = pending.filter((n) => (SERIES_MODE ? n.id >= SHOW_ID : n.id < SHOW_ID) && n.id < ARRIVAL_ID);
         if (premieres.length) await ln.cancel({ notifications: premieres.map((n) => ({ id: n.id })) });
         if (!items.length) return;
         await ln.schedule({ notifications: items.map(({ m, at }, i) => ({
-          id: Number(m.tmdb) || 100000 + i,
-          title: `¡Hoy se estrena «${m.title}»!`,
-          body: "La tienes guardada en Cinder. Toca para ver la ficha.",
+          id: (m.kind === "tv" ? SHOW_ID : 0) + (Number(m.tmdb) || 100000 + i),
+          title: m.kind === "tv" ? `Nuevo capítulo de «${m.title}»` : `¡Hoy se estrena «${m.title}»!`,
+          body: m.kind === "tv" ? `Hoy sale el T${m.next.s} · E${m.next.e}. Toca para ver la ficha.` : "La tienes guardada en Cinder. Toca para ver la ficha.",
           schedule: { at, allowWhileIdle: true },
           smallIcon: "ic_stat_cinder",
           iconColor: "#E0414B",
