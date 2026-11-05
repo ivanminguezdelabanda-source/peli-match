@@ -96,9 +96,13 @@ jobs:
         run: |
           npx -y esbuild@0.24.2 js/app.js js/cloud.js js/taste.js js/import.js --target=chrome69,safari12,firefox68 --outdir=js --allow-overwrite --log-level=warning
           npx -y esbuild@0.24.2 styles.css --target=chrome69,safari12,firefox68 --outfile=styles.css --allow-overwrite --log-level=warning
-      # Cada publicación pide CSS y JS nuevos, para que el navegador no mezcle versiones
+      # Cada cambio de código pide CSS y JS nuevos, para que el navegador no mezcle versiones. La versión sale del
+      # propio código (no del commit): las publicaciones que solo traen datos nuevos (varias al día) no la cambian,
+      # así la web no se recarga sola al abrirla (cortaba la animación de inicio)
       - name: Marcar la versión de los archivos
-        run: echo "${GITHUB_SHA::8}" > version.txt && sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" index.html accion.html terminos.html login-app.html privacidad.html borrar-cuenta.html js/app.js
+        run: |
+          V=$(cat *.html js/*.js styles.css | sha1sum | cut -c1-8)
+          echo "$V" > version.txt && sed -i "s/?v=dev/?v=$V/g" index.html accion.html terminos.html login-app.html privacidad.html borrar-cuenta.html js/app.js
       - name: No publicar las dependencias del Worker ni el proyecto de Android
         run: rm -rf worker/node_modules android-app
       - uses: actions/configure-pages@v5

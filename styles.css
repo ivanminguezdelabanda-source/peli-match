@@ -973,3 +973,7 @@ html.event-halloween .event-go { background: linear-gradient(135deg, #ff7a1a, #b
 .import-big { margin: 0; font-size: 17px; }
 .import-list { margin: 6px 0 0; padding-left: 4px; list-style: none; display: grid; gap: 4px; font-size: 14px; }
 .import-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Cada plataforma de «Dónde verla» abre la peli en esa plataforma */
+a.prov { color: var(--text); text-decoration: none; }
+a.prov:active { transform: scale(.97); }
+.prov-go { font-size: 11px; color: var(--muted); margin-left: -2px; }

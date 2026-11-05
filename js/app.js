@@ -182,9 +182,29 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const shortTime = (min) => (!min ? "—" : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}`);
   const trailerUrl = (m) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${m.title} ${m.year} tráiler español`)}`;
   const whereUrl = (m) => m.providersLink || `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(m.title)}`;
-  // Plataformas con su logo (los logos los guarda la sincronización de TMDB)
-  const provList = (names) => `<ul class="prov-list">${names.map((p) => `<li class="prov">${LOGOS[p]
-    ? `<img src="https://image.tmdb.org/t/p/w92${esc(LOGOS[p])}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span>${esc(p)}</span></li>`).join("")}</ul>`;
+  // Plataformas con su logo (los logos los guarda la sincronización de TMDB). Cada una es un enlace que abre
+  // la peli o serie en esa plataforma (su buscador con el título: en el móvil se abre su app si la tienes).
+  // TMDB no da el enlace exacto de cada plataforma; las que no tienen buscador conocido van a la página de TMDB
+  // con todas las opciones, que sí lleva a la peli en cada plataforma.
+  const SEARCH = {
+    "Netflix": "https://www.netflix.com/search?q=",
+    "Amazon Prime Video": "https://www.primevideo.com/search?phrase=",
+    "Amazon Video": "https://www.primevideo.com/search?phrase=",
+    "Disney Plus": "https://www.disneyplus.com/es-es/search?q=",
+    "HBO Max": "https://play.hbomax.com/search?q=",
+    "Filmin": "https://www.filmin.es/buscador?q=",
+    "Filmin Plus": "https://www.filmin.es/buscador?q=",
+    "Apple TV": "https://tv.apple.com/es/search?term=",
+    "Apple TV Store": "https://tv.apple.com/es/search?term=",
+    "Rakuten TV": "https://www.rakuten.tv/es/search?q=",
+    "MUBI": "https://mubi.com/es/search/films?query=",
+    "Crunchyroll": "https://www.crunchyroll.com/es/search?q=",
+    "Google Play Movies": "https://play.google.com/store/search?c=movies&q=",
+    "YouTube": "https://www.youtube.com/results?search_query=",
+  };
+  const platformUrl = (p, m) => SEARCH[platform(p)] ? SEARCH[platform(p)] + encodeURIComponent(m.title) : whereUrl(m);
+  const provList = (names, m) => `<ul class="prov-list">${names.map((p) => `<li><a class="prov" href="${esc(platformUrl(p, m))}" target="_blank" rel="noopener" aria-label="Ver «${esc(m.title)}» en ${esc(p)}">${LOGOS[p]
+    ? `<img src="https://image.tmdb.org/t/p/w92${esc(LOGOS[p])}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span>${esc(p)}</span><span class="prov-go" aria-hidden="true">↗</span></a></li>`).join("")}</ul>`;
   function whereBlock(m) {
     if (!m.providers) return "";
     // «Netflix Standard with Ads» o «HBO Max Amazon Channel» se enseñan como su plataforma, sin repetir
@@ -193,8 +213,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     m = { ...m, providers: flat };
     let body;
     if (m.providers.length || pay.length) {
-      body = (m.providers.length ? `<p class="where-kind">Incluida en</p>${provList(m.providers)}` : "")
-        + (pay.length ? `<p class="where-kind">Alquiler o compra</p>${provList(pay)}` : "");
+      body = (m.providers.length ? `<p class="where-kind">Incluida en</p>${provList(m.providers, m)}` : "")
+        + (pay.length ? `<p class="where-kind">Alquiler o compra</p>${provList(pay, m)}` : "");
     } else {
       body = `<p style="margin:0;color:var(--muted)">${upcoming(m)
         ? "Todavía no se ha estrenado." : "Ahora mismo no está en ninguna plataforma en España."}</p>`;
@@ -3972,10 +3992,13 @@ async function loadData(url) {
   }
 }
 // Catálogo: la copia guardada al momento (y si tiene más de 6 horas se renueva para la próxima vez); si no hay copia, se descarga
+// La entrada del logo (1,5 s) va primero: leer el catálogo (varios MB) bloquea el móvil y la animación se cortaba
+const INTRO = new Promise((ok) => setTimeout(ok, 1500));
 async function loadCatalog(url = "data/movies.json") {
   const cache = await openCache();
   const old = cache && (await cache.match(url).catch(() => null));
   if (old && Date.now() - Number(old.headers.get("x-guardado") || 0) < 6 * 3600e3) {
+    await INTRO;
     const data = await old.json().catch(() => null);
     if (data) return data;
   }
@@ -3983,10 +4006,11 @@ async function loadCatalog(url = "data/movies.json") {
     .then(async (text) => { await saveCopy(cache, url, text); return text; });
   if (old) {
     fresh.catch(() => {});
+    await INTRO;
     const data = await old.json().catch(() => null);
     if (data) return data;
   }
-  return fresh.then((t) => JSON.parse(t)).catch(() => null); // abierto como archivo o sin red
+  return fresh.then(async (t) => { await INTRO; return JSON.parse(t); }).catch(() => null); // abierto como archivo o sin red
 }
 
 // Carga las pelis de TMDB (data/movies.json, generado por scripts/sync-tmdb.mjs).
