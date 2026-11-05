@@ -16,10 +16,6 @@ on:
         description: "Descargar también las series"
         type: boolean
         default: true
-      cines:
-        description: "Descargar también las carteleras de los cines"
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -68,29 +64,12 @@ jobs:
           git add data/
           # main puede haber avanzado mientras se descargaba el catálogo (tarda): se suben los datos encima
           git diff --cached --quiet || (git commit -m "Actualizar catálogo de TMDB [datos]" && git pull --rebase -q origin main && git push)
-      # Carteleras de los cines (cambian cada día y ocupan bastante): no van en main, sino en la rama datos-cines,
-      # que solo guarda la última versión (sin historial). Cada publicación las copia a data/cines/.
-      - name: Descargar carteleras de los cines
-        id: cines
-        if: (github.event_name == 'workflow_dispatch' && inputs.cines) || github.event.schedule == '0 4 * * *'
-        continue-on-error: true # si falla, se publica con las carteleras anteriores
-        run: node scripts/sync-cines.mjs /tmp/cines
-      - name: Guardar carteleras
-        if: steps.cines.outcome == 'success'
-        run: |
-          cd /tmp/cines
-          git init -q -b datos-cines
-          git config user.name "github-actions[bot]"
-          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git add -A && git commit -qm "Carteleras de los cines [datos]"
-          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" datos-cines
+      # Carteleras de los cines: las descarga cines.yml en la rama datos-cines; aquí solo se copian a data/cines/
       - name: Copiar carteleras a la web
         continue-on-error: true
         run: |
-          if [ -d /tmp/cines ] && [ "${{ steps.cines.outcome }}" = "success" ]; then cp -r /tmp/cines data/cines
-          elif git fetch -q --depth=1 origin datos-cines; then mkdir -p data/cines && git --work-tree=data/cines checkout FETCH_HEAD -- . && git reset -q
-          fi
-          rm -rf data/cines/.git; ls data/cines | wc -l
+          if git fetch -q --depth=1 origin datos-cines; then mkdir -p data/cines && git --work-tree=data/cines checkout FETCH_HEAD -- . && git reset -q; fi
+          ls data/cines | wc -l
       # IA de «Para ti»: solo si están los secretos ANTHROPIC_API_KEY, CLOUDFLARE_API_TOKEN y CLOUDFLARE_ACCOUNT_ID
       - name: Comprobar si la IA está configurada
         id: hasia

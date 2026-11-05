@@ -117,17 +117,32 @@ async function main() {
 
   await rm(OUT, { recursive: true, force: true });
   await mkdir(OUT, { recursive: true });
+  // La descarga anterior (CINES_PREV): lo que no dé tiempo a bajar hoy se queda como estaba (si es de hace
+  // menos de 4 días); se baja primero lo que más tiempo lleva sin actualizar
+  const PREV = process.env.CINES_PREV;
+  const prev = {};
+  if (PREV) {
+    const old = JSON.parse(await readFile(`${PREV}/index.json`, "utf8").catch(() => "{}"));
+    for (const c of old.cinemas || []) {
+      const file = JSON.parse(await readFile(`${PREV}/${c.id}.json`, "utf8").catch(() => "null"));
+      if (file) prev[c.id] = { c, file };
+    }
+  }
+  theaters.sort((a, b) => (prev[a.id]?.file.updated || "").localeCompare(prev[b.id]?.file.updated || ""));
+  const deadline = Date.now() + (Number(process.env.CINES_MINUTES) || 70) * 60e3;
   const index = [];
+  const done = new Set();
   let next = 0, withFilms = 0;
   const failed = [];
   let queue = theaters;
   async function worker() {
-    while (next < queue.length) {
+    while (next < queue.length && Date.now() < deadline) {
       const t = queue[next++];
       const html = await get(`theater-showtimes.php?id=${t.id}`);
       if (!html) { failed.push(t); continue; }
       const d = parseTheater(html, today, last);
       if (d.lat == null) { stats.nomap = (stats.nomap || 0) + 1; continue; } // sin sitio en el mapa no se puede ordenar por distancia
+      done.add(t.id);
       index.push({ id: t.id, name: t.name, city: t.city, prov: t.prov, addr: t.addr, lat: d.lat, lon: d.lon, screens: d.screens, films: d.films.length });
       if (d.films.length) withFilms++;
       await writeFile(`${OUT}/${t.id}.json`, JSON.stringify({ id: t.id, name: t.name, city: t.city, addr: t.addr, web: d.web, screens: d.screens, updated: today, films: d.films }));
@@ -136,17 +151,30 @@ async function main() {
   }
   await Promise.all(Array.from({ length: LOCAL ? 1 : 2 }, worker));
   // Los que han fallado, otra vez al final y de uno en uno, tras una pausa
-  if (failed.length && !LOCAL) {
+  if (failed.length && !LOCAL && Date.now() < deadline - 5 * 60e3) {
     console.log(`${failed.length} cines fallidos, se reintentan`, stats);
     await sleep(60000);
     queue = failed.splice(0); next = 0;
     await worker();
   }
   console.log("Errores:", stats, `sin descargar: ${failed.length}`);
+  // Los que no se han podido bajar hoy: la versión anterior, quitando los pases que ya han pasado
+  const limit = new Date(Date.now() - 4 * 864e5).toISOString().slice(0, 10);
+  let kept = 0;
+  for (const t of theaters) {
+    const p = prev[t.id];
+    if (done.has(t.id) || !p || p.file.updated < limit) continue;
+    p.file.films = p.file.films.map((f) => ({ ...f, versions: f.versions.map((v) => ({ ...v, days: Object.fromEntries(Object.entries(v.days).filter(([d]) => d >= today)) }))
+      .filter((v) => Object.keys(v.days).length) })).filter((f) => f.versions.length);
+    await writeFile(`${OUT}/${t.id}.json`, JSON.stringify(p.file));
+    index.push({ ...p.c, films: p.file.films.length });
+    if (p.file.films.length) withFilms++;
+    kept++;
+  }
   index.sort((a, b) => a.id - b.id);
   await writeFile(`${OUT}/index.json`, JSON.stringify({ updated: today, source: "FilmAffinity", cinemas: index }));
-  console.log(`::notice::Cines: ${theaters.length} en la lista, ${index.length} guardados, ${withFilms} con cartelera, sin descargar ${failed.length}, errores ${JSON.stringify(stats)}`);
-  if (!LOCAL && withFilms < 100) throw new Error("Muy pocos cines con cartelera: la web habrá cambiado");
+  console.log(`::notice::Cines: ${theaters.length} en la lista, ${index.length} guardados, ${withFilms} con cartelera, de la vez anterior ${kept}, sin descargar ${failed.length + Math.max(0, queue.length - next)}, errores ${JSON.stringify(stats)}`);
+  if (!LOCAL && withFilms < 60) throw new Error("Muy pocos cines con cartelera: la web habrá cambiado");
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

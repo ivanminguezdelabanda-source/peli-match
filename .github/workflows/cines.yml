@@ -1,0 +1,52 @@
+name: Carteleras de los cines
+
+# Las carteleras de todos los cines (FilmAffinity) tardan en bajarse porque se piden despacio. Van aparte para no
+# frenar la publicación de la web: se guardan en la rama datos-cines (solo la última versión, sin historial) y
+# después se lanza «Sincronizar TMDB y publicar», que las copia a data/cines/. Dos veces al día; lo que no dé
+# tiempo a bajar se queda como estaba la vez anterior.
+on:
+  schedule:
+    - cron: "30 2,13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: cines
+  cancel-in-progress: false
+
+jobs:
+  cines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Carteleras anteriores
+        run: |
+          mkdir -p /tmp/prev
+          if git fetch -q --depth=1 origin datos-cines; then git --work-tree=/tmp/prev checkout FETCH_HEAD -- . && git reset -q; fi
+          ls /tmp/prev | wc -l
+      - name: Descargar carteleras
+        run: node scripts/sync-cines.mjs /tmp/cines
+        env:
+          CINES_PREV: /tmp/prev
+          CINES_MINUTES: 70
+      - name: Guardar carteleras
+        run: |
+          cd /tmp/cines
+          git init -q -b datos-cines
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Carteleras de los cines [datos]"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" datos-cines
+      - name: Publicar la web con las carteleras nuevas
+        run: gh workflow run sync-and-deploy.yml --ref main -f catalogo=false -f series=false
+        env:
+          GH_TOKEN: ${{ github.token }}
