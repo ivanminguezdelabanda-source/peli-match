@@ -47,6 +47,6 @@ jobs:
           git add -A && git commit -qm "Carteleras de los cines [datos]"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" datos-cines
       - name: Publicar la web con las carteleras nuevas
-        run: gh workflow run sync-and-deploy.yml --ref main -f catalogo=false -f series=false
+        run: for i in 1 2 3 4; do gh workflow run sync-and-deploy.yml --ref main -f catalogo=false -f series=false && exit 0; sleep $((i * 20)); done; exit 1
         env:
           GH_TOKEN: ${{ github.token }}
