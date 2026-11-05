@@ -12,6 +12,7 @@ const BASE = "https://www.filmaffinity.com/es/";
 const LOCAL = process.env.CINES_LOCAL;
 const DAYS = 7;
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
+const stats = {};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function get(path) {
@@ -20,13 +21,16 @@ async function get(path) {
       : path.startsWith("theaters.php?state=") ? `state-${path.split("=")[1]}.html` : `theater-${path.split("=")[1]}.html`;
     return readFile(`${LOCAL}/${name}`, "utf8").catch(() => "");
   }
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     try {
       const r = await fetch(BASE + path, { headers: { "User-Agent": UA, "Accept-Language": "es-ES,es;q=0.9" } });
       if (r.ok) return await r.text();
+      stats["http" + r.status] = (stats["http" + r.status] || 0) + 1;
       if (r.status === 404) return "";
-    } catch {}
-    await sleep(3000 * (i + 1));
+      // Demasiadas peticiones: se espera más (lo que pida la web, o cada vez más)
+      if (r.status === 429 || r.status >= 500) await sleep((Number(r.headers.get("retry-after")) || 0) * 1000 || 10000 * (i + 1));
+    } catch { stats.neterr = (stats.neterr || 0) + 1; }
+    await sleep(2000 * (i + 1));
   }
   return "";
 }
@@ -115,23 +119,33 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   const index = [];
   let next = 0, withFilms = 0;
+  const failed = [];
+  let queue = theaters;
   async function worker() {
-    while (next < theaters.length) {
-      const t = theaters[next++];
+    while (next < queue.length) {
+      const t = queue[next++];
       const html = await get(`theater-showtimes.php?id=${t.id}`);
-      if (!html) continue;
+      if (!html) { failed.push(t); continue; }
       const d = parseTheater(html, today, last);
-      if (d.lat == null) continue; // sin sitio en el mapa no se puede ordenar por distancia
+      if (d.lat == null) { stats.nomap = (stats.nomap || 0) + 1; continue; } // sin sitio en el mapa no se puede ordenar por distancia
       index.push({ id: t.id, name: t.name, city: t.city, prov: t.prov, addr: t.addr, lat: d.lat, lon: d.lon, screens: d.screens, films: d.films.length });
       if (d.films.length) withFilms++;
       await writeFile(`${OUT}/${t.id}.json`, JSON.stringify({ id: t.id, name: t.name, city: t.city, addr: t.addr, web: d.web, screens: d.screens, updated: today, films: d.films }));
-      if (!LOCAL) await sleep(500);
+      if (!LOCAL) await sleep(900);
     }
   }
-  await Promise.all(Array.from({ length: LOCAL ? 1 : 4 }, worker));
+  await Promise.all(Array.from({ length: LOCAL ? 1 : 2 }, worker));
+  // Los que han fallado, otra vez al final y de uno en uno, tras una pausa
+  if (failed.length && !LOCAL) {
+    console.log(`${failed.length} cines fallidos, se reintentan`, stats);
+    await sleep(60000);
+    queue = failed.splice(0); next = 0;
+    await worker();
+  }
+  console.log("Errores:", stats, `sin descargar: ${failed.length}`);
   index.sort((a, b) => a.id - b.id);
   await writeFile(`${OUT}/index.json`, JSON.stringify({ updated: today, source: "FilmAffinity", cinemas: index }));
-  console.log(`${index.length} cines guardados, ${withFilms} con cartelera`);
+  console.log(`::notice::Cines: ${theaters.length} en la lista, ${index.length} guardados, ${withFilms} con cartelera, sin descargar ${failed.length}, errores ${JSON.stringify(stats)}`);
   if (!LOCAL && withFilms < 100) throw new Error("Muy pocos cines con cartelera: la web habrá cambiado");
 }
 
