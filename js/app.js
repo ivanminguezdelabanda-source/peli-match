@@ -3815,7 +3815,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
           const b = el("button", "cine-main", `
             <span class="cine-name">${esc(c.name)}</span>
             <span class="cine-meta">${kmText(c.km)} · ${esc(c.city)}${c.addr ? " · " + esc(c.addr) : ""}</span>
-            <span class="cine-go">${c.films ? `${c.films} ${c.films === 1 ? "peli" : "pelis"} en cartelera` : "Horarios en su web"} ›</span>`);
+            <span class="cine-go">${c.films ? `${c.films} ${c.films === 1 ? "peli" : "pelis"} en cartelera` : c.pending ? "Ver horarios" : "Horarios en su web"} ›</span>`);
           b.type = "button";
           b.onclick = () => openCinema(c, m);
           li.append(b);
@@ -3881,7 +3881,10 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const data = await loadCine(c.id);
     if (data?.web) links.insertAdjacentHTML("beforeend", `<a href="${esc(data.web)}" target="_blank" rel="noopener">Web del cine</a>`);
     if (!data?.films?.length) {
-      films.replaceChildren(el("li", "cines-msg", data?.web
+      const google = `https://www.google.com/search?q=${encodeURIComponent(`cartelera ${c.name} ${c.city}`)}`;
+      films.replaceChildren(el("li", "cines-msg", data?.pending
+        ? `Aún no tenemos la cartelera de este cine (se va actualizando a lo largo del día). Mientras, mira <a href="${esc(google)}" target="_blank" rel="noopener">sus horarios en Google</a>.`
+        : data?.web
         ? `Este cine no publica sus horarios en FilmAffinity. Los tienes en <a href="${esc(data.web)}" target="_blank" rel="noopener">su web</a>.`
         : "Este cine no tiene cartelera publicada estos días."));
       return;

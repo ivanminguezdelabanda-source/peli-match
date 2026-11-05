@@ -2,11 +2,11 @@ name: Carteleras de los cines
 
 # Las carteleras de todos los cines (FilmAffinity) tardan en bajarse porque se piden despacio. Van aparte para no
 # frenar la publicación de la web: se guardan en la rama datos-cines (solo la última versión, sin historial) y
-# después se lanza «Sincronizar TMDB y publicar», que las copia a data/cines/. Dos veces al día; lo que no dé
+# después se lanza «Sincronizar TMDB y publicar», que las copia a data/cines/. Cada 4 horas (FilmAffinity frena si se le pide mucho de golpe); lo que no dé
 # tiempo a bajar se queda como estaba la vez anterior.
 on:
   schedule:
-    - cron: "30 2,13 * * *"
+    - cron: "20 1,5,9,13,17,21 * * *"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +20,7 @@ concurrency:
 jobs:
   cines:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,7 +37,7 @@ jobs:
         run: node scripts/sync-cines.mjs /tmp/cines
         env:
           CINES_PREV: /tmp/prev
-          CINES_MINUTES: 70
+          CINES_MINUTES: 45
       - name: Guardar carteleras
         run: |
           cd /tmp/cines
