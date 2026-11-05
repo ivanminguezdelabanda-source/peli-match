@@ -1,0 +1,23 @@
+name: probe cines
+on: { push: { branches: [probe-cines] } }
+permissions: { contents: write }
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p probe; cd probe
+          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+          get(){ curl -sSL -m 30 -A "$UA" -H "Accept-Language: es-ES" -o "$1" -w "$1 %{http_code} %{size_download} %{url_effective}\n" "$2" >> codes.txt || echo "$1 FAIL" >> codes.txt; }
+          get ec-cines.html https://www.ecartelera.com/cines/
+          get ec-madrid.html https://www.ecartelera.com/cines/0,0,28.html
+          get sc-cines.html https://www.sensacine.com/cines/
+          get fa-th.html "https://www.filmaffinity.com/es/theaters.php"
+          get gdo.html https://www.guiadelocio.com/cine/cartelera
+          get abc.html https://www.abc.es/play/cine/cartelera/
+          get photon.json "https://photon.komoot.io/api/?q=28013&limit=3"
+          cat codes.txt
+      - run: |
+          git config user.name probe; git config user.email probe@users.noreply.github.com
+          git add probe; git commit -qm probe; git push -q origin HEAD:probe-cines
