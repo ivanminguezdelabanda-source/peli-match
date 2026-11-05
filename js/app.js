@@ -64,15 +64,16 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     reported: [], // reseñas ya denunciadas desde aquí ("peli/autor")
   };
   Object.assign(state, store.load() || {});
-  // La primera vez en modo Series se parte de lo que ya sabe de tus pelis: la encuesta, el tutorial y tus gustos
-  // (géneros, actores…), así «Para ti» acierta desde el principio sin repetir la encuesta
+  // La primera vez en modo Series se hace la encuesta de series; de las pelis se aprovechan el tutorial y tus gustos
+  // (géneros, actores…) para que lo que recomiende ya se parezca a lo tuyo
   if (SERIES_MODE) {
     try {
       const pm = JSON.parse(localStorage.getItem("pelimatch:v1") || "null");
       // Invitado o no: lo mismo en los dos modos
       if (pm && state.guest === undefined) state.guest = Boolean(pm.guest);
+      // Quien entró a Series antes de que tuviera su propia encuesta (llevaba la de pelis): se la hace ahora, una vez
+      if (state.profile && !("length" in state.profile)) { state.profile = null; state.weekly = null; }
       if (state.profile || state.taste) throw 0;
-      if (pm?.profile) state.profile = { ...pm.profile, favs: [] };
       if (pm?.tourDone) state.tourDone = true;
       if (pm?.taste) state.taste = pm.taste;
       if (pm?.owner) state.owner = pm.owner;
@@ -972,12 +973,20 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const MOOD_GENRES = {
     "Reírme": ["Comedia"],
     "Emocionarme": ["Drama", "Romance"],
-    "Pasar miedo": ["Terror", "Suspense", "Thriller"],
-    "Adrenalina": ["Acción", "Aventura", "Suspense", "Thriller"],
+    "Pasar miedo": ["Terror", "Suspense", "Thriller", ...(SERIES_MODE ? ["Misterio", "Crimen"] : [])],
+    "Adrenalina": ["Acción", "Aventura", "Suspense", "Thriller", ...(SERIES_MODE ? ["Bélica"] : [])],
     "Pensar": ["Ciencia ficción", "Misterio", "Drama", "Documental"],
     "Algo ligero": ["Comedia", "Animación", "Familia", "Familiar"],
     "Misterio": ["Misterio", "Crimen", "Suspense", "Thriller"],
     "Otro mundo": ["Fantasía", "Ciencia ficción", "Aventura", "Animación"],
+  };
+  // Encuesta de series: cuántas temporadas te apetecen
+  const LENGTHS = {
+    "Me da igual": null,
+    "Miniseries (una temporada)": (m) => m.seasons.length === 1,
+    "Cortas (2 o 3 temporadas)": (m) => m.seasons.length >= 2 && m.seasons.length <= 3,
+    "Largas, para engancharme": (m) => m.seasons.length >= 4,
+    "Ya terminadas, para verlas del tirón": (m) => Boolean(m.end),
   };
   const ERAS = {
     "Me da igual": null,
@@ -991,13 +1000,16 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     { key: "genres", q: "¿Tus géneros favoritos?", hint: "Elige los que más te gusten.", type: "multi", options: ALL_GENRES, required: true },
     { key: "favs", q: "Dime hasta 3 pelis que te encanten", hint: "Busco otras parecidas: mismo director, reparto, géneros y época.", type: "search" },
     { key: "note", q: "¿Algo más que deba saber?", hint: "Opcional. Escríbelo con tus palabras: «algo que me deje pensando», «nada de finales tristes», «como Amélie pero más moderna»…", type: "text", aiOnly: true },
-    { key: "time", q: "¿Cuánto tiempo tienes?", type: "single", options: TIMES.map((t) => t.label) },
+    ...(SERIES_MODE ? [
+      { key: "length", q: "¿Cómo te gustan las series?", type: "single", options: Object.keys(LENGTHS) },
+      { key: "time", q: "¿Cuánto te gusta que duren los capítulos?", type: "single", options: TIMES.map((t) => t.label) },
+    ] : [{ key: "time", q: "¿Cuánto tiempo tienes?", type: "single", options: TIMES.map((t) => t.label) }]),
     { key: "era", q: "¿De qué época?", type: "single", options: Object.keys(ERAS) },
     { key: "platforms", q: "¿Qué plataformas tienes?", hint: "Si marcas alguna, te priorizo lo que puedes ver ya. Si no, sáltalo.", type: "multi", options: PROVIDERS, skipIfEmpty: true },
     { key: "avoid", q: "¿Algo que prefieras evitar?", hint: "Opcional.", type: "multi", options: ALL_GENRES },
   ].filter((s) => (!s.skipIfEmpty || s.options.length) && (!s.aiOnly || AI_URL));
 
-  const emptyProfile = () => ({ company: null, moods: [], genres: [], favs: [], time: TIMES[0].label, era: "Me da igual", platforms: [], avoid: [], note: "" });
+  const emptyProfile = () => ({ company: null, moods: [], genres: [], favs: [], time: TIMES[0].label, era: "Me da igual", length: "Me da igual", platforms: [], avoid: [], note: "" });
   let draft = null;     // respuestas mientras se hace la encuesta
   let stepIdx = 0;
   let results = null;   // [{ m, score, reasons }]
@@ -1043,6 +1055,9 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       if (shared >= 2 && sim < 3.5) reasons.push([shared, `Parecida a «${f.title}»`]);
       s += sim;
     }
+
+    const fits = SERIES_MODE && LENGTHS[p.length];
+    if (fits) s += fits(m) ? add(1.8, p.length === "Me da igual" ? "" : `Como te gustan: ${p.length.toLowerCase()}`) : -1.5;
 
     const era = ERAS[p.era];
     if (era) s += m.year >= era[0] && m.year <= era[1] ? add(1.4, "") : -1;
