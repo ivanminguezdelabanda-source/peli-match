@@ -1,0 +1,8 @@
+ec-cines.html 200 124402 https://www.ecartelera.com/cartelera/
+ec-madrid.html 404 26934 https://www.ecartelera.com/cines/0,0,28.html
+sc-cines.html 200 214819 https://www.sensacine.com/cines/
+fa-th.html 200 111086 https://www.filmaffinity.com/es/theaters.php
+gdo.html 000 0 https://www.guiadelocio.com/cine/cartelera
+gdo.html FAIL
+abc.html 200 289215 https://www.abc.es/play/cine/
+photon.json 200 1220 https://photon.komoot.io/api/?q=28013&limit=3
