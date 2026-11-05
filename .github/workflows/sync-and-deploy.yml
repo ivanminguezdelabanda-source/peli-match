@@ -12,6 +12,10 @@ on:
         description: "Descargar también el catálogo completo (tarda bastante)"
         type: boolean
         default: true
+      series:
+        description: "Descargar también las series"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -38,6 +42,12 @@ jobs:
       - name: Descargar pelis de TMDB
         if: (github.event_name == 'workflow_dispatch' && inputs.catalogo) || github.event.schedule == '0 4 * * *'
         run: node scripts/sync-tmdb.mjs
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      - name: Descargar series de TMDB
+        if: (github.event_name == 'workflow_dispatch' && inputs.series) || github.event.schedule == '0 4 * * *'
+        continue-on-error: true # si falla, se publica con las series anteriores
+        run: node scripts/sync-series.mjs
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
       - name: Descargar novedades y noticias
