@@ -15,7 +15,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   takeSharedLink();
 
   // ---------- Persistencia local (en la app móvil se cambiaría por almacenamiento nativo) ----------
-  const KEY = "pelimatch:v1";
+  // Cada modo guarda lo suyo: las pelis en «pelimatch:v1» y las series en «cinder:series:v1»
+  const KEY = SERIES_MODE ? "cinder:series:v1" : "pelimatch:v1";
   // Modo pruebas: cada recarga empieza de cero (bienvenida y encuesta). Poner a false para guardar entre visitas.
   const RESET_ON_LOAD = false;
   if (RESET_ON_LOAD) { try { localStorage.removeItem(KEY); } catch (e) { /* sin almacenamiento */ } }
@@ -27,7 +28,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const sessionDone = () => { try { localStorage.setItem(SESSION_KEY, String(SESSION_VERSION)); } catch (e) { /* sin almacenamiento */ } };
   try {
     if (localStorage.getItem(SESSION_KEY) !== String(SESSION_VERSION)) {
-      localStorage.removeItem(KEY);
+      localStorage.removeItem("pelimatch:v1");
+      localStorage.removeItem("cinder:series:v1");
       forceSignOut = true;
     }
   } catch (e) { /* sin almacenamiento */ }
@@ -60,9 +62,22 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     alerted: [],  // estrenos de los que ya se ha avisado dentro de la app
     blocked: [],  // autores de reseñas bloqueados (sus reseñas no se ven en este dispositivo)
     reported: [], // reseñas ya denunciadas desde aquí ("peli/autor")
-    series: {},   // { "tv-…": { st: "pending" | "watching" | "done", s: temporada, e: episodios vistos de esa temporada, at } }
   };
   Object.assign(state, store.load() || {});
+  // La primera vez en modo Series se parte de lo que ya sabe de tus pelis: la encuesta, el tutorial y tus gustos
+  // (géneros, actores…), así «Para ti» acierta desde el principio sin repetir la encuesta
+  if (SERIES_MODE) {
+    try {
+      const pm = JSON.parse(localStorage.getItem("pelimatch:v1") || "null");
+      // Invitado o no: lo mismo en los dos modos
+      if (pm && state.guest === undefined) state.guest = Boolean(pm.guest);
+      if (state.profile || state.taste) throw 0;
+      if (pm?.profile) state.profile = { ...pm.profile, favs: [] };
+      if (pm?.tourDone) state.tourDone = true;
+      if (pm?.taste) state.taste = pm.taste;
+      if (pm?.owner) state.owner = pm.owner;
+    } catch (e) { /* sin datos de pelis */ }
+  }
   const known = state.order.filter((id) => byId[id]);
   const fresh = MOVIES.map((m) => m.id).filter((id) => !known.includes(id));
   state.order = fresh.length ? [...known, ...shuffle(fresh)] : known;
@@ -73,7 +88,6 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   state.alerted = state.alerted || [];
   state.blocked = state.blocked || [];
   state.reported = state.reported || [];
-  state.series = state.series && typeof state.series === "object" ? state.series : {};
   let afterPersist = null; // con cuenta: sube los cambios a la nube (se activa más abajo)
   let afterSave = null;    // en la app de Android: vuelve a programar los avisos de estreno
   const persist = () => { store.save(state); if (afterPersist) afterPersist(); if (afterSave) afterSave(); queueBox(); };
@@ -105,7 +119,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     SPECIAL[EVENT.name] = EVENT.ok;
     document.documentElement.classList.add("event-" + EVENT.key);
   }
-  SPECIAL["⏱️ Corta y buena"] = (m) => m.runtime > 0 && m.runtime < 100 && (m.rating || 0) >= 7;
+  if (SERIES_MODE) SPECIAL["📺 Miniseries"] = (m) => m.seasons.length === 1 && Boolean(m.end) && (m.rating || 0) >= 7;
+  else SPECIAL["⏱️ Corta y buena"] = (m) => m.runtime > 0 && m.runtime < 100 && (m.rating || 0) >= 7;
   // Las del evento, primero las más del evento (etiqueta de TMDB y, en Halloween, de terror) y luego las mejor valoradas
   const eventMovies = () => !EVENT ? [] : MOVIES.filter((m) => EVENT.ok(m))
     .map((m) => ({ m, s: ((m.season || []).includes(EVENT.key) ? 1 : 0) + (EVENT.key === "halloween" && m.genres.includes("Terror") ? 1 : 0) }))
@@ -180,6 +195,10 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   // Los próximos estrenos pueden no tener duración todavía
   const fmtTime = (min) => (!min ? "Duración por confirmar" : min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min` : `${min} min`);
   const shortTime = (min) => (!min ? "—" : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}`);
+  // Años y duración: una peli dice «2019 · 2 h 05 min»; una serie, «2019–2023 · 4 temporadas»
+  const yearText = (m) => m.kind !== "tv" ? m.year : m.end ? (m.end === m.year ? m.year : `${m.year}–${m.end}`) : `${m.year}–`;
+  const lenText = (m) => m.kind === "tv" ? `${m.seasons.length} ${m.seasons.length === 1 ? "temporada" : "temporadas"}` : fmtTime(m.runtime);
+  const lenShort = (m) => m.kind === "tv" ? `${m.seasons.length} temp.` : shortTime(m.runtime);
   const trailerUrl = (m) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${m.title} ${m.year} tráiler español`)}`;
   const whereUrl = (m) => m.providersLink || `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(m.title)}`;
   // Plataformas con su logo (los logos los guarda la sincronización de TMDB). Cada una es un enlace que abre
@@ -236,7 +255,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const size = len > 30 ? " xlong" : len > 14 ? " long" : "";
     wrap.append(el("div", "poster-art", `
       <div>
-        <div class="poster-credit">${m.kind === "tv" ? "Una serie de" : "Una película de"} ${esc(m.director)}</div>
+        <div class="poster-credit">${m.kind === "tv" ? "Una serie" : "Una película"}${m.director && m.director !== "Desconocido" ? ` de ${esc(m.director)}` : ""}</div>
         <div class="poster-title${size}">${esc(m.title)}</div>
       </div>
       <div class="poster-year">${m.year}</div>`));
@@ -300,7 +319,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     c.append(el("span", "stamp stamp-nope", "PASO"));
     c.append(el("span", "stamp stamp-seen", "YA LA VI"));
     c.append(el("div", "card-info", `
-      <p class="card-meta">${m.year} · ${fmtTime(m.runtime)}</p>
+      <p class="card-meta">${yearText(m)} · ${lenText(m)}</p>
       <h2 class="card-title">${esc(m.title)}</h2>
       <p class="card-desc">${esc(m.desc || "Sin sinopsis todavía.")}</p>
       <ul class="chips">${m.genres.map((g) => `<li class="chip">${esc(g)}</li>`).join("")}</ul>`));
@@ -573,7 +592,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     btn.onclick = () => openSheet(m.id, from);
     li.append(btn);
     li.append(el("p", "tile-name", esc(m.title)));
-    li.append(el("p", "tile-meta", `${m.year} · ${shortTime(m.runtime)}`));
+    li.append(el("p", "tile-meta", m.kind === "tv" && entry(m.id) && !entry(m.id).watched && seenCount(m, entry(m.id))
+      ? esc(progressText(m, entry(m.id))) : `${yearText(m)} · ${lenShort(m)}`));
     return li;
   }
 
@@ -635,7 +655,13 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   $("#seg-watched").onclick = () => { showWatched = true; renderLibrary(); };
 
   // ---------- Caja: tira de carátulas que se desliza hasta parar en una al azar ----------
-  const TIMES = [
+  // En modo Series, el tiempo es lo que dura cada episodio
+  const TIMES = SERIES_MODE ? [
+    { label: "Sin prisa", max: Infinity },
+    { label: "Episodios de 1 h o menos", max: 60 },
+    { label: "De 45 min o menos", max: 45 },
+    { label: "De media hora", max: 30 },
+  ] : [
     { label: "Sin prisa", max: Infinity },
     { label: "Menos de 2h 30", max: 150 },
     { label: "Menos de 2 h", max: 120 },
@@ -874,7 +900,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       <div>
         <p class="result-label">Esta noche toca</p>
         <p class="result-title">${esc(m.title)}</p>
-        <p class="tile-meta">${m.year} · ${fmtTime(m.runtime)} · ${esc(m.genres.join(", "))}</p>
+        <p class="tile-meta">${yearText(m)} · ${lenText(m)} · ${esc(m.genres.join(", "))}</p>
       </div>`);
     const actions = el("div", "result-actions");
     const where = el("a", "btn btn-solid", `${ICON.tv} Dónde verla`);
@@ -1092,7 +1118,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     imp.type = "button";
     imp.onclick = () => { openImport = true; location.hash = "#cuenta"; };
     const footer = el("div", "match-footer");
-    footer.append(mine, redo, imp, tour);
+    footer.append(mine, redo, ...(SERIES_MODE ? [] : [imp]), tour);
     box.append(footer);
   }
 
@@ -1205,8 +1231,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     widgetSent = key;
     native.setWidget({
       id: m.id, title: m.title, poster: m.poster ? m.poster.replace("/w500/", "/w342/") : "",
-      meta: [m.year, fmtTime(m.runtime), m.rating != null ? `${m.rating.toFixed(1)}/10` : ""].filter(Boolean).join(" · "),
-      reason: String(w.reason || "").slice(0, 120), label: "Peli de la semana",
+      meta: [yearText(m), lenText(m), m.rating != null ? `${m.rating.toFixed(1)}/10` : ""].filter(Boolean).join(" · "),
+      reason: String(w.reason || "").slice(0, 120), label: SERIES_MODE ? "Serie de la semana" : "Peli de la semana",
     }).catch((e) => console.warn("Widget:", e));
   }
 
@@ -1221,7 +1247,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const pool = mine ? pending : MOVIES.filter((m) => m.poster && (m.rating ?? 0) >= 7 && !entry(m.id)?.watched);
     const items = shuffle(pool).slice(0, 60).map((m) => ({
       id: m.id, title: m.title, poster: m.poster ? m.poster.replace("/w500/", "/w342/") : "",
-      meta: [m.year, fmtTime(m.runtime), mine ? "de tus matches" : "al azar"].filter(Boolean).join(" · "),
+      meta: [yearText(m), lenText(m), mine ? "de tus matches" : "al azar"].filter(Boolean).join(" · "),
     }));
     // Si no cambia el conjunto de pelis, no se reenvía (y el widget conserva la que ya había salido)
     const key = (mine ? "m:" : "a:") + (mine ? pending.map((m) => m.id).sort().join(",") : "");
@@ -1252,7 +1278,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       <div>
         <p class="result-label">${esc(label)}</p>
         <p class="result-title">${esc(m.title)}</p>
-        <p class="tile-meta">${m.year} · ${fmtTime(m.runtime)}${m.rating != null ? ` · ${m.rating.toFixed(1)}/10` : ""}</p>
+        <p class="tile-meta">${yearText(m)} · ${lenText(m)}${m.rating != null ? ` · ${m.rating.toFixed(1)}/10` : ""}</p>
       </div>
       <p class="weekly-why">${esc(w.reason)}</p>`);
     const actions = el("div", "match-actions");
@@ -1616,7 +1642,6 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       lib: state.library.slice(-2000),
       passed: state.passed.slice(-3000),
       lists: state.lists.slice(0, 50),
-      series: Object.entries(state.series).slice(-1000).map(([id, e]) => ({ id, st: e.st, s: e.s, e: e.e, at: e.at })),
       savedAt: state.savedAt,
     };
   }
@@ -1654,7 +1679,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     Object.assign(state, {
       taste: null, profile: null, tourDone: false, weekly: null, library: [], passed: [], lists: [], history: [],
       myReviews: {}, reviewSignals: {}, order: shuffle(MOVIES.map((m) => m.id)), owner: null, savedAt: 0,
-      alerts: {}, alerted: [], blocked: [], reported: [], provSeen: null, series: {},
+      alerts: {}, alerted: [], blocked: [], reported: [], provSeen: null,
     });
     personal = discovery = results = null;
     forYou = [];
@@ -1672,7 +1697,6 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     state.library = (r.lib || []).filter((l) => l && byId[l.id]);
     state.passed = (r.passed || []).filter((id) => byId[id]);
     state.lists = (r.lists || []).map((l) => ({ ...l, ids: (l.ids || []).filter((id) => byId[id]) }));
-    if (Array.isArray(r.series)) state.series = Object.fromEntries(r.series.filter((x) => x && x.id && x.st).map((x) => [x.id, { st: x.st, s: x.s || 1, e: x.e || 0, at: x.at || 0 }]));
     state.savedAt = r.savedAt || 0;
     personal = discovery = results = null;
     forYou = [];
@@ -1766,6 +1790,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     if (!m) return false;
     const id = decodeURIComponent(m[1]);
     if (byId[id]) { pendingOpen = id; if (booted) route(); }
+    else if (id.startsWith("tv-") !== SERIES_MODE) switchMode(SERIES_MODE ? "pelis" : "series", "#peli/" + encodeURIComponent(id));
     return true;
   }
   if (NATIVE) {
@@ -2161,6 +2186,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   let openImport = false;
   const ratingSignal = (r) => r == null ? SIGNAL.seen : r >= 0.85 ? 1.4 : r >= 0.7 ? 0.9 : r >= 0.55 ? 0.3 : r >= 0.4 ? -0.3 : -1;
   function importSection() {
+    if (SERIES_MODE) return "";
     const sec = accountSection("Importar de Letterboxd o FilmAffinity", openImport);
     if (openImport) setTimeout(() => sec.scrollIntoView({ block: "start", behavior: "smooth" }), 80);
     openImport = false;
@@ -3024,8 +3050,14 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     if (slides.length) box.append(heroCarousel(slides));
     // Los próximos estrenos que tienes guardados o con aviso, por fecha
     const mine = premiereMovies().filter(upcoming).sort((a, b) => a.release.localeCompare(b.release)).map((m) => m.id);
-    [EVENT ? eventRow() : null, newsRow("Tus próximos estrenos", mine, true, true), newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true),
-      newsRow("Tendencias de la semana", NEWS.trending)]
+    // En modo Series: las que siguen en la biblioteca con capítulo nuevo pronto, las que estrenan capítulo y las de moda
+    const soon = SERIES_MODE ? MOVIES.filter((m) => m.next && m.next.date >= todayISO()).sort((a, b) => a.next.date.localeCompare(b.next.date)) : [];
+    (SERIES_MODE
+      ? [newsRow("Tus series con capítulo nuevo", soon.filter((m) => inLibrary(m.id)).map((m) => m.id), false, true),
+        newsRow("Capítulos nuevos esta semana", soon.filter((m) => m.next.date <= isoDay(new Date(Date.now() + 7 * 864e5))).map((m) => m.id)),
+        newsRow("Tendencias de la semana", NEWS.trending)]
+      : [EVENT ? eventRow() : null, newsRow("Tus próximos estrenos", mine, true, true), newsRow("En cines", NEWS.nowPlaying), newsRow("Próximos estrenos", NEWS.upcoming, true),
+        newsRow("Tendencias de la semana", NEWS.trending)])
       .forEach((sec) => sec && box.append(sec));
 
     // Noticias de webs de cine: titular, foto y un trozo; se leen en la web original
@@ -3137,15 +3169,18 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     body.append(top);
 
     const content = el("div", "sheet-content", `
+      ${m.kind === "tv" ? showInfo(m) : ""}
       ${upcoming(m) ? `<div class="release-box"><p><span class="section-label">Estreno en cines</span><b>${esc(longDay(m.release))}</b></p></div>` : ""}
       <dl class="facts">
-        <div class="fact"><dt>Año</dt><dd>${m.year}</dd></div>
-        <div class="fact"><dt>Duración</dt><dd>${fmtTime(m.runtime)}</dd></div>
+        <div class="fact"><dt>${m.kind === "tv" ? "Años" : "Año"}</dt><dd>${yearText(m)}</dd></div>
+        ${m.kind === "tv"
+          ? `<div class="fact"><dt>Temporadas</dt><dd>${m.seasons.length} <small>· ${m.episodes} ep.</small></dd></div>`
+          : `<div class="fact"><dt>Duración</dt><dd>${fmtTime(m.runtime)}</dd></div>`}
         <div class="fact"><dt>${m.rating != null ? "Nota" : "Género"}</dt><dd>${m.rating != null ? m.rating.toFixed(1) : esc(m.genres[0])}</dd></div>
       </dl>
       <p class="sheet-desc">${esc(m.desc || "Todavía no hay sinopsis.")}</p>
       <div>
-        <p class="section-label">Dirección</p>
+        <p class="section-label">${m.kind === "tv" ? "Creada por" : "Dirección"}</p>
         <p style="margin:0;font-weight:700">${esc(m.director)}</p>
       </div>
       ${m.cast && m.cast.length ? `<div><p class="section-label">Reparto</p><p style="margin:0">${esc(m.cast.join(", "))}</p></div>` : ""}
@@ -3169,6 +3204,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         </button>
       </div>
       <div class="sheet-actions" id="sheet-actions"></div>
+      ${m.kind === "tv" ? `<div class="show-eps" id="show-eps"></div>` : ""}
       <div class="sheet-more" id="sheet-more"></div>
       <section class="reviews" id="sheet-reviews" aria-label="Reseñas"></section>
       ${m.tmdb ? `<p class="credit">Datos e imágenes de TMDB. Plataformas: JustWatch.</p>` : ""}`);
@@ -3253,11 +3289,100 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     };
     drawActions();
 
+    if (m.kind === "tv") drawEpisodes(m, content.querySelector("#show-eps"), drawActions);
     renderReviews(id);
     sheet.hidden = backdrop.hidden = false;
     sheet.scrollTop = 0;
     $("#sheet-close").focus();
     if (opts.trailer && ytKey(m.trailer)) playTrailer(m, content);
+  }
+
+  // ---------- Series: capítulos vistos (modo Series) ----------
+  // Cada serie de la biblioteca guarda qué capítulos has visto, uno a uno: eps = { "1": "1101…" }
+  // (una cifra por capítulo de cada temporada). Al verlos todos pasa a «Vistas» (si la serie ya ha terminado).
+  const epsOf = (e, n, count) => String(e?.eps?.[n] || "").padEnd(count, "0").slice(0, count);
+  const seenCount = (m, e) => m.seasons.reduce((t, [n, c]) => t + epsOf(e, n, c).split("1").length - 1, 0);
+  function nextEp(m, e) {
+    for (const [n, c] of m.seasons) { const i = epsOf(e, n, c).indexOf("0"); if (i >= 0) return [n, i + 1]; }
+    return null;
+  }
+  function progressText(m, e) {
+    const seen = seenCount(m, e), nx = nextEp(m, e);
+    if (!nx) return m.status === "En emisión" ? "Al día" : "Vista entera";
+    return seen ? `Te toca T${nx[0]} · E${nx[1]} · ${Math.round((seen * 100) / m.episodes)} %` : "Empiezas T1 · E1";
+  }
+  function showInfo(m) {
+    const next = m.next && m.next.date >= todayISO()
+      ? `<div class="release-box"><p><span class="section-label">Próximo capítulo</span><b>T${m.next.s} · E${m.next.e} · ${esc(longDay(m.next.date))}</b></p></div>` : "";
+    const bits = [m.status, m.network, m.episodeTime ? `capítulos de unos ${m.episodeTime} min` : ""].filter(Boolean);
+    return `${next}${bits.length ? `<p class="show-status">${esc(bits.join(" · "))}</p>` : ""}`;
+  }
+  // Guarda los capítulos vistos de una temporada; añade la serie a la biblioteca si aún no estaba
+  function setEps(m, season, str) {
+    let e = entry(m.id);
+    if (!e) {
+      e = { id: m.id, at: Date.now(), watched: false };
+      state.library.push(e);
+      state.passed = state.passed.filter((x) => x !== m.id);
+      taste.learn(m, SIGNAL.like);
+      bumpCount();
+    }
+    e.eps = { ...(e.eps || {}), [season]: str.replace(/0+$/, "") };
+    if (!e.eps[season]) delete e.eps[season];
+    const done = !nextEp(m, e);
+    if (done && !e.watched && m.status !== "En emisión") { e.watched = true; toast(`¡Terminada! ${m.title} pasa a «Vistas»`); }
+    else if (!done && e.watched) e.watched = false;
+    persist();
+    refreshViews();
+  }
+  function drawEpisodes(m, box, onChange) {
+    const e = entry(m.id);
+    const seen = seenCount(m, e), nx = nextEp(m, e);
+    box.replaceChildren(el("p", "section-label", `Capítulos · ${seen} de ${m.episodes} vistos`));
+    box.append(el("div", "show-bar", `<span style="width:${((seen * 100) / (m.episodes || 1)).toFixed(1)}%"></span>`));
+    const redraw = () => { drawEpisodes(m, box, onChange); onChange?.(); };
+    if (nx) {
+      const go = el("button", "btn btn-solid", `${ICON.check} Visto T${nx[0]} · E${nx[1]}`);
+      go.type = "button";
+      go.onclick = () => {
+        const c = m.seasons.find((x) => x[0] === nx[0])[1];
+        const str = epsOf(entry(m.id), nx[0], c).split("");
+        str[nx[1] - 1] = "1";
+        setEps(m, nx[0], str.join(""));
+        redraw();
+      };
+      box.append(go);
+    } else box.append(el("p", "tile-meta", m.status === "En emisión" ? "Vas al día. Te avisamos con el próximo capítulo." : "La has visto entera."));
+    const list = el("div", "season-list");
+    m.seasons.forEach(([n, c, y]) => {
+      const str = epsOf(entry(m.id), n, c);
+      const count = str.split("1").length - 1;
+      const d = el("details", "season" + (count === c ? " done" : count ? " current" : ""));
+      d.open = Boolean(nx && nx[0] === n);
+      d.append(el("summary", "", `<span class="season-n">T${n}</span><span class="season-txt">${c} capítulos${y ? ` · ${y}` : ""}</span>
+        <span class="season-mark">${count === c ? "✓ Vista" : `${count}/${c}`}</span>`));
+      const grid = el("div", "ep-grid");
+      for (let i = 1; i <= c; i++) {
+        const on = str[i - 1] === "1";
+        const b = el("button", "ep" + (on ? " on" : ""), String(i));
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(on));
+        b.setAttribute("aria-label", `Temporada ${n}, capítulo ${i}: ${on ? "visto" : "sin ver"}`);
+        b.onclick = () => {
+          const cur = epsOf(entry(m.id), n, c).split("");
+          cur[i - 1] = cur[i - 1] === "1" ? "0" : "1";
+          setEps(m, n, cur.join(""));
+          redraw();
+        };
+        grid.append(b);
+      }
+      const all = el("button", "btn btn-ghost ep-all", count === c ? "Desmarcar la temporada" : "Marcar la temporada entera");
+      all.type = "button";
+      all.onclick = () => { setEps(m, n, (count === c ? "0" : "1").repeat(c)); redraw(); };
+      d.append(grid, all);
+      list.append(d);
+    });
+    box.append(list);
   }
 
   // ---------- Tráiler, compartir y avisos de estreno ----------
@@ -3441,6 +3566,9 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const e = entry(id);
     if (!e) return;
     e.watched = watched;
+    // Una serie vista entera: todos sus capítulos marcados
+    const m = byId[id];
+    if (watched && m.kind === "tv") e.eps = Object.fromEntries(m.seasons.map(([n, c]) => [n, "1".repeat(c)]));
     persist();
     refreshViews();
     toast(watched ? `Vista: ${byId[id].title}` : `Pendiente otra vez: ${byId[id].title}`);
@@ -3478,361 +3606,6 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     }, 7000);
   }
 
-  // ---------- Series: su propio apartado (data/series.json), separado de las pelis ----------
-  // No se mezclan con las pelis: no salen en Descubrir, la Biblioteca, la Caja ni Buscar. Tienen su pestaña,
-  // su lista («Mis series»: por ver, viendo y terminadas) y el seguimiento por episodio. El motor de gustos sí
-  // es el mismo, así que lo que te gusta en pelis (géneros, reparto…) ordena también las series.
-  let SERIES = null, seriesById = {}, seriesTrending = [], seriesLoad = null;
-  let seriesTab = "descubrir", seriesGenre = "Todas", seriesProv = "Cualquier sitio", seriesQuery = "", seriesMore = 0;
-  const SHOW_STATES = [["pending", "Por ver"], ["watching", "Viendo"], ["done", "Terminadas"]];
-  const myShow = (id) => state.series[id];
-  function loadSeries() {
-    if (!seriesLoad) {
-      seriesLoad = loadCatalog("data/series.json").then((data) => {
-        SERIES = (data?.series || []).filter((s) => s && s.id && s.title && Array.isArray(s.genres) && Array.isArray(s.seasons));
-        seriesById = Object.fromEntries(SERIES.map((s) => [s.id, s]));
-        seriesTrending = (data?.trending || []).filter((id) => seriesById[id]);
-        Object.assign(LOGOS, data?.logos || {});
-      }).catch(() => { SERIES = []; });
-    }
-    return seriesLoad;
-  }
-  const yearsOf = (s) => s.end ? (s.end === s.year ? String(s.year) : `${s.year}–${s.end}`) : `${s.year}–`;
-  const seasonsText = (n) => `${n} ${n === 1 ? "temporada" : "temporadas"}`;
-  const showMeta = (s) => `${yearsOf(s)} · ${s.seasons.length} temp.`;
-  const epsBefore = (s, season) => s.seasons.filter((x) => x[0] < season).reduce((n, x) => n + x[1], 0);
-  const epsIn = (s, season) => (s.seasons.find((x) => x[0] === season) || [0, 0])[1];
-  // Dónde vas: «Empiezas T1», «T2 · E5» o «Al día» / «Terminada»
-  function progressOf(s, e) {
-    const seen = Math.min(s.episodes, epsBefore(s, e.s) + e.e);
-    const pct = s.episodes ? seen / s.episodes : 0;
-    const last = s.seasons[s.seasons.length - 1];
-    const caught = e.s > last[0] || (e.s === last[0] && e.e >= last[1]);
-    const text = e.st === "done" ? "Terminada" : caught ? (s.status === "En emisión" ? "Al día" : "Vista entera")
-      : e.e === 0 ? `Empiezas T${e.s}` : `Vas por T${e.s} · E${e.e}`;
-    return { pct, text, caught };
-  }
-  function setShow(id, st) {
-    const s = seriesById[id];
-    const old = myShow(id);
-    if (!st) delete state.series[id];
-    else {
-      const e = old || { s: 1, e: 0 };
-      state.series[id] = { st, s: e.s, e: e.e, at: Date.now() };
-      if (st === "done") { const last = s.seasons[s.seasons.length - 1]; state.series[id].s = last[0]; state.series[id].e = last[1]; }
-      // Aprende como con las pelis: quererla ver o estar viéndola dice mucho; terminarla, algo menos
-      if (!old) taste.learn(s, st === "done" ? SIGNAL.seen : SIGNAL.like);
-    }
-    persist();
-    syncTaste();
-  }
-  // +1 episodio: pasa a la siguiente temporada al acabar una
-  function nextEpisode(id) {
-    const s = seriesById[id], e = myShow(id);
-    if (!s || !e) return;
-    const p = progressOf(s, e);
-    if (p.caught) return;
-    if (e.e >= epsIn(s, e.s)) { const nxt = s.seasons.find((x) => x[0] > e.s); if (nxt) { e.s = nxt[0]; e.e = 1; } }
-    else e.e += 1;
-    e.st = "watching";
-    e.at = Date.now();
-    if (progressOf(s, e).caught && s.status !== "En emisión") { e.st = "done"; toast(`¡Terminada! ${s.title}`); }
-    persist();
-    syncTaste();
-  }
-
-  function showTile(s, from) {
-    const e = myShow(s.id);
-    const li = el("li", "tile show-tile");
-    const btn = el("button", "tile-btn");
-    btn.type = "button";
-    btn.setAttribute("aria-label", `Ver ficha de ${s.title}`);
-    btn.append(poster(s));
-    if (e) btn.append(el("span", "show-badge show-" + e.st, e.st === "done" ? "VISTA" : e.st === "watching" ? "VIENDO" : "POR VER"));
-    btn.onclick = () => openShow(s.id, from);
-    li.append(btn, el("p", "tile-name", esc(s.title)), el("p", "tile-meta", showMeta(s)));
-    return li;
-  }
-  function showRow(title, list) {
-    if (!list.length) return null;
-    const sec = el("section", "news-section");
-    const head = el("div", "news-section-head");
-    head.append(el("h2", "news-section-title", esc(title)));
-    sec.append(head);
-    const ul = el("ul", "news-row");
-    list.forEach((s) => ul.append(showTile(s, "series")));
-    sec.append(ul);
-    return sec;
-  }
-  const showMatches = (s) => (seriesGenre === "Todas" || s.genres.includes(seriesGenre))
-    && (seriesProv === "Cualquier sitio" || platformsOf(s).includes(seriesProv));
-  const rankShows = (list) => taste.events >= PERSONAL_FROM
-    ? taste.rank(list, { fresh: true }).map((x) => x.m)
-    : list.slice().sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-
-  function renderSeries() {
-    const box = $("#series-body");
-    const head = el("div", "list-head");
-    head.append(el("h1", "page-title", "Series"));
-    const seg = el("div", "seg");
-    seg.setAttribute("role", "tablist");
-    const mineN = Object.keys(state.series).filter((id) => !SERIES || seriesById[id]).length;
-    [["descubrir", "Descubrir", ""], ["mias", "Mis series", ` <span class="seg-n">${mineN}</span>`]].forEach(([k, label, n]) => {
-      const b = el("button", "seg-btn", label + n);
-      b.type = "button";
-      b.setAttribute("role", "tab");
-      b.setAttribute("aria-selected", String(seriesTab === k));
-      b.onclick = () => { seriesTab = k; renderSeries(); };
-      seg.append(b);
-    });
-    head.append(seg);
-    box.replaceChildren(head);
-    if (!SERIES) {
-      box.append(el("p", "empty-text", "Cargando series…"));
-      loadSeries().then(() => { if (!$("#view-series").hidden) renderSeries(); });
-      return;
-    }
-    if (!SERIES.length) {
-      box.append(el("div", "list-empty", `<p class="empty-title">Las series están de camino</p>
-        <p class="empty-text">Todavía no se han descargado. Vuelve en un rato.</p>`));
-      return;
-    }
-    if (seriesTab === "mias") return renderMyShows(box);
-
-    // Descubrir: buscador, filtros y filas (o una cuadrícula si hay búsqueda o filtro)
-    const q = el("input", "q-search");
-    q.type = "search";
-    q.placeholder = "Busca una serie, su creador o un actor…";
-    q.setAttribute("aria-label", "Buscar serie");
-    q.value = seriesQuery;
-    box.append(q);
-    const genres = el("div", "filters");
-    chipRow(genres, ["Todas", ...genresOf(SERIES).filter((g) => !["Reality", "Telenovela", "Infantil"].includes(g)).slice(0, 14)], seriesGenre, (g) => { seriesGenre = g; seriesMore = 0; renderSeries(); });
-    const provs = el("div", "filters");
-    const plats = ALL_PLATFORMS.filter((p) => SERIES.some((s) => platformsOf(s).includes(p)));
-    chipRow(provs, ["Cualquier sitio", ...plats], seriesProv, (p) => { seriesProv = p; seriesMore = 0; renderSeries(); });
-    box.append(genres, provs);
-    const results = el("div", "series-results");
-    box.append(results);
-    const draw = () => {
-      results.replaceChildren();
-      const text = norm(seriesQuery.trim());
-      const free = SERIES.filter((s) => !myShow(s.id));
-      if (text || seriesGenre !== "Todas" || seriesProv !== "Cualquier sitio") {
-        let list = SERIES.filter(showMatches);
-        if (text) list = list.filter((s) => norm(`${s.title} ${s.original} ${s.director} ${s.cast.join(" ")}`).includes(text));
-        list = text ? list.sort((a, b) => (b.popularity || 0) - (a.popularity || 0)) : rankShows(list);
-        if (!list.length) { results.append(el("p", "empty-text", "No hay series con esos filtros.")); return; }
-        const n = 60 + seriesMore;
-        const grid = el("ul", "grid");
-        list.slice(0, n).forEach((s) => grid.append(showTile(s, "series")));
-        results.append(el("p", "search-note", `${list.length} ${list.length === 1 ? "serie" : "series"}`), grid);
-        if (list.length > n) {
-          const more = el("button", "btn btn-ghost", "Ver más");
-          more.type = "button";
-          more.onclick = () => { seriesMore += 60; draw(); };
-          results.append(more);
-        }
-        return;
-      }
-      const year = new Date().getFullYear();
-      const watching = Object.entries(state.series).filter(([id, e]) => e.st === "watching" && seriesById[id])
-        .sort((a, b) => b[1].at - a[1].at).map(([id]) => seriesById[id]);
-      [
-        watching.length ? showRow("Sigues viendo", watching) : null,
-        showRow(taste.events >= PERSONAL_FROM ? "✨ Para ti" : "Las más vistas", rankShows(free).slice(0, 20)),
-        showRow("En tendencia esta semana", seriesTrending.map((id) => seriesById[id]).filter((s) => !myShow(s.id))),
-        showRow("Recién llegadas", free.filter((s) => s.year >= year - 1).sort((a, b) => (b.popularity || 0) - (a.popularity || 0)).slice(0, 20)),
-        showRow("Miniseries para un finde", rankShows(free.filter((s) => s.seasons.length === 1 && s.status !== "En emisión" && s.episodes <= 10 && (s.rating || 0) >= 7.3)).slice(0, 20)),
-        showRow("Joyas: las mejor valoradas", free.filter((s) => (s.votes || 0) >= 800).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 20)),
-        showRow("Terminadas, para verlas del tirón", rankShows(free.filter((s) => s.end && (s.rating || 0) >= 7.8)).slice(0, 20)),
-      ].forEach((sec) => sec && results.append(sec));
-    };
-    let t = 0;
-    q.oninput = () => { seriesQuery = q.value; seriesMore = 0; clearTimeout(t); t = setTimeout(draw, 200); };
-    draw();
-  }
-
-  function renderMyShows(box) {
-    const mine = Object.entries(state.series).filter(([id]) => seriesById[id]).sort((a, b) => b[1].at - a[1].at);
-    if (!mine.length) {
-      const empty = el("div", "list-empty", `<p class="empty-title">Aún no sigues ninguna serie</p>
-        <p class="empty-text">Abre una serie y márcala como «La quiero ver» o «La estoy viendo». Aquí llevarás por qué episodio vas.</p>`);
-      const go = el("button", "btn btn-solid", "Descubrir series");
-      go.type = "button";
-      go.onclick = () => { seriesTab = "descubrir"; renderSeries(); };
-      empty.append(go);
-      box.append(empty);
-      return;
-    }
-    SHOW_STATES.slice().sort((a, b) => (a[0] === "watching" ? -1 : b[0] === "watching" ? 1 : 0)).forEach(([st, label]) => {
-      const list = mine.filter(([, e]) => e.st === st).map(([id]) => seriesById[id]);
-      if (!list.length) return;
-      const sec = el("section", "news-section");
-      sec.append(el("h2", "news-section-title", `${esc(label)} <span class="seg-n">${list.length}</span>`));
-      if (st === "watching") {
-        const ul = el("ul", "show-progress-list");
-        list.forEach((s) => ul.append(progressCard(s)));
-        sec.append(ul);
-      } else {
-        const grid = el("ul", "grid");
-        list.forEach((s) => grid.append(showTile(s, "mine")));
-        sec.append(grid);
-      }
-      box.append(sec);
-    });
-  }
-  // Tarjeta de «Viendo»: cartel, por dónde vas, barra de progreso y +1 episodio
-  function progressCard(s) {
-    const e = myShow(s.id);
-    const p = progressOf(s, e);
-    const li = el("li", "show-progress");
-    const pst = el("button", "show-progress-poster");
-    pst.type = "button";
-    pst.setAttribute("aria-label", `Ver ficha de ${s.title}`);
-    pst.append(poster(s));
-    pst.onclick = () => openShow(s.id, "mine");
-    const info = el("div", "show-progress-info", `
-      <p class="tile-name">${esc(s.title)}</p>
-      <p class="tile-meta">${esc(p.text)}${s.next && s.next.date >= todayISO() ? ` · nuevo ep. ${esc(dayText(s.next.date))}` : ""}</p>
-      <div class="show-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p.pct * 100)}"><span style="width:${(p.pct * 100).toFixed(1)}%"></span></div>`);
-    const plus = el("button", "btn btn-solid show-plus", p.caught ? "✓" : "+1 ep.");
-    plus.type = "button";
-    plus.disabled = p.caught;
-    plus.setAttribute("aria-label", `Marcar el siguiente episodio de ${s.title} como visto`);
-    plus.onclick = () => { nextEpisode(s.id); li.replaceWith(myShow(s.id).st === "watching" ? progressCard(s) : el("li")); if (myShow(s.id).st !== "watching") renderSeries(); };
-    li.append(pst, info, plus);
-    return li;
-  }
-
-  // Ficha de una serie (usa la misma hoja que las pelis)
-  function similarShows(s, n = 12) {
-    const g = new Set(s.genres);
-    return SERIES.filter((x) => x.id !== s.id && !myShow(x.id) && x.genres.some((y) => g.has(y)))
-      .map((x) => ({ x, sc: x.genres.filter((y) => g.has(y)).length * 2 + (x.rating || 0) / 2 + (x.cast.some((a) => s.cast.includes(a)) ? 2 : 0) }))
-      .sort((a, b) => b.sc - a.sc).slice(0, n).map((r) => r.x);
-  }
-  function openShow(id, from) {
-    const s = seriesById[id];
-    if (!s) return;
-    if (!opened.has(id)) { opened.add(id); taste.learn(s, 0.15); }
-    lastFocus = document.activeElement;
-    const body = $("#sheet-body");
-    body.replaceChildren();
-    const top = el("div", "sheet-top");
-    const pst = el("div", "sheet-poster");
-    pst.append(poster(s));
-    top.append(pst, el("div", "", `
-      <h2 class="sheet-title" id="sheet-title">${esc(s.title)}</h2>
-      ${s.original && s.original !== s.title ? `<p class="sheet-original">${esc(s.original)}</p>` : ""}
-      <p class="show-status">${esc(s.status || "")}${s.network ? ` · ${esc(s.network)}` : ""}</p>`));
-    body.append(top);
-    const content = el("div", "sheet-content", `
-      ${s.next && s.next.date >= todayISO() ? `<div class="release-box"><p><span class="section-label">Próximo episodio</span><b>T${s.next.s} · E${s.next.e} · ${esc(longDay(s.next.date))}</b></p></div>` : ""}
-      <dl class="facts">
-        <div class="fact"><dt>Años</dt><dd>${esc(yearsOf(s))}</dd></div>
-        <div class="fact"><dt>Temporadas</dt><dd>${s.seasons.length} <small>(${s.episodes} ep.)</small></dd></div>
-        <div class="fact"><dt>${s.rating != null ? "Nota" : "Episodios"}</dt><dd>${s.rating != null ? s.rating.toFixed(1) : s.episodes}</dd></div>
-      </dl>
-      ${s.episodeTime ? `<p class="tile-meta">Episodios de unos ${s.episodeTime} min · ${Math.round(s.episodes * s.episodeTime / 60)} h en total</p>` : ""}
-      <p class="sheet-desc">${esc(s.desc || "Todavía no hay sinopsis.")}</p>
-      ${s.director !== "Desconocido" ? `<div><p class="section-label">Creada por</p><p style="margin:0;font-weight:700">${esc(s.director)}</p></div>` : ""}
-      ${s.cast.length ? `<div><p class="section-label">Reparto</p><p style="margin:0">${esc(s.cast.join(", "))}</p></div>` : ""}
-      ${whereBlock(s)}
-      <div><p class="section-label">Géneros</p><ul class="chips">${s.genres.map((g) => `<li class="chip">${esc(g)}</li>`).join("")}</ul></div>
-      <div class="links">
-        <a class="link-card" id="sheet-trailer" href="${esc(s.trailer || trailerUrl(s))}" target="_blank" rel="noopener">
-          <span class="link-icon play">${ICON.play}</span>
-          <span class="link-text"><b>Tráiler</b><span>${ytKey(s.trailer) ? "Verlo aquí" : "En YouTube"}</span></span>
-        </a>
-        <a class="link-card" href="${esc(whereUrl(s))}" target="_blank" rel="noopener">
-          <span class="link-icon where">${ICON.tv}</span>
-          <span class="link-text"><b>Dónde verla</b><span>Todas las opciones</span></span>
-        </a>
-      </div>
-      <div class="show-mine" id="show-mine"></div>
-      <div class="show-seasons" id="show-seasons"></div>
-      <div class="sheet-more" id="sheet-more"></div>
-      <p class="credit">Datos e imágenes de TMDB. Plataformas: JustWatch.</p>`);
-    body.append(content);
-    const trailerLink = content.querySelector("#sheet-trailer");
-    if (ytKey(s.trailer)) trailerLink.onclick = (ev) => { ev.preventDefault(); playTrailer(s, content); };
-    const like = showRow("Series parecidas", similarShows(s));
-    if (like) content.querySelector("#sheet-more").append(like);
-
-    // En qué estado la tienes y por dónde vas
-    const mineBox = content.querySelector("#show-mine");
-    const seasonsBox = content.querySelector("#show-seasons");
-    const redraw = () => {
-      const e = myShow(id);
-      mineBox.replaceChildren(el("p", "section-label", "Mis series"));
-      const row = el("div", "filters wrap");
-      SHOW_STATES.forEach(([st, label]) => {
-        const b = el("button", "filter", st === "pending" ? "La quiero ver" : st === "watching" ? "La estoy viendo" : "Ya la vi entera");
-        b.type = "button";
-        b.setAttribute("aria-pressed", String(e?.st === st));
-        b.onclick = () => { setShow(id, e?.st === st ? null : st); redraw(); refreshSeries(); };
-        row.append(b);
-      });
-      mineBox.append(row);
-      if (e && e.st !== "pending") {
-        const p = progressOf(s, e);
-        const prog = el("div", "show-progress-inline", `<p class="tile-meta">${esc(p.text)}</p>
-          <div class="show-bar"><span style="width:${(p.pct * 100).toFixed(1)}%"></span></div>`);
-        if (!p.caught) {
-          const plus = el("button", "btn btn-solid", `+1 episodio (T${e.e >= epsIn(s, e.s) ? (s.seasons.find((x) => x[0] > e.s) || [e.s])[0] : e.s} · E${e.e >= epsIn(s, e.s) ? 1 : e.e + 1})`);
-          plus.type = "button";
-          plus.onclick = () => { nextEpisode(id); redraw(); refreshSeries(); };
-          prog.append(plus);
-        }
-        mineBox.append(prog);
-      }
-      // Temporadas: tocar una marca «la he visto hasta el final de esta temporada»
-      seasonsBox.replaceChildren(el("p", "section-label", seasonsText(s.seasons.length)));
-      const ul = el("ul", "season-list");
-      s.seasons.forEach(([n, eps, y]) => {
-        const done = e && e.st !== "pending" && (e.s > n || (e.s === n && e.e >= eps) || e.st === "done");
-        const cur = e && e.st === "watching" && e.s === n && !done;
-        const li = el("li");
-        const b = el("button", "season" + (done ? " done" : cur ? " current" : ""), `
-          <span class="season-n">T${n}</span><span class="season-txt">${eps} episodios${y ? ` · ${y}` : ""}</span>
-          <span class="season-mark">${done ? "✓ Vista" : cur ? `Vas por el ${e.e}` : "Marcar vista"}</span>`);
-        b.type = "button";
-        b.setAttribute("aria-label", `Temporada ${n}: ${done ? "vista; tócala para dejarla sin ver" : "marcarla como vista"}`);
-        b.onclick = () => {
-          const old = myShow(id);
-          const last = s.seasons[s.seasons.length - 1];
-          // Si ya estaba vista, vuelve al principio de esa temporada
-          const to = done ? { s: n, e: 0 } : { s: n, e: eps };
-          state.series[id] = { st: old?.st === "pending" || !old ? "watching" : old.st, ...to, at: Date.now() };
-          if (!old) taste.learn(s, SIGNAL.like);
-          const caught = to.s === last[0] && to.e >= last[1];
-          if (caught && s.status !== "En emisión") state.series[id].st = "done";
-          else if (state.series[id].st === "done") state.series[id].st = "watching";
-          persist();
-          syncTaste();
-          redraw();
-          refreshSeries();
-        };
-        li.append(b);
-        ul.append(li);
-      });
-      seasonsBox.append(ul);
-    };
-    redraw();
-    sheet.hidden = backdrop.hidden = false;
-    sheet.scrollTop = 0;
-    $("#sheet-close").focus();
-  }
-  // Repinta la pestaña Series debajo de la ficha si está abierta (sin perder lo que se estaba buscando)
-  function refreshSeries() {
-    if (!$("#view-series").hidden) {
-      const y = $("#view-series").scrollTop;
-      renderSeries();
-      $("#view-series").scrollTop = y;
-    }
-  }
-
   // ---------- Aviso ----------
   let toastTimer;
   function toast(msg, actionLabel, onAction, ms = 4000) {
@@ -3849,8 +3622,51 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     toastTimer = setTimeout(() => (t.hidden = true), ms);
   }
 
+  // ---------- Interruptor Pelis / Series ----------
+  // Cambiar de modo guarda lo pendiente y vuelve a abrir Cinder con el otro catálogo (cada uno con sus datos)
+  function switchMode(mode, hash) {
+    flushAccount().finally(() => {
+      try { localStorage.setItem("cinder:modo", mode); } catch (e) { /* sin almacenamiento */ }
+      const keep = /^#(descubrir|novedades|biblioteca|para-ti|ruleta|buscar|cuenta)$/.test(location.hash) ? location.hash : "#descubrir";
+      history.replaceState(null, "", location.pathname + location.search + (hash || keep));
+      location.reload();
+    });
+  }
+  document.querySelectorAll(".mode-btn").forEach((b) => {
+    const on = (b.dataset.mode === "series") === SERIES_MODE;
+    b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { if (!on) switchMode(b.dataset.mode); };
+  });
+  // En modo Series, los textos de la app hablan de series: «peli» → «serie», «película» → «serie»…
+  // (ambas son femeninas, así que el resto de la frase vale igual). Los títulos y las noticias no se tocan.
+  if (SERIES_MODE) {
+    const WORDS = [[/\bpelículas\b/g, "series"], [/\bPelículas\b/g, "Series"], [/\bpelícula\b/g, "serie"], [/\bPelícula\b/g, "Serie"],
+      [/\bpelis\b/g, "series"], [/\bPelis\b/g, "Series"], [/\bPELIS\b/g, "SERIES"], [/\bpeli\b/g, "serie"], [/\bPeli\b/g, "Serie"], [/\bPELI\b/g, "SERIE"],
+      [/\bDirector\b/g, "Creador"], [/\bdirector\b/g, "creador"]];
+    const KEEP = ".mode-switch, .card-title, .tile-name, .sheet-title, .sheet-original, .news-hero-title, .result-title, .review-text, .news-list, .q-search-keep";
+    const fix = (t) => { let out = t; for (const [re, to] of WORDS) out = out.replace(re, to); return out; };
+    const fixNode = (n) => {
+      if (n.nodeType === 3) {
+        if (/peli|pelí|PELI|irector/i.test(n.data) && !n.parentElement?.closest(KEEP)) { const t = fix(n.data); if (t !== n.data) n.data = t; }
+        return;
+      }
+      if (n.nodeType !== 1 || n.closest?.(KEEP)) return;
+      for (const a of ["placeholder", "aria-label", "title"]) { const v = n.getAttribute(a); if (v && /peli|pelí|irector/i.test(v)) n.setAttribute(a, fix(v)); }
+      const walk = document.createTreeWalker(n, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+      for (let x = walk.nextNode(); x; x = walk.nextNode()) {
+        if (x.nodeType === 1) { for (const a of ["placeholder", "aria-label", "title"]) { const v = x.getAttribute(a); if (v && /peli|pelí|irector/i.test(v)) x.setAttribute(a, fix(v)); } }
+        else fixNode(x);
+      }
+    };
+    fixNode(document.body);
+    new MutationObserver((list) => list.forEach((r) => {
+      if (r.type === "characterData") fixNode(r.target);
+      else r.addedNodes.forEach(fixNode);
+    })).observe(document.body, { childList: true, subtree: true, characterData: true });
+  }
+
   // ---------- Navegación (#descubrir, #biblioteca, #ruleta) ----------
-  const VIEWS = ["descubrir", "series", "novedades", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta", "admin"];
+  const VIEWS = ["descubrir", "novedades", "biblioteca", "para-ti", "ruleta", "buscar", "cuenta", "admin"];
   let lastView = null;
   let premieresChecked = false;
   function route() {
@@ -3897,7 +3713,6 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     else if (view === "cuenta") renderAccount();
     else if (view === "admin") renderAdmin();
     else if (view === "novedades") renderNews();
-    else if (view === "series") renderSeries();
     else renderDeck();
     if (!booted || locked || tourIdx >= 0) return;
     if (pendingOpen) { const id = pendingOpen; pendingOpen = null; openSheet(id, "link"); }
@@ -3992,6 +3807,17 @@ async function loadData(url) {
   }
 }
 // Catálogo: la copia guardada al momento (y si tiene más de 6 horas se renueva para la próxima vez); si no hay copia, se descarga
+// Modo de la app: Pelis o Series (interruptor de arriba). Todo funciona igual en los dos, cada uno con sus datos.
+// Un enlace a una serie (#peli/tv-…) abre el modo Series; a una peli, el de pelis.
+const SERIES_MODE = (() => {
+  let mode = null;
+  try { mode = localStorage.getItem("cinder:modo"); } catch (e) { /* sin almacenamiento */ }
+  const link = location.hash.match(/^#peli\/(tv|tmdb)-/);
+  if (link) mode = link[1] === "tv" ? "series" : "pelis";
+  try { localStorage.setItem("cinder:modo", mode === "series" ? "series" : "pelis"); } catch (e) { /* idem */ }
+  return mode === "series";
+})();
+document.documentElement.classList.toggle("mode-series", SERIES_MODE);
 // La entrada del logo (1,5 s) va primero: leer el catálogo (varios MB) bloquea el móvil y la animación se cortaba
 const INTRO = new Promise((ok) => setTimeout(ok, 1500));
 async function loadCatalog(url = "data/movies.json") {
@@ -4002,7 +3828,7 @@ async function loadCatalog(url = "data/movies.json") {
     const data = await old.json().catch(() => null);
     if (data) return data;
   }
-  const fresh = download(url, old || !url.includes("movies") ? null : (p) => window.__splash?.progress(p))
+  const fresh = download(url, old ? null : (p) => window.__splash?.progress(p))
     .then(async (text) => { await saveCopy(cache, url, text); return text; });
   if (old) {
     fresh.catch(() => {});
@@ -4019,9 +3845,19 @@ async function loadCatalog(url = "data/movies.json") {
   let movies = window.MOVIES;
   // Las cuentas (Firebase) empiezan a conectarse a la vez que se descargan las pelis, no después
   const cloudBoot = window.CINDER_FIREBASE
-    ? import("./cloud.js?v=dev").then((m) => ({ m, c: m.connect(window.CINDER_FIREBASE) }))
+    ? import("./cloud.js?v=dev").then((m) => ({ m, c: m.connect(window.CINDER_FIREBASE, { series: SERIES_MODE }) }))
     : null;
   cloudBoot?.catch(() => {}); // el error se trata en startApp
+  if (SERIES_MODE) {
+    // Modo Series: el catálogo son las series (data/series.json); de Novedades, las noticias y las series de moda
+    const [data, news] = await Promise.all([loadCatalog("data/series.json"), loadData("data/news.json")]);
+    const shows = (data?.series || []).filter((s) => s && s.id && s.title && s.year && Array.isArray(s.genres) && s.genres.length && Array.isArray(s.seasons) && s.seasons.length && s.c)
+      .map((s) => ({ ...s, runtime: s.episodeTime || 0 }));
+    const trending = (data?.trending || []).filter((id) => shows.some((s) => s.id === id));
+    startApp(shows.length ? shows : movies, { featured: trending[0], trending, nowPlaying: [], upcoming: [], news: news?.news || [], movies: [] },
+      { ...data?.logos, ...news?.logos }, cloudBoot);
+    return;
+  }
   const [data, news] = await Promise.all([loadCatalog(), loadData("data/news.json")]);
   if (data && Array.isArray(data.movies) && data.movies.length) movies = data.movies;
   // Las pelis de Novedades que aún no están en el catálogo (estrenos recientes o próximos) se añaden

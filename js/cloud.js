@@ -22,7 +22,7 @@ export const USERNAME_RE = /^(?![.])[a-z0-9_.]{2,19}[a-z0-9_]$/;
 const V = "13.1.0";
 const SDK = `https://www.gstatic.com/firebasejs/${V}`;
 
-export async function connect(config) {
+export async function connect(config, { series = false } = {}) {
   const [{ initializeApp }, A, F] = await Promise.all([
     import(`${SDK}/firebase-app.js`),
     import(`${SDK}/firebase-auth.js`),
@@ -34,12 +34,12 @@ export async function connect(config) {
   const db = F.getFirestore(app);
   let user = null;
   let profile = null;
-  let seriesRules = null; // ¿aceptan las reglas de Firestore el campo «series»? (null = aún no se sabe)
   const listeners = new Set();
 
   const userDoc = (uid) => F.doc(db, "users", uid);
   const nameDoc = (name) => F.doc(db, "usernames", name);
-  const tasteDoc = (uid) => F.doc(db, "tastes", uid);
+  // Gustos y biblioteca: los de las pelis en tastes/{uid}; en modo Series, los de las series en tastesSeries/{uid}
+  const tasteDoc = (uid, mode = series) => F.doc(db, mode ? "tastesSeries" : "tastes", uid);
   const statsDoc = F.doc(db, "meta", "stats");
   const reviewsOf = (movieId) => F.collection(db, "movies", String(movieId), "reviews");
   const toReview = (d) => {
@@ -161,23 +161,10 @@ export async function connect(config) {
       const snap = await F.getDoc(tasteDoc(user.uid));
       return snap.exists() ? snap.data() : null;
     },
-    // Gustos, encuesta, tutorial visto, matches (lib), descartes (passed), listas y series de la cuenta.
-    // Si las reglas de Firestore aún no aceptan «series» (hay que publicarlas), se guarda todo lo demás igual.
-    async saveTaste(model, { survey = null, tour = false, lib = [], passed = [], lists = [], series = null, savedAt = Date.now() } = {}) {
-      const data = { v: 1, n: model.n, f: model.f, survey, tour, lib, passed, lists, savedAt, at: F.serverTimestamp() };
-      if (series && seriesRules !== false) {
-        try {
-          await F.setDoc(tasteDoc(user.uid), { ...data, series });
-          seriesRules = true;
-          return;
-        } catch (e) {
-          if (e?.code !== "permission-denied") throw e;
-          seriesRules = false;
-          console.warn("Las reglas de Firestore no aceptan series todavía: se guardan solo en este dispositivo");
-        }
-      }
-      return F.setDoc(tasteDoc(user.uid), data);
-    },
+    // Gustos, encuesta, tutorial visto, matches (lib), descartes (passed) y listas de la cuenta
+    // (en modo Series, los de las series: otro documento, para que no se mezclen con los de las pelis)
+    saveTaste: (model, { survey = null, tour = false, lib = [], passed = [], lists = [], savedAt = Date.now() } = {}) =>
+      F.setDoc(tasteDoc(user.uid), { v: 1, n: model.n, f: model.f, survey, tour, lib, passed, lists, savedAt, at: F.serverTimestamp() }),
 
     // ---------- Seguridad ----------
     async changePassword(current, next) {
@@ -199,7 +186,8 @@ export async function connect(config) {
         const users = profile?.ready ? (await tx.get(statsDoc)).data()?.users || 0 : 0;
         reviewDocs().forEach((ref) => tx.delete(ref));
         if (profile?.ready && profile.name) tx.delete(nameDoc(profile.name));
-        tx.delete(tasteDoc(user.uid));
+        tx.delete(tasteDoc(user.uid, false));
+        tx.delete(tasteDoc(user.uid, true));
         tx.delete(userDoc(user.uid));
         if (users > 0) tx.set(statsDoc, { users: users - 1 }); // deja sitio a otra cuenta
       });
