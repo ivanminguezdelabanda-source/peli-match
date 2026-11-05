@@ -201,7 +201,6 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const inCinemas = (m) => m.kind !== "tv" && (NEWS?.nowPlaying?.includes(m.id)
     || (m.release && m.release <= todayISO() && m.release >= isoDay(new Date(Date.now() - 45 * 864e5)) && !(m.providers || []).length));
   const showtimesUrl = (m) => `https://www.google.com/search?q=${encodeURIComponent(`${m.title} horarios cines cerca`)}`;
-  const CINEMAS_URL = "https://www.google.com/maps/search/cines+cerca+de+mi";
   // Años y duración: una peli dice «2019 · 2 h 05 min»; una serie, «2019–2023 · 4 temporadas»
   const yearText = (m) => m.kind !== "tv" ? m.year : m.end ? (m.end === m.year ? m.year : `${m.year}–${m.end}`) : `${m.year}–`;
   const lenText = (m) => m.kind === "tv" ? `${m.seasons.length} ${m.seasons.length === 1 ? "temporada" : "temporadas"}` : fmtTime(m.runtime);
@@ -3083,10 +3082,9 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       .map((sec) => {
         // Bajo «En cines», el acceso a los cines de alrededor
         if (sec && !SERIES_MODE && sec.querySelector(".news-section-title")?.textContent === "En cines") {
-          const go = el("a", "btn btn-ghost cine-near", "🎟️ Cines cerca de ti y sus horarios");
-          go.href = CINEMAS_URL;
-          go.target = "_blank";
-          go.rel = "noopener";
+          const go = el("button", "btn btn-ghost cine-near", "🎟️ Cines cerca de ti y sus carteleras");
+          go.type = "button";
+          go.onclick = () => openCinemas();
           sec.append(go);
         }
         return sec;
@@ -3231,10 +3229,10 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
           <span class="link-icon where">${ICON.tv}</span>
           <span class="link-text"><b>Dónde verla</b><span>Todas las opciones</span></span>
         </a>
-        ${inCinemas(m) ? `<a class="link-card" href="${esc(showtimesUrl(m))}" target="_blank" rel="noopener">
+        ${inCinemas(m) ? `<button class="link-card" id="sheet-cines" type="button">
           <span class="link-icon cine">🎟️</span>
-          <span class="link-text"><b>Horarios en cines</b><span>Cerca de ti, hoy</span></span>
-        </a>` : ""}
+          <span class="link-text"><b>Horarios en cines</b><span>En los cines cerca de ti</span></span>
+        </button>` : ""}
         <button class="link-card" id="sheet-share" type="button">
           <span class="link-icon share">${ICON.share}</span>
           <span class="link-text"><b>Compartir</b><span>Mándasela a alguien</span></span>
@@ -3251,6 +3249,8 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const trailerLink = content.querySelector("#sheet-trailer");
     if (ytKey(m.trailer)) trailerLink.onclick = (ev) => { ev.preventDefault(); playTrailer(m, content); };
     content.querySelector("#sheet-share").onclick = () => shareMovie(m);
+    const cines = content.querySelector("#sheet-cines");
+    if (cines) cines.onclick = () => openCinemas(m);
     // Maratones y pelis parecidas
     const more = content.querySelector("#sheet-more");
     marathonsOf(m).forEach((mar) => more.append(marathonBlock(mar)));
@@ -3625,6 +3625,156 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     $("#sheet-body").querySelector(".trailer-box")?.remove(); // para el vídeo
     sheet.hidden = backdrop.hidden = true;
     if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  }
+
+  // ---------- Cines cerca: con tu ubicación (o una ciudad), los cines de alrededor y su cartelera ----------
+  // Los cines salen de OpenStreetMap (Overpass, gratis y sin clave); la ciudad escrita se busca en Nominatim.
+  // Nadie publica gratis los horarios de cada cine, así que cada cine lleva a su cartelera (su web o la ficha
+  // de Google con los horarios de hoy) y, si vienes de una peli, directamente a los pases de esa peli en ese cine.
+  const POS_KEY = "cinder:pos";
+  const CINE_KEY = "cinder:cines";
+  const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
+  const kmBetween = (a, b) => {
+    const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+    return 12742 * Math.asin(Math.sqrt(h));
+  };
+  const kmText = (km) => (km < 1 ? `${Math.round(km * 1000 / 50) * 50} m` : `${km < 10 ? km.toFixed(1).replace(".", ",") : Math.round(km)} km`);
+  const readLS = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+  const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  function myPosition() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) return reject(new Error("nogeo"));
+      navigator.geolocation.getCurrentPosition(
+        (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+        (e) => reject(e), { enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60e3 });
+    });
+  }
+  async function placePosition(q) {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=${encodeURIComponent(q)}`);
+    const [hit] = r.ok ? await r.json() : [];
+    if (!hit) throw new Error("noplace");
+    return { lat: +hit.lat, lon: +hit.lon, name: hit.display_name.split(",")[0] };
+  }
+  async function cinemasNear(pos) {
+    // Lo mismo que la última vez (mismo sitio, menos de un día): sin volver a preguntar
+    const key = `${pos.lat.toFixed(2)},${pos.lon.toFixed(2)}`;
+    const cached = readLS(CINE_KEY);
+    if (cached?.key === key && Date.now() - cached.at < 864e5) return cached.list;
+    const q = `[out:json][timeout:25];nwr["amenity"="cinema"](around:25000,${pos.lat},${pos.lon});out center tags 80;`;
+    let data = null;
+    for (const url of OVERPASS) {
+      try {
+        const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        if (r.ok) { data = await r.json(); break; }
+      } catch {}
+    }
+    if (!data) throw new Error("overpass");
+    const seen = new Set();
+    const list = (data.elements || []).map((x) => {
+      const t = x.tags || {};
+      const lat = x.lat ?? x.center?.lat, lon = x.lon ?? x.center?.lon;
+      if (!t.name || lat == null) return null;
+      const street = [t["addr:street"], t["addr:housenumber"]].filter(Boolean).join(", ");
+      return {
+        name: t.name, lat, lon,
+        city: t["addr:city"] || "",
+        address: [street, t["addr:city"] || t["addr:suburb"]].filter(Boolean).join(" · "),
+        web: t.website || t["contact:website"] || t.url || "",
+        screens: Number(t.screen || t.screens) || null,
+      };
+    }).filter((c) => c && !seen.has(c.name + Math.round(c.lat * 500)) && seen.add(c.name + Math.round(c.lat * 500)))
+      .map((c) => ({ ...c, km: kmBetween(pos, c) })).sort((a, b) => a.km - b.km).slice(0, 30);
+    writeLS(CINE_KEY, { key, at: Date.now(), list });
+    return list;
+  }
+  // Cartelera del cine: la ficha de Google con los pases de hoy (con la peli, solo los de esa peli)
+  const cinemaShowtimes = (c, m) => `https://www.google.com/search?q=${encodeURIComponent((m ? `${m.title} ${c.name} ${c.city} horarios` : `${c.name} ${c.city} cartelera`).replace(/\s+/g, " "))}`;
+  const cinemaRoute = (c) => `https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}`;
+
+  function openCinemas(m) {
+    lastFocus = document.activeElement;
+    const body = $("#sheet-body");
+    body.replaceChildren();
+    const wrap = el("div", "cines");
+    wrap.append(el("h2", "sheet-title", "Cines cerca de ti"), el("p", "cines-sub", m
+      ? `Elige un cine para ver a qué hora ponen «${esc(m.title)}».`
+      : "Los cines de alrededor, del más cercano al más lejano. Toca uno para ver su cartelera de hoy."));
+    const status = el("div", "cines-status");
+    const list = el("ol", "cines-list");
+    wrap.append(status, list);
+
+    // Lo que hay en cines estos días (no en todos los cines a la vez: cada cartelera dice cuáles pone)
+    if (!m) {
+      const row = newsRow("En cartelera estos días", NEWS?.nowPlaying || []);
+      if (row) { row.classList.add("cines-now"); wrap.append(row); }
+    }
+    body.append(wrap);
+
+    const where = el("form", "cines-where");
+    where.innerHTML = `<input type="search" placeholder="O escribe tu ciudad o barrio" aria-label="Ciudad o barrio" enterkeyhint="search">
+      <button class="btn btn-ghost" type="submit">Buscar</button>`;
+    where.onsubmit = (ev) => {
+      ev.preventDefault();
+      const q = where.querySelector("input").value.trim();
+      if (q) load(() => placePosition(q), q);
+    };
+
+    async function load(getPos, label) {
+      list.replaceChildren();
+      status.replaceChildren(el("p", "cines-loading", label ? `Buscando cines cerca de ${esc(label)}…` : "Buscando dónde estás…"));
+      let pos;
+      try {
+        pos = await getPos();
+        writeLS(POS_KEY, { lat: +pos.lat.toFixed(3), lon: +pos.lon.toFixed(3), name: pos.name || "" });
+      } catch (e) {
+        status.replaceChildren(el("p", "cines-msg", e?.message === "noplace"
+          ? "No encuentro ese sitio. Prueba con el nombre de tu ciudad."
+          : e?.code === 1 ? "Sin permiso para ver tu ubicación. Escribe tu ciudad y te enseño sus cines."
+          : "No he podido saber dónde estás. Escribe tu ciudad y te enseño sus cines."), where);
+        return;
+      }
+      status.replaceChildren(el("p", "cines-loading", "Buscando cines…"));
+      let cines;
+      try { cines = await cinemasNear(pos); } catch {
+        status.replaceChildren(el("p", "cines-msg", "No he podido cargar los cines ahora mismo. Inténtalo en un rato."));
+        return;
+      }
+      const here = el("p", "cines-here", `📍 ${pos.name ? `Cerca de ${esc(pos.name)}` : "Cerca de ti"}`);
+      const change = el("button", "cines-change", "Cambiar");
+      change.type = "button";
+      change.onclick = () => { status.replaceChildren(askBtn(), where); where.querySelector("input").focus(); };
+      here.append(change);
+      status.replaceChildren(here);
+      if (!cines.length) { list.append(el("li", "cines-msg", "No hay cines en 25 km a la redonda.")); return; }
+      cines.forEach((c) => {
+        const li = el("li", "cine");
+        li.innerHTML = `
+          <a class="cine-main" href="${esc(cinemaShowtimes(c, m))}" target="_blank" rel="noopener">
+            <span class="cine-name">${esc(c.name)}</span>
+            <span class="cine-meta">${kmText(c.km)}${c.address ? " · " + esc(c.address) : ""}${c.screens ? ` · ${c.screens} salas` : ""}</span>
+            <span class="cine-go">${m ? "Horarios de la peli aquí" : "Cartelera y horarios de hoy"} ›</span>
+          </a>
+          <div class="cine-links">
+            ${c.web ? `<a href="${esc(c.web)}" target="_blank" rel="noopener">Web del cine</a>` : ""}
+            <a href="${esc(cinemaRoute(c))}" target="_blank" rel="noopener">Cómo llegar</a>
+          </div>`;
+        list.append(li);
+      });
+    }
+
+    function askBtn() {
+      const ask = el("button", "btn btn-solid", "📍 Usar mi ubicación");
+      ask.type = "button";
+      ask.onclick = () => load(myPosition);
+      return ask;
+    }
+    const saved = readLS(POS_KEY);
+    if (saved?.lat != null) load(() => Promise.resolve(saved), saved.name);
+    else status.replaceChildren(el("p", "cines-msg", "Para enseñarte los cines de alrededor necesito saber dónde estás (solo se usa para esto)."), askBtn(), where);
+    sheet.hidden = backdrop.hidden = false;
+    sheet.scrollTop = 0;
+    $("#sheet-close").focus();
   }
 
   function refreshViews() {
