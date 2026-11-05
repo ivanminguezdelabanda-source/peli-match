@@ -2,12 +2,14 @@
 // Necesita TMDB_API_KEY, como sync-tmdb.mjs. Uso local: TMDB_API_KEY=xxxx node scripts/sync-series.mjs
 // Variables opcionales: PAGES (páginas por lista, 20 series cada una; 60 por defecto) y MIN_VOTES (100).
 
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "series.json");
+// Capítulos de cada serie (título, nota y fecha) en un archivo aparte por serie: la app lo pide al abrir su ficha
+const EPS_DIR = join(ROOT, "data", "eps");
 const KEY = process.env.TMDB_API_KEY;
 const PAGES = Number(process.env.PAGES || 60);
 const MIN_VOTES = Number(process.env.MIN_VOTES || 100);
@@ -110,18 +112,46 @@ async function main() {
       await sleep(60);
     }
   }
-  // Las que están en tendencia esta semana, para la fila «En tendencia»
+  // Capítulos de las temporadas que vengan en la respuesta (append_to_response season/N): [título, nota, fecha]
+function episodesOf(d) {
+  const out = {};
+  for (const [k, v] of Object.entries(d)) {
+    const n = k.match(/^season\/(\d+)$/)?.[1];
+    if (!n || n === "0" || !Array.isArray(v?.episodes)) continue;
+    out[n] = v.episodes.map((e) => [e.name || "", e.vote_count ? Math.round(e.vote_average * 10) / 10 : null, e.air_date || null]);
+  }
+  return out;
+}
+const seasonParts = (numbers) => {
+  const parts = [];
+  for (let i = 0; i < numbers.length; i += 17) parts.push(numbers.slice(i, i + 17).map((n) => `season/${n}`));
+  return parts;
+};
+
+// Las que están en tendencia esta semana, para la fila «En tendencia»
   const trending = (await tmdb("/trending/tv/week", { language: "es-ES" })).results.map((s) => `tv-${s.id}`);
   console.log(`${ids.size} series en la lista; pidiendo fichas…`);
 
   const series = [];
+  await rm(EPS_DIR, { recursive: true, force: true });
+  await mkdir(EPS_DIR, { recursive: true });
   let n = 0;
   for (const id of ids) {
     try {
-      const d = await tmdb(`/tv/${id}`, { language: "es-ES", append_to_response: "videos,credits,watch/providers", include_video_language: "es,en" });
+      // La ficha y las primeras 17 temporadas en una sola petición (TMDB admite 20 añadidos por petición)
+      const d = await tmdb(`/tv/${id}`, { language: "es-ES", append_to_response: "videos,credits,watch/providers," + Array.from({ length: 17 }, (_, i) => `season/${i + 1}`).join(","), include_video_language: "es,en" });
       if ((d.genres || []).some((g) => SKIP_GENRES.has(g.id))) continue;
       const s = toSeries(d);
-      if (s.desc && s.poster && s.year && s.genres.length && s.seasons.length) series.push(s);
+      if (s.desc && s.poster && s.year && s.genres.length && s.seasons.length) {
+        series.push(s);
+        const eps = episodesOf(d);
+        const rest = s.seasons.map((x) => x[0]).filter((x) => !eps[x]);
+        for (const part of seasonParts(rest)) {
+          Object.assign(eps, episodesOf(await tmdb(`/tv/${id}`, { language: "es-ES", append_to_response: part.join(",") })));
+          await sleep(40);
+        }
+        await writeFile(join(EPS_DIR, `${d.id}.json`), JSON.stringify(eps));
+      }
     } catch (e) {
       console.warn(`  ${id}: ${e.message}`);
     }
