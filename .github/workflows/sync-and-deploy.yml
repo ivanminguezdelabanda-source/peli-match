@@ -94,7 +94,7 @@ jobs:
       # (WebView de Android 8-11 sin actualizar, iPhone con iOS 12-13). El código del repositorio no cambia.
       - name: Compatibilidad con navegadores antiguos
         run: |
-          npx -y esbuild@0.24.2 js/app.js js/cloud.js js/taste.js --target=chrome69,safari12,firefox68 --outdir=js --allow-overwrite --log-level=warning
+          npx -y esbuild@0.24.2 js/app.js js/cloud.js js/taste.js js/import.js --target=chrome69,safari12,firefox68 --outdir=js --allow-overwrite --log-level=warning
           npx -y esbuild@0.24.2 styles.css --target=chrome69,safari12,firefox68 --outfile=styles.css --allow-overwrite --log-level=warning
       # Cada publicación pide CSS y JS nuevos, para que el navegador no mezcle versiones
       - name: Marcar la versión de los archivos

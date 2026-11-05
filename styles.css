@@ -933,3 +933,43 @@ html.event-navidad .event-row { background: linear-gradient(160deg, rgba(200, 32
 html.event-halloween .event-go { background: linear-gradient(135deg, #ff7a1a, #b0378f); color: #fff; }
 
 @media (prefers-reduced-motion: reduce) { html.event-halloween .brand-name::after { animation: none; } }
+
+/* Series (apartado propio) */
+@media (max-width: 1023px) {
+  .tabbar { grid-template-columns: repeat(6, 1fr); }
+  .tab { font-size: 10.5px; letter-spacing: -.01em; }
+}
+@media (max-width: 360px) { .tab { font-size: 9.5px; } }
+@media (max-width: 699px) and (max-height: 600px) { .tab { font-size: 0; } }
+.series-body { display: flex; flex-direction: column; gap: 14px; }
+.series-results { display: flex; flex-direction: column; gap: 18px; }
+.show-tile .tile-btn { position: relative; }
+.show-badge { position: absolute; top: 8px; right: 8px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .1em; padding: 2px 6px; border-radius: 4px; background: var(--ticket); color: var(--on-ticket); }
+.show-badge.show-done { background: var(--ok); color: var(--ink); }
+.show-badge.show-watching { background: var(--velvet); color: #fff; }
+.show-status { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.show-progress-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.show-progress { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; background: var(--panel); border-radius: 16px; padding: 10px; }
+.show-progress-poster { position: relative; display: block; width: 64px; border: 0; padding: 0; background: var(--panel-2); border-radius: 10px; overflow: hidden; aspect-ratio: 2 / 3; cursor: pointer; }
+.show-progress-poster .poster { border-radius: 10px; }
+.show-progress-info { min-width: 0; display: grid; gap: 4px; }
+.show-bar { height: 6px; border-radius: 6px; background: var(--panel-2); overflow: hidden; }
+.show-bar span { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--velvet), var(--ticket)); }
+.show-plus { padding: 10px 12px; white-space: nowrap; }
+.show-progress-inline { display: grid; gap: 8px; margin-top: 10px; }
+.season-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.season { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; text-align: left; border: 0; cursor: pointer;
+  background: var(--panel); color: var(--text); border-radius: 12px; padding: 10px 12px; font: inherit; }
+.season-n { font-family: var(--f-mono); font-weight: 700; color: var(--ticket); }
+.season-txt { font-size: 14px; }
+.season-mark { font-size: 12px; color: var(--muted); }
+.season.done { background: color-mix(in srgb, var(--ok) 14%, var(--panel)); }
+.season.done .season-mark { color: var(--ok); font-weight: 700; }
+.season.current { box-shadow: 0 0 0 1px var(--ticket) inset; }
+.season.current .season-mark { color: var(--ticket); font-weight: 700; }
+/* Importar historial */
+.import-body { display: grid; gap: 12px; }
+.import-help p { margin: 0 0 8px; font-size: 14px; line-height: 1.45; }
+.import-big { margin: 0; font-size: 17px; }
+.import-list { margin: 6px 0 0; padding-left: 4px; list-style: none; display: grid; gap: 4px; font-size: 14px; }
+.import-actions { display: flex; gap: 8px; flex-wrap: wrap; }

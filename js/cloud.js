@@ -34,6 +34,7 @@ export async function connect(config) {
   const db = F.getFirestore(app);
   let user = null;
   let profile = null;
+  let seriesRules = null; // ¿aceptan las reglas de Firestore el campo «series»? (null = aún no se sabe)
   const listeners = new Set();
 
   const userDoc = (uid) => F.doc(db, "users", uid);
@@ -160,9 +161,23 @@ export async function connect(config) {
       const snap = await F.getDoc(tasteDoc(user.uid));
       return snap.exists() ? snap.data() : null;
     },
-    // Gustos, encuesta, tutorial visto, matches (lib), descartes (passed) y listas de la cuenta
-    saveTaste: (model, { survey = null, tour = false, lib = [], passed = [], lists = [], savedAt = Date.now() } = {}) =>
-      F.setDoc(tasteDoc(user.uid), { v: 1, n: model.n, f: model.f, survey, tour, lib, passed, lists, savedAt, at: F.serverTimestamp() }),
+    // Gustos, encuesta, tutorial visto, matches (lib), descartes (passed), listas y series de la cuenta.
+    // Si las reglas de Firestore aún no aceptan «series» (hay que publicarlas), se guarda todo lo demás igual.
+    async saveTaste(model, { survey = null, tour = false, lib = [], passed = [], lists = [], series = null, savedAt = Date.now() } = {}) {
+      const data = { v: 1, n: model.n, f: model.f, survey, tour, lib, passed, lists, savedAt, at: F.serverTimestamp() };
+      if (series && seriesRules !== false) {
+        try {
+          await F.setDoc(tasteDoc(user.uid), { ...data, series });
+          seriesRules = true;
+          return;
+        } catch (e) {
+          if (e?.code !== "permission-denied") throw e;
+          seriesRules = false;
+          console.warn("Las reglas de Firestore no aceptan series todavía: se guardan solo en este dispositivo");
+        }
+      }
+      return F.setDoc(tasteDoc(user.uid), data);
+    },
 
     // ---------- Seguridad ----------
     async changePassword(current, next) {

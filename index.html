@@ -241,12 +241,12 @@
         if (ended) return;
         ended = true;
         bar.style.width = "100%";
-        // Que se vea entera la entrada del logo (1,3 s; 2,6 s con la escena de un evento) aunque la app ya esté lista
+        // Que se vea con calma la entrada del logo (3 s; 4,2 s con la escena de un evento) aunque la app ya esté lista
         setTimeout(function () {
           clearInterval(tick);
           box.className = "out";
           setTimeout(function () { box.remove(); }, 500);
-        }, Math.max(150, (cls.contains("event-halloween") || cls.contains("event-navidad") ? 2600 : 1300) - (Date.now() - start)));
+        }, Math.max(150, (cls.contains("event-halloween") || cls.contains("event-navidad") ? 4200 : 3000) - (Date.now() - start)));
       },
     };
   })();
@@ -371,6 +371,10 @@
     <section class="view view-match" id="view-para-ti" aria-label="Match personalizado" hidden>
       <div id="match-body" class="match-body"></div>
     </section>
+    <!-- Series: apartado propio (data/series.json), separado de las pelis -->
+    <section class="view view-list view-series" id="view-series" aria-label="Series" hidden>
+      <div id="series-body" class="series-body"></div>
+    </section>
     <!-- Novedades: destacada, en cines, próximos estrenos, tendencias y noticias (data/news.json) -->
     <section class="view view-list view-news" id="view-novedades" aria-label="Novedades" hidden>
       <div id="news-body" class="news-body"></div>
@@ -398,6 +402,10 @@
     <a class="tab" href="#descubrir" data-view="descubrir">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18M15 3v18" opacity=".35"/></svg>
       <span>Descubrir</span>
+    </a>
+    <a class="tab" href="#series" data-view="series">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8.5 2.5 12 6l3.5-3.5"/><path d="M10 10v5.5l4.5-2.75z"/></svg>
+      <span>Series</span>
     </a>
     <a class="tab" href="#novedades" data-view="novedades">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2"/><path d="M7.5 9h6M7.5 12.5h6M7.5 16h4"/></svg>
@@ -463,6 +471,7 @@
 <script src="js/firebase-config.js?v=dev"></script>
 <script src="js/movies.js?v=dev"></script>
 <script src="js/taste.js?v=dev"></script>
+<script src="js/import.js?v=dev"></script>
 <script src="js/app.js?v=dev"></script>
 </body>
 </html>

@@ -58,6 +58,13 @@ const seasonsOf = (kws = []) => {
 // «Harry Potter - Colección» → «Harry Potter»
 const sagaName = (name) => String(name).replace(/\s*[-–:]\s*Colecci[oó]n$/i, "").replace(/^Colecci[oó]n:?\s*/i, "").replace(/\s*\(Colecci[oó]n\)$/i, "").trim();
 
+// Título en inglés (Letterboxd usa ese al exportar): solo si no es ya el título o el original
+const englishTitle = (d) => {
+  const t = (d.translations?.translations || []).find((x) => x.iso_639_1 === "en" && x.iso_3166_1 === "US")?.data?.title
+    || (d.translations?.translations || []).find((x) => x.iso_639_1 === "en")?.data?.title;
+  return t && t !== d.title && t !== d.original_title ? t : null;
+};
+
 export function toMovie(d, genreNames) {
   const es = d["watch/providers"]?.results?.ES;
   const flatrate = names(es?.flatrate);
@@ -69,6 +76,7 @@ export function toMovie(d, genreNames) {
     tmdb: d.id,
     title: d.title,
     original: d.original_title,
+    ...(englishTitle(d) ? { en: englishTitle(d) } : {}),
     year,
     director: (d.credits?.crew || []).filter((c) => c.job === "Director").map((c) => c.name).join(", ") || "Desconocido",
     cast: (d.credits?.cast || []).slice(0, 4).map((c) => c.name),
@@ -115,7 +123,7 @@ async function main() {
     try {
       const d = await tmdb(`/movie/${id}`, {
         language: "es-ES",
-        append_to_response: "videos,credits,watch/providers,keywords",
+        append_to_response: "videos,credits,watch/providers,keywords,translations",
         include_video_language: "es,en",
       });
       const m = toMovie(d, genreNames);

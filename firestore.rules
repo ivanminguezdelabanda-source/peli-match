@@ -1,6 +1,6 @@
 rules_version = '2';
 // Reglas de Cinder:
-// - Cada perfil (users/{uid}) y sus datos (tastes/{uid}: gustos, encuesta, tutorial, matches, descartes y listas)
+// - Cada perfil (users/{uid}) y sus datos (tastes/{uid}: gustos, encuesta, tutorial, matches, descartes, listas y series)
 //   solo los lee y los cambia su dueño.
 // - Los nombres de usuario (usernames/{nombre}) son únicos: cada uno apunta a su dueño.
 // - Las reseñas las lee cualquiera; solo su autor, con perfil terminado, las escribe o borra.
@@ -73,7 +73,8 @@ service cloud.firestore {
     match /tastes/{uid} {
       allow read, delete: if signedAs(uid);
       allow create, update: if signedAs(uid)
-        && request.resource.data.keys().hasOnly(['v', 'n', 'f', 'at', 'survey', 'tour', 'lib', 'passed', 'lists', 'savedAt'])
+        && request.resource.data.keys().hasOnly(['v', 'n', 'f', 'at', 'survey', 'tour', 'lib', 'passed', 'lists', 'series', 'savedAt'])
+        && (!('series' in request.resource.data) || (request.resource.data.series is list && request.resource.data.series.size() <= 1000))
         && (!('lib' in request.resource.data) || (request.resource.data.lib is list && request.resource.data.lib.size() <= 2000))
         && (!('passed' in request.resource.data) || (request.resource.data.passed is list && request.resource.data.passed.size() <= 3000))
         && (!('lists' in request.resource.data) || (request.resource.data.lists is list && request.resource.data.lists.size() <= 50))
