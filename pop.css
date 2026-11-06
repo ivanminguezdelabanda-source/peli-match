@@ -257,3 +257,114 @@ html[data-theme="light"] .sheet-backdrop { background: rgba(17,17,17,.45); }
   .sheet { border-bottom: 3px solid var(--edge); border-radius: 22px; box-shadow: 8px 8px 0 var(--edge); }
   .filter:hover, .btn:hover, .link-card:hover, .news-item:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--edge) !important; }
 }
+
+/* ======================================================================
+   Logo, pantalla de carga y eventos del año, también en estilo pop
+   (los estilos de la pantalla de carga están en index.html; aquí se pisan con «html body»)
+   ====================================================================== */
+.brand-mark { overflow: visible; filter: drop-shadow(2px 2px 0 var(--edge)); }
+.brand-mark rect:first-of-type { fill: #fff; stroke: #111; stroke-width: 3.5; }
+.brand-mark rect:nth-of-type(2) { fill: var(--pink); stroke: #111; stroke-width: 3.5; }
+.brand-mark path { fill: #111; }
+.brand-name b { color: var(--pink); }
+
+/* Pantalla de carga: fondo amarillo, círculo rosa y franja morada que entran, logo plano con borde y sombra dura */
+html body #splash { background: #ffd21f; color: #111; font-family: "Archivo", system-ui, sans-serif; overflow: hidden; }
+html body #splash::before {
+  left: -28vmax; top: 18%; width: 62vmax; height: 62vmax; margin: 0; border-radius: 50%;
+  background: #ff4f7b; animation: pop-in-left .7s cubic-bezier(.2,.9,.25,1.15) both; opacity: 1;
+}
+html body #splash::after {
+  content: ""; position: absolute; right: -10%; bottom: -12%; width: 85%; height: 46%;
+  background: #7b6cf6; clip-path: polygon(0 32%, 100% 0, 100% 100%, 0 100%);
+  animation: pop-in-right .75s cubic-bezier(.2,.9,.25,1.15) .12s both;
+}
+html body #splash .sp-logo, html body #splash .sp-bar, html body #splash .sp-text { position: relative; z-index: 2; }
+html body #splash .sp-mark { filter: drop-shadow(4px 4px 0 #111); }
+html body #splash .sp-back { fill: #fff; stroke: #111; stroke-width: 3.5; stroke-dasharray: none; stroke-dashoffset: 0;
+  animation: sp-tilt-back .5s cubic-bezier(.2,.9,.3,1.3) .3s both, pop-fade .25s ease .2s both; }
+html body #splash .sp-front > rect { fill: #ff4f7b; stroke: #111; stroke-width: 3.5; }
+html body #splash .sp-play { fill: #111; }
+html body #splash .sp-shine { display: none; }
+html body #splash .sp-name { font-family: "Archivo", "Arial Black", sans-serif; font-weight: 900; font-size: 50px; letter-spacing: -.03em; padding: 0 6px 6px 0; }
+html body #splash .sp-name span, html body #splash .sp-name b { font-weight: 900; }
+html body #splash .sp-name span { color: #111; }
+html body #splash .sp-name b { color: #ff4f7b; text-shadow: 3px 3px 0 #111; -webkit-text-stroke: 1.5px #111; }
+html body #splash .sp-bar { height: 16px; border-radius: 9px; background: #fff; border: 2.5px solid #111; box-shadow: 3px 3px 0 #111; }
+html body #splash .sp-bar i { border-radius: 0; background: repeating-linear-gradient(135deg, #ff4f7b 0 8px, #ff86a3 8px 16px); border-right: 2.5px solid #111; }
+html body #splash .sp-text { margin-top: -10px; color: #111; font-weight: 800; font-size: 15px; background: #fff; border: 2.5px solid #111;
+  border-radius: 10px; padding: 4px 12px; box-shadow: 3px 3px 0 #111; }
+html body #splash .sp-text:empty { visibility: hidden; }
+html body #splash.out { opacity: 0; }
+@keyframes pop-in-left { from { transform: translateX(-60%) scale(.6); } to { transform: none; } }
+@keyframes pop-in-right { from { transform: translateX(60%); } to { transform: none; } }
+@keyframes pop-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html body #splash::after { animation: none; } }
+
+/* --- Halloween: noche morada plana, luna amarilla con borde, calabaza naranja --- */
+html.event-halloween body #splash { background: #3b2a7a; color: #fff; }
+html.event-halloween body #splash::before { background: #ff7a1a; left: auto; right: -30vmax; top: -18vmax; width: 52vmax; height: 52vmax; display: none; }
+html.event-halloween body #splash::after { background: #111; height: 22%; bottom: -4%; clip-path: polygon(0 40%, 30% 20%, 60% 38%, 100% 10%, 100% 100%, 0 100%); }
+html.event-halloween body #splash .hw-fog { display: none; }
+html.event-halloween body #splash .hw-moon circle:not(.hw-moon-glow) { fill: #ffd21f; stroke: #111; stroke-width: 4; }
+html.event-halloween body #splash .hw-moon circle:not(.hw-moon-glow) ~ circle { fill: #f2b800; stroke-width: 0; }
+html.event-halloween body #splash .hw-moon-glow { display: none; }
+html.event-halloween body #splash .hw-star { fill: #ffd21f; }
+html.event-halloween body #splash .sp-mark { filter: drop-shadow(4px 4px 0 #111); animation: none; }
+html.event-halloween body #splash .sp-front > rect { fill: #ff7a1a; }
+html.event-halloween body #splash .sp-play { fill: #111; animation: sp-pop .35s cubic-bezier(.3,1.6,.5,1) .95s both; }
+html.event-halloween body #splash .sp-name span { color: #fff; text-shadow: 3px 3px 0 #111; -webkit-text-stroke: 1.5px #111; }
+html.event-halloween body #splash .sp-name b { color: #ff7a1a; text-shadow: 3px 3px 0 #111; }
+html.event-halloween body #splash .sp-bar i { background: repeating-linear-gradient(135deg, #ff7a1a 0 8px, #ffb15c 8px 16px); box-shadow: none; }
+html.event-halloween body #splash .sp-text { color: #111; }
+html.event-halloween body #splash .hw-spider i { background: #111; width: 2px; }
+
+/* --- Navidad: rojo plano, nieve blanca con borde, luces sin brillo --- */
+html.event-navidad body #splash { background: #e8343f; color: #fff; }
+html.event-navidad body #splash::before { background: #3cc23c; left: -30vmax; top: auto; bottom: -30vmax; width: 70vmax; height: 70vmax; }
+html.event-navidad body #splash::after { background: #fff; height: 18%; bottom: -3%; clip-path: polygon(0 35%, 50% 0, 100% 30%, 100% 100%, 0 100%); border-top: 0; }
+html.event-navidad body #splash .sp-scene > svg:not(.xm-lights) { display: none; }
+html.event-navidad body #splash .xm-flake { background: #fff; border: 1.5px solid #111; opacity: 1; }
+html.event-navidad body #splash .xm-bulb ellipse { filter: none !important; stroke: #111; stroke-width: 2; }
+html.event-navidad body #splash .xm-lights path { stroke: #111; stroke-width: 3; }
+html.event-navidad body #splash .sp-front > rect { fill: #3cc23c; }
+html.event-navidad body #splash .xm-ribbon, html.event-navidad body #splash .xm-bow { fill: #ffd21f; stroke: #111; stroke-width: 1; }
+html.event-navidad body #splash .xm-cap { fill: #fff; stroke: #111; stroke-width: 1.5; }
+html.event-navidad body #splash .sp-name span { color: #fff; text-shadow: 3px 3px 0 #111; -webkit-text-stroke: 1.5px #111; }
+html.event-navidad body #splash .sp-name b { color: #ffd21f; }
+html.event-navidad body #splash .sp-bar i { background: repeating-linear-gradient(135deg, #e8343f 0 8px, #fff 8px 16px); }
+
+/* --- Eventos dentro de la app: cambian la paleta pop y quitan degradados y brillos --- */
+html.event-halloween { --yellow: #ff8a1f; --pink: #b46bff; --peach: #ffc27a; --lime: #ffb15c; }
+html.event-halloween:not([data-theme="light"]) { --ink: #1c1230; --panel: #2c1d47; --panel-2: #3a2760; --line: #000; }
+html.event-halloween[data-theme="light"] { --ink: #fff1e2; --ticket: var(--yellow); --like: var(--yellow); }
+html.event-navidad { --yellow: #ffd21f; --pink: #e8343f; --lime: #3cc23c; --peach: #ffd7d0; }
+html.event-navidad:not([data-theme="light"]) { --ink: #0f2a20; --panel: #173a2c; --panel-2: #1f4a39; }
+html.event-navidad[data-theme="light"] { --ink: #fff5ef; }
+html.event-sanvalentin { --yellow: #ff9fbd; --pink: #ff3d7f; --peach: #ffd0de; }
+html.event-sanvalentin[data-theme="light"] { --ink: #fff1f5; }
+html.event-premios { --yellow: #f5c518; --pink: #ff4f7b; --peach: #f9e3a0; }
+html.event-premios:not([data-theme="light"]) { --ink: #141414; --panel: #222; --panel-2: #2e2e2e; }
+html.event-verano { --yellow: #ffd21f; --pink: #ff7a59; --purple: #18b7c9; --info: #18b7c9; --peach: #ffe3a3; }
+html.event-verano[data-theme="light"] { --ink: #fff9e3; }
+html[class*="event-"]:not([data-theme="light"]) body { background: var(--ink); }
+
+.filter.filter-event { background: var(--pink); color: #111; }
+.filter.filter-event[aria-pressed="true"] { background: var(--pink); color: #111; box-shadow: var(--pop) !important; transform: translate(-1px, -1px); }
+.event-row { padding: 14px; margin: 0; border-radius: 18px; background: var(--peach); color: #111; border: var(--bw) solid var(--edge); box-shadow: var(--pop); }
+.event-row .news-section-title, .event-row .tile-name, .event-row .tile-meta { color: #111; }
+html.event-navidad .event-row, html.event-halloween .event-row { background: var(--peach); box-shadow: var(--pop); }
+.event-go, html.event-halloween .event-go { background: var(--pink); color: #111; }
+html[class*="event-"] .event-box .reel-wrap { background: var(--peach); }
+html[class*="event-"] .event-box .reel-marker { background: var(--pink); }
+html[class*="event-"] .event-box .reel-marker::before { border-top-color: var(--pink); }
+html[class*="event-"] .event-box .reel-marker::after { border-bottom-color: var(--pink); }
+html[class*="event-"] .event-box .reel-open { background: var(--pink); color: #111; }
+.brand-name { white-space: nowrap; }
+.topbar { gap: 8px; }
+.top-actions { gap: 6px; }
+.icon-btn { width: 40px; height: 40px; }
+@media (max-width: 420px) { .brand-name { font-size: 20px; } .mode-btn { padding: 6px 9px; } html[class*="event-"] .brand-mark { display: none; } }
+html.event-navidad .filter.filter-event, html.event-navidad .event-go,
+html.event-navidad .event-box .reel-open { color: #fff; }
+html[class*="event-"] .filter.filter-event { background: var(--pink); }
