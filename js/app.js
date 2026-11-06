@@ -232,6 +232,41 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const platformUrl = (p, m) => SEARCH[platform(p)] ? SEARCH[platform(p)] + encodeURIComponent(m.title) : whereUrl(m);
   const provList = (names, m) => `<ul class="prov-list">${names.map((p) => `<li><a class="prov" href="${esc(platformUrl(p, m))}" target="_blank" rel="noopener" aria-label="Ver «${esc(m.title)}» en ${esc(p)}">${LOGOS[p]
     ? `<img src="https://image.tmdb.org/t/p/w92${esc(LOGOS[p])}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span>${esc(p)}</span><span class="prov-go" aria-hidden="true">↗</span></a></li>`).join("")}</ul>`;
+  // ---------- Precios de alquiler y compra ----------
+  // La única tienda que da sus precios en abierto es Apple (API de búsqueda de iTunes, tienda de España):
+  // se busca la peli por título y año y, si está, se enseña cuánto cuesta alquilarla y comprarla (SD y HD).
+  // Las demás tiendas no publican precios: se queda su enlace como hasta ahora.
+  const priceCache = new Map();
+  const euro = (n) => (typeof n === "number" && n > 0 ? n.toLocaleString("es-ES", { style: "currency", currency: "EUR" }) : null);
+  function applePrice(m) {
+    if (priceCache.has(m.id)) return priceCache.get(m.id);
+    const norm = window.CinderImport?.norm || ((x) => String(x || "").toLowerCase());
+    const ask = (term) => fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=es&media=movie&entity=movie&limit=10`)
+      .then((r) => (r.ok ? r.json() : { results: [] })).then((d) => d.results || []).catch(() => []);
+    const pick = (list) => list.find((r) => {
+      const y = Number(String(r.releaseDate || "").slice(0, 4));
+      const t = norm(r.trackName);
+      return Math.abs(y - m.year) <= 1 && [m.title, m.original].some((x) => x && (t === norm(x) || t.startsWith(norm(x) + " ")));
+    });
+    const p = ask(m.title).then((list) => pick(list) || (m.original && m.original !== m.title ? ask(m.original).then(pick) : null)).then((r) => r || null);
+    priceCache.set(m.id, p);
+    return p;
+  }
+  function loadPrices(m, box) {
+    applePrice(m).then((r) => {
+      if (!r || !box.isConnected) return;
+      const rows = [["Alquiler", euro(r.trackRentalPrice), euro(r.trackHdRentalPrice)], ["Compra", euro(r.trackPrice), euro(r.trackHdPrice)]]
+        .filter(([, sd, hd]) => sd || hd);
+      if (!rows.length) return;
+      box.insertAdjacentHTML("beforeend", `<div class="prices">
+        <p class="where-kind">Precio en Apple TV</p>
+        <ul class="price-list">${rows.map(([k, sd, hd]) => `<li><span>${k}</span><b>${sd || hd}</b>${sd && hd && hd !== sd ? `<small>HD ${hd}</small>` : ""}</li>`).join("")}</ul>
+        ${r.trackViewUrl ? `<a class="link-btn" href="${esc(r.trackViewUrl)}" target="_blank" rel="noopener">Ver en Apple TV ↗</a>` : ""}
+        <p class="prices-note">Precio de hoy en la tienda de España. Las demás tiendas no publican sus precios: míralos en su enlace.</p>
+      </div>`);
+    });
+  }
+
   function whereBlock(m) {
     if (!m.providers) return "";
     // «Netflix Standard with Ads» o «HBO Max Amazon Channel» se enseñan como su plataforma, sin repetir
@@ -1038,7 +1073,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       s += add(has(["Comedia", "Acción", "Terror"]).length * 0.8, "Funciona muy bien con amigos");
     }
 
-    const moodHits = p.moods.filter((mood) => MOOD_GENRES[mood].some((x) => g.includes(x)));
+    const moodHits = p.moods.filter((mood) => (MOOD_GENRES[mood] || []).some((x) => g.includes(x)));
     s += add(Math.min(moodHits.length, 2) * 2.2, moodHits.length ? `Encaja con lo que te apetece: ${moodHits.join(", ").toLowerCase()}` : "");
 
     const genreHits = has(p.genres);
@@ -1701,7 +1736,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     Object.assign(state, {
       taste: null, profile: null, tourDone: false, weekly: null, library: [], passed: [], lists: [], history: [],
       myReviews: {}, reviewSignals: {}, order: shuffle(MOVIES.map((m) => m.id)), owner: null, savedAt: 0,
-      alerts: {}, alerted: [], blocked: [], reported: [], provSeen: null,
+      alerts: {}, alerted: [], blocked: [], reported: [], provSeen: null, provGone: null,
     });
     personal = discovery = results = null;
     forYou = [];
@@ -2183,12 +2218,49 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const pref = themePref();
     const light = pref === "claro" || (pref === "auto" && Boolean(lightQuery?.matches));
     document.documentElement.dataset.theme = light ? "light" : "dark";
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f7f1ea" : "#14100f");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#fbf5e6" : "#17142a");
     plugin("SystemBars")?.setStyle?.({ style: light ? "LIGHT" : "DARK" }).catch?.(() => {});
-    plugin("CinderNative")?.setBars?.({ color: light ? "#f7f1ea" : "#14100f", light }).catch?.(() => {});
+    plugin("CinderNative")?.setBars?.({ color: light ? "#fbf5e6" : "#17142a", light }).catch?.(() => {});
   }
   lightQuery?.addEventListener?.("change", applyTheme);
   applyTheme();
+  // ---------- Accesibilidad: letra más grande, alto contraste y menos movimiento (clases a11y-* en <html>) ----------
+  const A11Y = [["big", "Letra más grande"], ["contrast", "Alto contraste"], ["calm", "Menos animaciones"]];
+  const a11yPrefs = () => { try { return JSON.parse(localStorage.getItem("cinder:acceso") || "{}") || {}; } catch (e) { return {}; } };
+  function applyA11y() {
+    const p = a11yPrefs();
+    A11Y.forEach(([k]) => document.documentElement.classList.toggle("a11y-" + k, Boolean(p[k])));
+  }
+  function a11ySection() {
+    const sec = accountSection("Accesibilidad");
+    sec.append(el("p", "empty-text", "Para leer mejor o si las animaciones te marean. Se guarda en este dispositivo."));
+    const box = el("div", "a11y-opts");
+    const draw = () => {
+      const p = a11yPrefs();
+      box.replaceChildren(...A11Y.map(([k, label]) => {
+        const b = el("button", "filter", esc(label));
+        b.type = "button";
+        b.setAttribute("role", "switch");
+        b.setAttribute("aria-checked", String(Boolean(p[k])));
+        b.setAttribute("aria-pressed", String(Boolean(p[k])));
+        b.onclick = () => {
+          const q = a11yPrefs();
+          q[k] = !q[k];
+          try { localStorage.setItem("cinder:acceso", JSON.stringify(q)); } catch (e) { /* sin almacenamiento */ }
+          applyA11y();
+          draw();
+          box.querySelector(`[data-k="${k}"]`)?.focus();
+        };
+        b.dataset.k = k;
+        return b;
+      }));
+    };
+    draw();
+    sec.append(box);
+    return sec;
+  }
+  applyA11y();
+
   function themeSection() {
     const sec = accountSection("Tema");
     const row = el("div", "filters wrap");
@@ -2475,7 +2547,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     box.replaceChildren();
     if (!cloud) {
       box.append(el("h1", "page-title", "Mi cuenta"),
-        el("p", "empty-text", "Las cuentas aún no están activadas en esta versión de Cinder. Mientras tanto, todo se guarda en este móvil."));
+        el("p", "empty-text", "Las cuentas aún no están activadas en esta versión de Cinder. Mientras tanto, todo se guarda en este móvil."), themeSection(), a11ySection());
       return;
     }
     const u = cloud.user;
@@ -2489,7 +2561,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       const enter = el("button", "btn btn-ghost", "Ya tengo cuenta: entrar");
       enter.type = "button";
       enter.onclick = () => leaveGuest("entrar");
-      box.append(create, enter, tasteSection(), importSection(), themeSection(), el("p", "account-note", `${termsLink()} · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a>`), appLink());
+      box.append(create, enter, tasteSection(), importSection(), themeSection(), a11ySection(), el("p", "account-note", `${termsLink()} · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a>`), appLink());
       return;
     }
     if (u && !u.ready) {
@@ -2561,7 +2633,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
         adm.href = "#admin";
         box.append(adm);
       }
-      box.append(prof, tasteSection(), importSection(), themeSection());
+      box.append(prof, tasteSection(), importSection(), themeSection(), a11ySection());
 
       // Seguridad
       const sec = accountSection("Seguridad");
@@ -3253,6 +3325,9 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     content.querySelector("#sheet-share").onclick = () => shareMovie(m);
     const cines = content.querySelector("#sheet-cines");
     if (cines) cines.onclick = () => openCinemas(m);
+    // Precios de alquiler y compra (Apple TV, que es la tienda que los publica)
+    const whereEl = content.querySelector(".where");
+    if (whereEl && m.kind !== "tv" && (m.pay || []).length) loadPrices(m, whereEl);
     // Maratones y pelis parecidas
     const more = content.querySelector("#sheet-more");
     marathonsOf(m).forEach((mar) => more.append(marathonBlock(mar)));
@@ -3555,21 +3630,40 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     const wanted = state.profile?.platforms?.length ? new Set(state.profile.platforms.map(platform)) : null;
     const first = !state.provSeen;
     const seen = state.provSeen || {};
-    const arrived = [];
+    const arrived = [], gone = [];
+    // Las que se van: TMDB a veces quita una plataforma un día y la vuelve a poner, así que solo se avisa si
+    // sigue sin estar al menos 20 horas después (state.provGone guarda desde cuándo falta)
+    const missing = state.provGone || {};
     mine.forEach((id) => {
       const m = byId[id];
       if (!m || entry(id)?.watched || !m.providers) return;
       const now = platformsOf(m);
       const before = seen[id];
+      let keep = now;
       if (before && !first) {
         const added = now.filter((p) => !before.includes(p) && (!wanted || wanted.has(p)));
         if (added.length) arrived.push({ m, where: added[0] });
+        const left = before.filter((p) => !now.includes(p) && (!wanted || wanted.has(p)));
+        const pend = missing[id] || {};
+        Object.keys(pend).forEach((p) => { if (!left.includes(p)) delete pend[p]; }); // ha vuelto
+        const confirmed = [];
+        left.forEach((p) => {
+          if (!pend[p]) pend[p] = Date.now();
+          else if (Date.now() - pend[p] > 20 * 3600e3) { confirmed.push(p); delete pend[p]; }
+        });
+        if (confirmed.length) gone.push({ m, where: confirmed[0] });
+        if (Object.keys(pend).length) missing[id] = pend; else delete missing[id];
+        // mientras no se confirma, se sigue contando como que está (para avisar cuando se confirme)
+        keep = [...new Set([...now, ...Object.keys(pend)])];
       }
-      seen[id] = now;
+      seen[id] = keep;
     });
     Object.keys(seen).forEach((id) => { if (!mine.has(id)) delete seen[id]; });
+    Object.keys(missing).forEach((id) => { if (!mine.has(id)) delete missing[id]; });
     state.provSeen = seen;
+    state.provGone = missing;
     persist();
+    if (gone.length) notifyGone(gone);
     if (!arrived.length) return;
     const one = arrived[0];
     toast(arrived.length === 1 ? `«${one.m.title}» ya está en ${one.where}` : `${arrived.length} pelis de tus listas han llegado a plataformas: «${one.m.title}» (${one.where})…`, "Ver", () => openSheet(one.m.id), 7000);
@@ -3579,6 +3673,25 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       id: ARRIVAL_ID + ((Number(m.tmdb) || i) % 90000000),
       title: `«${m.title}» ya está en ${where}`,
       body: "La tenías guardada en Cinder. Toca para ver la ficha.",
+      schedule: { at: new Date(Date.now() + 1500 + i * 500), allowWhileIdle: true },
+      smallIcon: "ic_stat_cinder",
+      iconColor: "#E0414B",
+      extra: { id: m.id },
+    })) })).catch((e) => console.warn("Aviso de plataformas:", e));
+  }
+
+  // Una peli de tus listas ya no está en una plataforma: aviso en la app y, en Android, notificación
+  const GONE_ID = 400000000;
+  function notifyGone(gone) {
+    const one = gone[0];
+    setTimeout(() => toast(gone.length === 1 ? `«${one.m.title}» ya no está en ${one.where}` : `${gone.length} pelis de tus listas han salido de plataformas: «${one.m.title}» (${one.where})…`,
+      "Dónde verla", () => openSheet(one.m.id), 8000), 400);
+    const ln = NATIVE && plugin("LocalNotifications");
+    if (!ln) return;
+    ln.checkPermissions().then(({ display }) => display === "granted" && ln.schedule({ notifications: gone.slice(0, 5).map(({ m, where }, i) => ({
+      id: GONE_ID + ((Number(m.tmdb) || i) % 90000000),
+      title: `«${m.title}» se ha ido de ${where}`,
+      body: "La tenías guardada en Cinder. Toca para ver dónde verla ahora.",
       schedule: { at: new Date(Date.now() + 1500 + i * 500), allowWhileIdle: true },
       smallIcon: "ic_stat_cinder",
       iconColor: "#E0414B",

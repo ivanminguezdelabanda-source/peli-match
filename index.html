@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Cinder</title>
-<meta name="theme-color" content="#14100f">
+<meta name="theme-color" content="#17142a">
 <link rel="icon" href="img/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -20,11 +20,14 @@
       var t = localStorage.getItem("cinder:tema") || "oscuro";
       var light = t === "claro" || (t === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches);
       document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
-      if (light) document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f7f1ea");
+      if (light) document.querySelector('meta[name="theme-color"]').setAttribute("content", "#fbf5e6");
       // Halloween (10 oct – 2 nov) y Navidad (1 dic – 7 ene): estética especial desde la pantalla de carga
       var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
       if (md >= 1010 && md <= 1102) document.documentElement.classList.add("event-halloween");
       else if (md >= 1201 || md <= 107) document.documentElement.classList.add("event-navidad");
+      // Accesibilidad (Mi cuenta): letra más grande, alto contraste, menos animaciones
+      var acc = JSON.parse(localStorage.getItem("cinder:acceso") || "{}") || {};
+      ["big", "contrast", "calm"].forEach(function (k) { if (acc[k]) document.documentElement.classList.add("a11y-" + k); });
       // Recién cambiado entre Pelis y Series: sin la animación de inicio, solo una transición corta
       var quick = sessionStorage.getItem("cinder:rapido");
       if (quick) { sessionStorage.removeItem("cinder:rapido"); document.documentElement.classList.add("quick-boot"); document.documentElement.setAttribute("data-quick", quick); }

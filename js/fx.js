@@ -2,7 +2,7 @@
 // miran lo que pasa en la página (qué pestaña está activa, qué se añade, cuándo para la caja…) y le ponen movimiento.
 // Los estilos de cada animación están al final de pop.css. Con «reducir movimiento» en el móvil no se hace nada.
 (function () {
-  if (!window.matchMedia || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (!window.matchMedia || window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.classList.contains("a11y-calm")) return;
   const root = document.documentElement;
   root.classList.add("fx");
 

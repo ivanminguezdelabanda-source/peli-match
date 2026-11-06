@@ -452,3 +452,50 @@ html.quick-boot body #splash::after {
 html.quick-boot[data-quick="series"] body #splash::after { background: #7b6cf6; color: #fff; text-shadow: 3px 3px 0 #111; }
 @keyframes fx-quick { from { transform: scale(.4) rotate(-12deg); opacity: 0; } to { transform: rotate(-3deg); } }
 html.quick-boot body #splash.out { transition-duration: .25s; }
+
+/* ======================================================================
+   Accesibilidad (Mi cuenta → Accesibilidad; clases a11y-* en <html>)
+   ====================================================================== */
+.a11y-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.a11y-opts .filter[aria-checked="true"]::before { content: "✓ "; }
+
+/* Letra más grande: todo el texto un 15–20 % mayor y botones algo más altos */
+html.a11y-big body { font-size: 17.5px; }
+html.a11y-big .card-title { font-size: 26px; }
+html.a11y-big .card-desc { font-size: 15.5px; -webkit-line-clamp: 3; }
+html.a11y-big .card-meta, html.a11y-big .tile-meta, html.a11y-big .chip, html.a11y-big .cine-meta { font-size: 14px; }
+html.a11y-big .tile-name, html.a11y-big .list-card-name { font-size: 16.5px; }
+html.a11y-big .sheet-desc, html.a11y-big .review p, html.a11y-big .news-item p { font-size: 17.5px; }
+html.a11y-big .sheet-title { font-size: 30px; }
+html.a11y-big .btn, html.a11y-big .filter, html.a11y-big .opt, html.a11y-big .seg-btn, html.a11y-big .mode-btn { font-size: 16px; }
+html.a11y-big .btn { padding: 13px 20px; }
+html.a11y-big .filter { padding: 8px 14px; }
+html.a11y-big .tab { font-size: 13px; }
+html.a11y-big .toast { font-size: 16px; }
+html.a11y-big .empty-text, html.a11y-big .account-sub, html.a11y-big .q-hint, html.a11y-big .tour-text { font-size: 16px; }
+html.a11y-big .section-label, html.a11y-big .fact dt, html.a11y-big .q-count, html.a11y-big .result-label { font-size: 13px; }
+html.a11y-big .grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
+
+/* Alto contraste: texto secundario igual de oscuro (o claro) que el principal, bordes más gruesos y enlaces subrayados */
+html.a11y-contrast { --muted: var(--text); --bw: 3px; --veil: var(--panel-2); }
+html.a11y-contrast[data-theme="light"] { --text: #000; --ink: #fff; --panel-2: #fff3c4; }
+html.a11y-contrast:not([data-theme="light"]) { --text: #fff; --ink: #000; --panel: #15122a; --panel-2: #241f45; --edge: #fff; --line: #fff; }
+html.a11y-contrast:not([data-theme="light"]) .card, html.a11y-contrast:not([data-theme="light"]) .sheet { border-color: #fff; }
+html.a11y-contrast .card-info { background: rgba(0,0,0,.92); }
+html.a11y-contrast .card-desc, html.a11y-contrast .card-meta { color: #fff; }
+html.a11y-contrast a:not(.btn):not(.tab):not(.prov):not(.link-card), html.a11y-contrast .link-btn { text-decoration: underline; text-decoration-thickness: 2px; }
+html.a11y-contrast :focus-visible { outline: 4px solid var(--pink); outline-offset: 3px; }
+html.a11y-contrast .poster-credit, html.a11y-contrast .poster-year { opacity: 1; }
+
+/* Menos animaciones: como «reducir movimiento» del móvil, pero elegido desde Cinder */
+html.a11y-calm *, html.a11y-calm *::before, html.a11y-calm *::after { animation: none !important; transition: none !important; }
+html[data-theme="light"] .brand-name b { color: #d0164f; }
+
+/* Precios de alquiler y compra en la ficha */
+.prices { margin-top: 12px; }
+.price-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.price-list li { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; background: var(--panel); border: var(--bw) solid var(--edge); border-radius: 12px; box-shadow: var(--pop-sm); }
+.price-list span { font-size: 13px; color: var(--muted); font-weight: 700; }
+.price-list b { font-size: 18px; font-weight: 900; }
+.price-list small { font-size: 12px; color: var(--muted); font-weight: 700; }
+.prices-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
