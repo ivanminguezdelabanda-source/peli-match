@@ -3989,6 +3989,15 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
       b.onclick = () => { t.hidden = true; onAction(); };
       t.append(b);
     }
+    // Se quita con la X (o deslizándolo hacia arriba)
+    const x = el("button", "toast-x", "✕");
+    x.type = "button";
+    x.setAttribute("aria-label", "Cerrar aviso");
+    x.onclick = () => { clearTimeout(toastTimer); t.hidden = true; };
+    t.append(x);
+    let y0 = null;
+    t.ontouchstart = (e) => { y0 = e.touches[0].clientY; };
+    t.ontouchend = (e) => { if (y0 != null && y0 - e.changedTouches[0].clientY > 25) x.onclick(); y0 = null; };
     t.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => (t.hidden = true), ms);

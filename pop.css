@@ -428,3 +428,14 @@ html[class*="event-"] .filter.filter-event { background: var(--pink); }
 
 /* 9. Inclinación hacia el ratón */
 .fx-tilt { transform: perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translate(-1px, -1px) !important; transition: transform .12s ease-out !important; }
+
+/* Avisos («Tienes N matches guardados»…): arriba, bajo la cabecera, con una X para quitarlos */
+.toast { top: calc(var(--sa-t) + 64px); bottom: auto; white-space: normal; text-overflow: clip; padding: 8px 8px 8px 14px; gap: 10px;
+  width: max-content; max-width: min(calc(100% - 24px), 520px); animation: fx-toast .4s cubic-bezier(.3,1.5,.5,1); z-index: 35; }
+.toast > span { flex: 1; min-width: 0; }
+.toast button { flex: none; }
+.toast .toast-x { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; text-decoration: none; font-size: 14px;
+  background: #fff; border: 2px solid #111; box-shadow: 2px 2px 0 #111; }
+.toast .toast-x:active { transform: translate(2px, 2px); box-shadow: none; }
+@keyframes fx-toast { from { transform: translate(-50%, -30px); opacity: 0; } }
+@media (min-width: 1024px) { .toast { top: 20px; } }
