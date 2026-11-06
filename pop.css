@@ -439,3 +439,16 @@ html[class*="event-"] .filter.filter-event { background: var(--pink); }
 .toast .toast-x:active { transform: translate(2px, 2px); box-shadow: none; }
 @keyframes fx-toast { from { transform: translate(-50%, -30px); opacity: 0; } }
 @media (min-width: 1024px) { .toast { top: 20px; } }
+
+/* Cambio entre Pelis y Series: en vez de la animación de inicio, un cartel con el modo que entra de golpe */
+html.quick-boot body #splash { background: var(--ink, #17142a); }
+html.quick-boot body #splash > *, html.quick-boot body #splash::before { display: none; }
+html.quick-boot body #splash::after {
+  content: attr(data-mode); position: static; width: auto; height: auto; clip-path: none; display: block;
+  font-family: "Archivo", "Arial Black", sans-serif; font-weight: 900; font-size: 54px; letter-spacing: -.03em; color: #111;
+  padding: 10px 30px 14px; background: #ffd21f; border: 3px solid #111; border-radius: 18px; box-shadow: 6px 6px 0 #111;
+  animation: fx-quick .45s cubic-bezier(.3,1.6,.5,1) both;
+}
+html.quick-boot[data-quick="series"] body #splash::after { background: #7b6cf6; color: #fff; text-shadow: 3px 3px 0 #111; }
+@keyframes fx-quick { from { transform: scale(.4) rotate(-12deg); opacity: 0; } to { transform: rotate(-3deg); } }
+html.quick-boot body #splash.out { transition-duration: .25s; }

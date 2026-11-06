@@ -25,6 +25,9 @@
       var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
       if (md >= 1010 && md <= 1102) document.documentElement.classList.add("event-halloween");
       else if (md >= 1201 || md <= 107) document.documentElement.classList.add("event-navidad");
+      // Recién cambiado entre Pelis y Series: sin la animación de inicio, solo una transición corta
+      var quick = sessionStorage.getItem("cinder:rapido");
+      if (quick) { sessionStorage.removeItem("cinder:rapido"); document.documentElement.classList.add("quick-boot"); document.documentElement.setAttribute("data-quick", quick); }
     } catch (e) { /* sin almacenamiento: oscuro */ }
   })();
 </script>
@@ -233,7 +236,8 @@
     var lines = cls.contains("event-halloween") ? ["Encendiendo las calabazas…", "Despertando a los vampiros…", "Buscando fantasmas en la sala…", "Repartiendo caramelos…"]
       : cls.contains("event-navidad") ? ["Colgando las luces…", "Preparando el turrón…", "Buscando a Papá Noel…", "Envolviendo las pelis…"]
       : ["Apagando las luces…", "Preparando la cartelera…", "Haciendo palomitas…", "Buscando tu butaca…"];
-    var n = 0, start = Date.now(), ended = false;
+    var n = 0, start = Date.now(), ended = false, quick = cls.contains("quick-boot");
+    if (quick) box.setAttribute("data-mode", document.documentElement.getAttribute("data-quick") === "series" ? "Series" : "Pelis");
     text.textContent = lines[0];
     var tick = setInterval(function () { text.textContent = lines[++n % lines.length]; }, 1700);
     window.__splash = {
@@ -247,7 +251,7 @@
           clearInterval(tick);
           box.className = "out";
           setTimeout(function () { box.remove(); }, 500);
-        }, Math.max(150, (cls.contains("event-halloween") || cls.contains("event-navidad") ? 4200 : 3000) - (Date.now() - start)));
+        }, Math.max(150, (quick ? 450 : cls.contains("event-halloween") || cls.contains("event-navidad") ? 4200 : 3000) - (Date.now() - start)));
       },
     };
   })();

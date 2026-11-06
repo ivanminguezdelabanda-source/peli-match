@@ -4007,7 +4007,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   // Cambiar de modo guarda lo pendiente y vuelve a abrir Cinder con el otro catálogo (cada uno con sus datos)
   function switchMode(mode, hash) {
     flushAccount().finally(() => {
-      try { localStorage.setItem("cinder:modo", mode); } catch (e) { /* sin almacenamiento */ }
+      try { localStorage.setItem("cinder:modo", mode); sessionStorage.setItem("cinder:rapido", mode); } catch (e) { /* sin almacenamiento */ }
       const keep = /^#(descubrir|novedades|biblioteca|para-ti|ruleta|buscar|cuenta)$/.test(location.hash) ? location.hash : "#descubrir";
       history.replaceState(null, "", location.pathname + location.search + (hash || keep));
       location.reload();
@@ -4200,7 +4200,8 @@ const SERIES_MODE = (() => {
 })();
 document.documentElement.classList.toggle("mode-series", SERIES_MODE);
 // La entrada del logo (1,5 s) va primero: leer el catálogo (varios MB) bloquea el móvil y la animación se cortaba
-const INTRO = new Promise((ok) => setTimeout(ok, 1500));
+// (al cambiar entre Pelis y Series no hay entrada del logo: se abre al momento)
+const INTRO = document.documentElement.classList.contains("quick-boot") ? Promise.resolve() : new Promise((ok) => setTimeout(ok, 1500));
 async function loadCatalog(url = "data/movies.json", quiet = false) {
   const cache = await openCache();
   const old = cache && (await cache.match(url).catch(() => null));
