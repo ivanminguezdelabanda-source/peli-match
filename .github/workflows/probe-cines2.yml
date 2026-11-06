@@ -8,9 +8,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           mkdir -p probe; cd probe
-          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-          for id in 301 327 267; do curl -sSL -m 30 -A "$UA" -H "Accept-Language: es-ES" -o t$id.html -w "$id %{http_code} %{size_download}\n" "https://www.filmaffinity.com/es/theater-showtimes.php?id=$id" >> codes.txt; sleep 2; done
-          cat codes.txt
+          curl -sS -m 30 -D h1.txt -o it1.json "https://itunes.apple.com/search?term=el%20caballero%20oscuro&country=es&media=movie&entity=movie&limit=5"
+          curl -sS -m 30 -H "Origin: https://ivanminguezdelabanda-source.github.io" -D h2.txt -o it2.txt "https://itunes.apple.com/search?term=origen&country=es&media=movie&entity=movie&limit=5&callback=cb"
+          head -c 300 it2.txt
       - run: |
           git config user.name probe; git config user.email probe@users.noreply.github.com
           git add probe; git commit -qm probe; git push -q origin HEAD:probe-cines2
