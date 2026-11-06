@@ -96,6 +96,9 @@ jobs:
         run: printf 'window.PELIMATCH_AI_URL = "%s";\n' "$URL" > js/config.js && cat js/config.js
         env:
           URL: ${{ steps.ia.outputs.deployment-url }}
+      # El catálogo en dos partes: lo necesario para abrir (sin sinopsis) y las sinopsis aparte, para que la app arranque antes
+      - name: Preparar el catálogo
+        run: node scripts/pack-catalog.mjs
       # Traduce el JS y el CSS a una versión que entienden también los móviles antiguos
       # (WebView de Android 8-11 sin actualizar, iPhone con iOS 12-13). El código del repositorio no cambia.
       - name: Compatibilidad con navegadores antiguos

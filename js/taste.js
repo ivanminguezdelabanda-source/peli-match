@@ -19,9 +19,10 @@
   const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const now = () => Date.now();
 
-  function createTaste(movies) {
-    // ---------- Rasgos de cada peli ----------
-    // Temas: palabras de la sinopsis con TF-IDF (las comunes a 3–300 pelis dicen algo del tema)
+  // Temas de cada peli: palabras de la sinopsis con TF-IDF (las comunes a 3–300 pelis dicen algo del tema).
+  // Se calculan al publicar la web (scripts/pack-catalog.mjs → campo kw) para no repasar miles de sinopsis
+  // en el móvil al abrir; si el catálogo no los trae, se calculan aquí. Devuelve Map id → [hasta 6 palabras].
+  function keywordIndex(movies) {
     const tokens = new Map();
     const df = new Map();
     // Los nombres propios (Vito, Corleone…) no son temas: se descartan las palabras que casi siempre van en mayúscula
@@ -43,6 +44,19 @@
       tf.forEach((_, w) => df.set(w, (df.get(w) || 0) + 1));
     }
     const N = movies.length;
+    const out = new Map();
+    for (const m of movies) {
+      out.set(m.id, [...(tokens.get(m.id) || [])]
+        .filter(([w]) => { const d = df.get(w); return d >= 3 && d <= 300; })
+        .map(([w, n]) => [w, n * Math.log(N / df.get(w))])
+        .sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w]) => w));
+    }
+    return out;
+  }
+
+  function createTaste(movies) {
+    // ---------- Rasgos de cada peli ----------
+    const kwIndex = movies.some((m) => m.kw) ? null : keywordIndex(movies);
     const featCache = new Map();
     function features(m) {
       let f = featCache.get(m.id);
@@ -51,11 +65,7 @@
       (m.genres || []).forEach((g) => f.push("g:" + g));
       if (m.director && m.director !== "Desconocido") f.push("d:" + m.director);
       (m.cast || []).slice(0, 4).forEach((a) => f.push("a:" + a));
-      const kw = [...(tokens.get(m.id) || [])]
-        .filter(([w]) => { const d = df.get(w); return d >= 3 && d <= 300; })
-        .map(([w, n]) => [w, n * Math.log(N / df.get(w))])
-        .sort((a, b) => b[1] - a[1]).slice(0, 6);
-      kw.forEach(([w]) => f.push("k:" + w));
+      (m.kw || kwIndex?.get(m.id) || []).forEach((w) => f.push("k:" + w));
       if (m.year) f.push("e:" + Math.floor(m.year / 10) * 10);
       if (m.runtime) f.push("t:" + (m.runtime < 95 ? "corta" : m.runtime <= 135 ? "media" : "larga"));
       featCache.set(m.id, f);
@@ -209,5 +219,6 @@
     };
   }
 
-  window.createTaste = createTaste;
+  if (typeof window !== "undefined") window.createTaste = createTaste;
+  if (typeof module !== "undefined") module.exports = { createTaste, keywordIndex };
 })();

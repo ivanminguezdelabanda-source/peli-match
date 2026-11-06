@@ -1,2 +1,4 @@
 node_modules/
 data/cines/
+data/*.min.json
+data/*.desc.json

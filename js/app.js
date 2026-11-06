@@ -206,7 +206,9 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
   const lenText = (m) => m.kind === "tv" ? `${m.seasons.length} ${m.seasons.length === 1 ? "temporada" : "temporadas"}` : fmtTime(m.runtime);
   const lenShort = (m) => m.kind === "tv" ? `${m.seasons.length} temp.` : shortTime(m.runtime);
   const trailerUrl = (m) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${m.title} ${m.year} tráiler español`)}`;
-  const whereUrl = (m) => m.providersLink || `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(m.title)}`;
+  // Dónde verla: la página de TMDB (con el id basta, no hace falta el enlace completo en el catálogo)
+  const whereUrl = (m) => m.providersLink || (m.tmdb ? `https://www.themoviedb.org/${m.kind === "tv" ? "tv" : "movie"}/${m.tmdb}/watch?locale=ES`
+    : `https://www.justwatch.com/es/buscar?q=${encodeURIComponent(m.title)}`);
   // Plataformas con su logo (los logos los guarda la sincronización de TMDB). Cada una es un enlace que abre
   // la peli o serie en esa plataforma (su buscador con el título: en el móvil se abre su app si la tienes).
   // TMDB no da el enlace exacto de cada plataforma; las que no tienen buscador conocido van a la página de TMDB
@@ -327,7 +329,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
     c.append(el("div", "card-info", `
       <p class="card-meta">${yearText(m)} · ${lenText(m)}</p>
       <h2 class="card-title">${esc(m.title)}</h2>
-      <p class="card-desc">${esc(m.desc || "Sin sinopsis todavía.")}</p>
+      <p class="card-desc" data-desc="${esc(m.id)}" data-none="Sin sinopsis todavía.">${esc(m.desc || (DESCS.done ? "Sin sinopsis todavía." : ""))}</p>
       <ul class="chips">${m.genres.map((g) => `<li class="chip">${esc(g)}</li>`).join("")}</ul>`));
     if (taste.events >= PERSONAL_FROM) {
       const why = taste.score(m, { explore: 0 }).reasons[0];
@@ -3209,7 +3211,7 @@ function startApp(MOVIES, NEWS, LOGOS, cloudBoot) {
           : `<div class="fact"><dt>Duración</dt><dd>${fmtTime(m.runtime)}</dd></div>`}
         <div class="fact"><dt>${m.rating != null ? "Nota" : "Género"}</dt><dd>${m.rating != null ? m.rating.toFixed(1) : esc(m.genres[0])}</dd></div>
       </dl>
-      <p class="sheet-desc">${esc(m.desc || "Todavía no hay sinopsis.")}</p>
+      <p class="sheet-desc" data-desc="${esc(m.id)}" data-none="Todavía no hay sinopsis.">${esc(m.desc || (DESCS.done ? "Todavía no hay sinopsis." : "Cargando la sinopsis…"))}</p>
       <div>
         <p class="section-label">${m.kind === "tv" ? "Creada por" : "Dirección"}</p>
         <p style="margin:0;font-weight:700">${esc(m.director)}</p>
@@ -4144,7 +4146,7 @@ async function download(url, onProgress) {
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   if (!onProgress || !res.body || !res.body.getReader) return res.text();
   // Avance aproximado: el servidor manda el archivo comprimido y aquí llegan los bytes ya descomprimidos
-  let expected = 8.5e6;
+  let expected = 5.2e6;
   try { expected = Number(localStorage.getItem("cinder:catalog-size")) || expected; } catch (e) { /* sin almacenamiento */ }
   const reader = res.body.getReader(), parts = [];
   let got = 0;
@@ -4190,7 +4192,7 @@ const SERIES_MODE = (() => {
 document.documentElement.classList.toggle("mode-series", SERIES_MODE);
 // La entrada del logo (1,5 s) va primero: leer el catálogo (varios MB) bloquea el móvil y la animación se cortaba
 const INTRO = new Promise((ok) => setTimeout(ok, 1500));
-async function loadCatalog(url = "data/movies.json") {
+async function loadCatalog(url = "data/movies.json", quiet = false) {
   const cache = await openCache();
   const old = cache && (await cache.match(url).catch(() => null));
   if (old && Date.now() - Number(old.headers.get("x-guardado") || 0) < 6 * 3600e3) {
@@ -4198,7 +4200,7 @@ async function loadCatalog(url = "data/movies.json") {
     const data = await old.json().catch(() => null);
     if (data) return data;
   }
-  const fresh = download(url, old ? null : (p) => window.__splash?.progress(p))
+  const fresh = download(url, old || quiet ? null : (p) => window.__splash?.progress(p))
     .then(async (text) => { await saveCopy(cache, url, text); return text; });
   if (old) {
     fresh.catch(() => {});
@@ -4207,6 +4209,29 @@ async function loadCatalog(url = "data/movies.json") {
     if (data) return data;
   }
   return fresh.then(async (t) => { await INTRO; return JSON.parse(t); }).catch(() => null); // abierto como archivo o sin red
+}
+
+// El catálogo se publica en dos partes (scripts/pack-catalog.mjs): data/<nombre>.min.json, sin sinopsis, para abrir
+// cuanto antes, y data/<nombre>.desc.json con las sinopsis, que se baja después sin hacer esperar.
+// Si la parte pequeña no está (pruebas en local), se usa el archivo entero.
+const DESCS = { done: false };
+async function loadSmall(name) {
+  const small = await loadCatalog(`data/${name}.min.json`);
+  if (small) {
+    openCache().then((c) => c && c.delete(`data/${name}.json`)).catch(() => {}); // la copia vieja (entera) ya no hace falta
+    return small;
+  }
+  DESCS.done = true;
+  return loadCatalog(`data/${name}.json`);
+}
+async function loadDescs(list, name, data) {
+  if (DESCS.done || !data) { DESCS.done = true; return; }
+  const descs = (await loadCatalog(`data/${name}.desc.json`, true)) || {};
+  for (const m of list) if (!m.desc && descs[m.id]) m.desc = descs[m.id];
+  DESCS.done = true;
+  // Lo que ya está en pantalla (cartas de Descubrir, ficha abierta) se completa al momento
+  const byId = new Map(list.map((m) => [m.id, m]));
+  document.querySelectorAll("[data-desc]").forEach((n) => { n.textContent = byId.get(n.dataset.desc)?.desc || n.dataset.none || ""; });
 }
 
 // Carga las pelis de TMDB (data/movies.json, generado por scripts/sync-tmdb.mjs).
@@ -4220,15 +4245,16 @@ async function loadCatalog(url = "data/movies.json") {
   cloudBoot?.catch(() => {}); // el error se trata en startApp
   if (SERIES_MODE) {
     // Modo Series: el catálogo son las series (data/series.json); de Novedades, las noticias y las series de moda
-    const [data, news] = await Promise.all([loadCatalog("data/series.json"), loadData("data/news.json")]);
+    const [data, news] = await Promise.all([loadSmall("series"), loadData("data/news.json")]);
     const shows = (data?.series || []).filter((s) => s && s.id && s.title && s.year && Array.isArray(s.genres) && s.genres.length && Array.isArray(s.seasons) && s.seasons.length && s.c)
       .map((s) => ({ ...s, runtime: s.episodeTime || 0 }));
     const trending = (data?.trending || []).filter((id) => shows.some((s) => s.id === id));
     startApp(shows.length ? shows : movies, { featured: trending[0], trending, nowPlaying: [], upcoming: [], news: news?.news || [], movies: [] },
       { ...data?.logos, ...news?.logos }, cloudBoot);
+    loadDescs(shows, "series", data);
     return;
   }
-  const [data, news] = await Promise.all([loadCatalog(), loadData("data/news.json")]);
+  const [data, news] = await Promise.all([loadSmall("movies"), loadData("data/news.json")]);
   if (data && Array.isArray(data.movies) && data.movies.length) movies = data.movies;
   // Las pelis de Novedades que aún no están en el catálogo (estrenos recientes o próximos) se añaden
   if (news && Array.isArray(news.movies)) {
@@ -4241,4 +4267,5 @@ async function loadCatalog(url = "data/movies.json") {
     movies = movies.concat(news.movies.filter((m) => m && m.id && !have.has(m.id) && m.title && m.year && Array.isArray(m.genres) && m.genres.length && m.c));
   }
   startApp(movies, news && Array.isArray(news.movies) ? news : null, { ...data?.logos, ...news?.logos }, cloudBoot);
+  loadDescs(movies, "movies", data);
 })();
