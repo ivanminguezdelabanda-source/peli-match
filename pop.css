@@ -368,3 +368,63 @@ html[class*="event-"] .event-box .reel-open { background: var(--pink); color: #1
 html.event-navidad .filter.filter-event, html.event-navidad .event-go,
 html.event-navidad .event-box .reel-open { color: #fff; }
 html[class*="event-"] .filter.filter-event { background: var(--pink); }
+
+/* ======================================================================
+   Animaciones (las pone js/fx.js; sin ese archivo no pasa nada)
+   ====================================================================== */
+/* 3. Pestaña amarilla que se desliza */
+.tabbar { position: relative; }
+.tab-pill { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0; border-radius: 12px;
+  background: var(--yellow); box-shadow: inset 0 0 0 var(--bw) var(--edge), 2px 2px 0 var(--edge); }
+.tabbar.has-pill .tab-pill { transition: transform .38s cubic-bezier(.3,1.45,.5,1), width .38s, height .38s; }
+.tabbar.has-pill .tab { z-index: 1; }
+.tabbar.has-pill .tab.active, .tabbar.has-pill .tab.active:hover { background: transparent; box-shadow: none; }
+.tabbar.has-pill .tab.active svg { animation: fx-wiggle .45s ease; }
+@keyframes fx-wiggle { 30% { transform: rotate(-14deg) scale(1.15); } 60% { transform: rotate(8deg); } }
+.view.fx-in { animation: fx-view .32s cubic-bezier(.2,.9,.3,1.1); }
+@keyframes fx-view { from { opacity: 0; transform: translateY(14px); } }
+
+/* 4. Cascada */
+.fx-drop { animation: fx-drop .45s cubic-bezier(.3,1.5,.5,1) both; animation-delay: calc(var(--fx-i, 0) * 45ms); }
+@keyframes fx-drop { from { opacity: 0; transform: translateY(18px) scale(.92) rotate(-2deg); } }
+
+/* 5. Contador que salta y se vuelve amarillo */
+.count.bump { animation: fx-count .55s cubic-bezier(.3,1.6,.5,1); }
+@keyframes fx-count { 0% { transform: scale(1); } 35% { transform: translateY(-8px) scale(1.5) rotate(-10deg); background: var(--yellow); } 70% { transform: translateY(1px) scale(.95); } 100% { transform: none; } }
+
+/* 6. Ficha que sube con rebote y póster inclinado */
+@media (max-width: 1023px) { .sheet { animation: fx-sheet .5s cubic-bezier(.25,1.35,.45,1); } }
+@media (min-width: 1024px) { .sheet { animation: fx-sheet-desk .4s cubic-bezier(.25,1.4,.45,1); } }
+@keyframes fx-sheet { from { transform: translateY(70%); } }
+@keyframes fx-sheet-desk { from { transform: translateY(40px) scale(.94); opacity: 0; } }
+.fx .sheet-poster { transform: rotate(-3deg); animation: fx-poster .6s cubic-bezier(.3,1.6,.5,1) .12s both; }
+@keyframes fx-poster { from { transform: rotate(8deg) scale(.8); opacity: 0; } }
+.fx .sheet-backdrop { animation: fade .25s; }
+
+/* 7. Caja: temblor y «¡BOOM!» */
+.reel-wrap.fx-shake { animation: fx-shake .9s linear; }
+@keyframes fx-shake { 10%, 50%, 90% { transform: translate(-2px, 1px) rotate(-.4deg); } 30%, 70% { transform: translate(2px, -1px) rotate(.4deg); } }
+.fx-boom {
+  position: absolute; left: 50%; top: 50%; z-index: 5; pointer-events: none;
+  font-family: var(--f-display); font-weight: 900; font-size: 46px; letter-spacing: -.02em; color: #111;
+  padding: 10px 26px; background: var(--yellow); border: 3px solid #111; box-shadow: 5px 5px 0 #111;
+  clip-path: polygon(0% 18%, 12% 0%, 26% 14%, 42% 0%, 56% 16%, 72% 0%, 86% 14%, 100% 4%, 92% 34%, 100% 56%, 90% 72%, 100% 100%, 78% 88%, 62% 100%, 48% 86%, 32% 100%, 20% 86%, 2% 100%, 8% 70%, 0% 50%, 8% 34%);
+  animation: fx-boom 1.4s cubic-bezier(.3,1.6,.5,1) forwards;
+}
+@keyframes fx-boom {
+  0% { transform: translate(-50%, -50%) scale(0) rotate(-20deg); opacity: 1; }
+  25% { transform: translate(-50%, -50%) scale(1.15) rotate(-6deg); }
+  40%, 75% { transform: translate(-50%, -50%) scale(1) rotate(-6deg); opacity: 1; }
+  100% { transform: translate(-50%, -60%) scale(.9) rotate(-6deg); opacity: 0; }
+}
+
+/* 8. Sello de goma */
+.stamp { font-family: var(--f-display); }
+.stamp-like { --st: rotate(-12deg); }
+.stamp-nope { --st: rotate(12deg); }
+.stamp-seen { --st: translateX(-50%); }
+.stamp.fx-slam { animation: fx-slam .28s cubic-bezier(.5,0,.6,1.4) both; }
+@keyframes fx-slam { from { transform: var(--st) scale(2.4); opacity: 0; } 70% { transform: var(--st) scale(.92); opacity: 1; } to { transform: var(--st) scale(1); opacity: 1; } }
+
+/* 9. Inclinación hacia el ratón */
+.fx-tilt { transform: perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translate(-1px, -1px) !important; transition: transform .12s ease-out !important; }
