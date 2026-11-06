@@ -1,0 +1,35 @@
+HTTP/2 200 
+server: daiquiri/5
+content-type: text/javascript; charset=utf-8
+x-apple-jingle-correlation-key: EI7QJ2VMYYH4DYKX2SU7ESDONY
+x-apple-request-uuid: 223f04ea-acc6-0fc1-e157-d4a9f2486e6e
+x-apple-translated-wo-url: /WebObjects/MZStoreServices.woa/ws/wsSearch?term=origen&country=es&media=movie&entity=movie&limit=5&callback=cb&urlDesc=
+apple-tk: false
+x-b3-spanid: 26a1410eec38db2a
+b3: 223f04eaacc60fc1e157d4a9f2486e6e-26a1410eec38db2a
+content-disposition: attachment; filename=1.txt
+x-b3-traceid: 223f04eaacc60fc1e157d4a9f2486e6e
+x-content-type-options: nosniff
+x-webobjects-loadaverage: 0
+x-responding-instance: MZStoreServices:6001248:::
+apple-seq: 0.0
+access-control-allow-origin: *
+apple-originating-system: MZStoreServices
+strict-transport-security: max-age=31536000; includeSubDomains
+x-apple-orig-url: https://mzstoreservices-st.itunes.apple.com/search?term=origen&country=es&media=movie&entity=movie&limit=5&callback=cb
+x-apple-application-site: ST11
+apple-timing-app: 90 ms
+x-apple-application-instance: 6001248
+x-daiquiri-instance: daiquiri:47317003:st44p00it-hyhk15124001:7987:26HOTFIX48:daiquiri-amp-store-shared-int-001-st
+x-daiquiri-debug-worker-pid: 17627
+x-daiquiri-instance: daiquiri:42282006:st53p00it-qujn15040502:7987:26HOTFIX48:daiquiri-amp-store-l7shared-ext-001-st
+x-daiquiri-debug-worker-pid: 74569
+vary: origin
+cache-control: max-age=86400
+date: Fri, 06 Nov 2026 12:27:31 GMT
+content-length: 47
+x-cache: TCP_MISS from a23-205-114-202.deploy.akamaitechnologies.com (AkamaiGHost/22.7.0-e687e9264c02f058b1bf8e920219e21f) (-)
+x-true-cache-key: /L/itunes.apple.com/search vcd=2897 ci2=callback=cb&country=es&entity=movie&limit=5&media=movie&term=origen///
+x-cache-remote: TCP_MISS from a23-34-83-78.deploy.akamaitechnologies.com (AkamaiGHost/22.7.0-e687e9264c02f058b1bf8e920219e21f) (-)
+x-apple-partner: origin.0
+

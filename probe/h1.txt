@@ -1,0 +1,34 @@
+HTTP/2 200 
+server: daiquiri/5
+content-type: text/javascript; charset=utf-8
+x-apple-jingle-correlation-key: ZP6C3EW2JLTU3DSL4YMTI226VA
+x-apple-request-uuid: cbfc2d92-da4a-e74d-8e4b-e619346b5ea8
+x-apple-translated-wo-url: /WebObjects/MZStoreServices.woa/ws/wsSearch?term=el%20caballero%20oscuro&country=es&media=movie&entity=movie&limit=5&urlDesc=
+apple-tk: false
+x-b3-spanid: 34ca5402dddf8110
+b3: cbfc2d92da4ae74d8e4be619346b5ea8-34ca5402dddf8110
+content-disposition: attachment; filename=1.txt
+x-b3-traceid: cbfc2d92da4ae74d8e4be619346b5ea8
+x-content-type-options: nosniff
+x-webobjects-loadaverage: 0
+x-responding-instance: MZStoreServices:6501167:::
+apple-seq: 0.0
+access-control-allow-origin: *
+apple-originating-system: MZStoreServices
+strict-transport-security: max-age=31536000; includeSubDomains
+x-apple-orig-url: https://mzstoreservices-mr.itunes.apple.com/search?term=el%20caballero%20oscuro&country=es&media=movie&entity=movie&limit=5
+x-apple-application-site: MR22
+apple-timing-app: 62 ms
+x-apple-application-instance: 6501167
+x-daiquiri-instance: daiquiri:17317001:mr85p00it-hyhk03124901:7987:26HOTFIX47:daiquiri-amp-store-shared-int-001-mr
+x-daiquiri-debug-worker-pid: 14028
+x-daiquiri-instance: daiquiri:12282004:mr47p00it-qujn04120301:7987:26HOTFIX47:daiquiri-amp-store-l7shared-ext-001-mr
+x-daiquiri-debug-worker-pid: 109614
+cache-control: max-age=86400
+date: Fri, 06 Nov 2026 12:27:31 GMT
+content-length: 42
+x-cache: TCP_MISS from a23-205-114-202.deploy.akamaitechnologies.com (AkamaiGHost/22.7.0-e687e9264c02f058b1bf8e920219e21f) (-)
+x-true-cache-key: /L/itunes.apple.com/search vcd=2897 ci2=country=es&entity=movie&limit=5&media=movie&term=el%20caballero%20oscuro///
+x-cache-remote: TCP_MISS from a23-219-77-134.deploy.akamaitechnologies.com (AkamaiGHost/22.7.0-e687e9264c02f058b1bf8e920219e21f) (-)
+x-apple-partner: origin.0
+
