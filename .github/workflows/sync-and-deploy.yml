@@ -110,7 +110,7 @@ jobs:
       # así la web no se recarga sola al abrirla (cortaba la animación de inicio)
       - name: Marcar la versión de los archivos
         run: |
-          V=$(cat *.html js/*.js styles.css | sha1sum | cut -c1-8)
+          V=$(cat *.html js/*.js styles.css pop.css | sha1sum | cut -c1-8)
           echo "$V" > version.txt && sed -i "s/?v=dev/?v=$V/g" index.html accion.html terminos.html login-app.html privacidad.html borrar-cuenta.html js/app.js
       - name: No publicar las dependencias del Worker ni el proyecto de Android
         run: rm -rf worker/node_modules android-app

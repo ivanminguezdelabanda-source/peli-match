@@ -1,0 +1,259 @@
+/* Estilo «pop» (2026-11-06): bordes negros gruesos, sombras duras sin difuminar, colores planos y letra grotesca.
+   Va encima de styles.css y solo cambia el aspecto. Para volver al estilo de antes (sala de cine) basta con quitar
+   la línea de pop.css de index.html (y de las demás páginas que la cargan). */
+:root {
+  --edge: #111;                 /* bordes y sombras */
+  --pop: 4px 4px 0 var(--edge); /* sombra dura */
+  --pop-sm: 3px 3px 0 var(--edge);
+  --bw: 2.5px;                  /* grosor de borde */
+  --yellow: #ffd21f;
+  --pink: #ff4f7b;
+  --purple: #7b6cf6;
+  --green: #3cc23c;
+  --lime: #a6d92b;
+  --peach: #ffd98f;
+  --f-display: "Archivo", "Arial Black", system-ui, sans-serif;
+  --f-body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r-card: 18px;
+  --r-sm: 12px;
+}
+/* Oscuro (por defecto): fondo morado muy oscuro, tarjetas algo más claras, bordes negros */
+html:not([data-theme="light"]) {
+  --ink: #17142a;
+  --panel: #262140;
+  --panel-2: #332c57;
+  --line: #000;
+  --edge: #000;
+  --text: #fff8e7;
+  --muted: #c3bcdf;
+  --velvet: var(--pink);
+  --ticket: var(--yellow);
+  --like: var(--yellow);
+  --info: #a99dff;
+  --ok: var(--green);
+  --on-ticket: #111;
+  --veil: rgba(255,255,255,.1);
+}
+/* Claro: como el papel, tarjetas blancas */
+html[data-theme="light"] {
+  --ink: #fbf5e6;
+  --panel: #ffffff;
+  --panel-2: #fff3d1;
+  --line: #111;
+  --text: #111;
+  --muted: #4d4a45;
+  --velvet: #f0365f;
+  --ticket: var(--yellow);
+  --like: var(--yellow);
+  --info: var(--purple);
+  --ok: #23a323;
+  --on-ticket: #111;
+  --veil: #fff3d1;
+}
+
+body { font-family: var(--f-body); }
+:focus-visible { outline: 3px solid var(--purple); outline-offset: 3px; }
+
+/* ---------- Letra: titulares gruesos, sin mayúsculas forzadas ---------- */
+.page-title, .q-title, .empty-title, .section-title, .tour-title, .news-section-title, .news-hero-title,
+.update-title, .lib-tab, .brand-name, .poster-title, .poster-year {
+  font-family: var(--f-display); font-weight: 900; text-transform: none; letter-spacing: -.02em;
+}
+.page-title { font-size: 36px; line-height: 1.02; }
+.q-title { font-size: 28px; line-height: 1.08; }
+.section-title, .news-section-title { font-size: 21px; }
+.empty-title { font-size: 26px; }
+.tour-title { font-size: 22px; }
+.brand-name { font-size: 22px; letter-spacing: -.01em; }
+.brand-name b { font-weight: 900; }
+.poster-title { line-height: .95; }
+.card-title, .sheet-title, .result-title { font-weight: 900; letter-spacing: -.015em; }
+.card-meta, .q-count, .tour-count, .result-label, .section-label, .fact dt, .seg-n, .count, .match-score, .season-mark, .ep-rate {
+  font-family: var(--f-body); font-weight: 700; letter-spacing: .02em;
+}
+
+/* ---------- Cajas: borde negro y sombra dura ---------- */
+.btn, .filter, .ctl, .icon-btn, .opt, .q-search, .link-card, .release-box, .prov, .wheel-result, .match-intro,
+.match-hero, .weekly, .welcome, .tour-card, .list-card, .lib-tabs, .seg, .account-card, .account-section, .news-item,
+.news-hero, .review, .sheet-poster, .tile-btn, .reel-item, .facts, .cine, .cines-field input, .cines-suggest, .toast,
+.update-card, .verify-banner, .sugg button, .fav-chip, .match-note, .trailer-box iframe, .at-input, .account-form input,
+.account-form textarea, .account-form select, #search-input, .q-note {
+  border: var(--bw) solid var(--edge) !important;
+  box-shadow: var(--pop-sm) !important;
+}
+.btn, .filter, .opt, .seg, .fav-chip, .sugg button, .q-search, .toast { border-radius: 12px; }
+.link-card, .release-box, .wheel-result, .match-intro, .match-hero, .weekly, .welcome, .tour-card, .list-card,
+.account-card, .account-section, .news-item, .review, .cine, .update-card { border-radius: 16px; box-shadow: var(--pop) !important; }
+.tile-btn, .sheet-poster, .reel-item { border-radius: 12px; }
+.facts { gap: 0; background: var(--edge); }
+.fact { border-right: var(--bw) solid var(--edge); }
+.fact:last-child { border-right: 0; }
+
+/* Al pulsar: la caja «se hunde» sobre su sombra */
+.btn, .filter, .ctl, .icon-btn, .opt, .link-card, .list-card, .tile-btn, .sugg button, .fav-chip, .news-item, .cine-main {
+  transition: transform .08s, box-shadow .08s;
+}
+.btn:active, .filter:active, .ctl:active:not(:disabled), .icon-btn:active, .opt:active, .link-card:active,
+.list-card:active, .tile-btn:active, .sugg button:active, .fav-chip:active, .news-item:active {
+  transform: translate(3px, 3px); box-shadow: 0 0 0 var(--edge) !important;
+}
+
+/* ---------- Botones ---------- */
+.btn { font-weight: 800; padding: 11px 18px; }
+.btn-solid { background: var(--yellow); color: #111; }
+.btn-red { background: var(--pink); color: #111; }
+.btn-ghost { background: var(--panel); color: var(--text); }
+.btn-danger { background: var(--panel); color: var(--text); }
+.btn-google { border-radius: 12px; }
+.icon-btn { border-radius: 12px; background: var(--panel); width: 42px; height: 42px; }
+.link-btn { color: var(--text); text-decoration-color: var(--pink); text-decoration-thickness: 2px; }
+.link-btn.danger { color: var(--muted); }
+
+/* Filtros (chips): blanco; el elegido, amarillo */
+.filter { background: var(--panel); color: var(--text); padding: 6px 12px; }
+.filter[aria-pressed="true"] { background: var(--yellow); color: #111; }
+.filter-add { background: var(--panel); color: var(--text); }
+.moods, .filters { padding: 2px 4px 6px 2px; }
+.opt { background: var(--panel); }
+.opt[aria-pressed="true"] { background: var(--yellow); color: #111; }
+.seg { background: var(--panel); padding: 3px; }
+.seg-btn { border-radius: 9px; color: var(--muted); }
+.seg-btn[aria-selected="true"] { background: var(--yellow); color: #111; }
+.lib-tabs { background: var(--panel); border-radius: 14px; }
+.lib-tab { font-size: 17px; border-radius: 10px; }
+.lib-tab[aria-selected="true"] { background: var(--yellow); color: #111; box-shadow: inset 0 0 0 var(--bw) var(--edge); }
+
+/* ---------- Cabecera y pestañas ---------- */
+.tabbar { background: var(--panel); border-top: var(--bw) solid var(--edge); margin-inline: -16px; padding-inline: 12px; }
+.tab { color: var(--muted); border-radius: 12px; font-weight: 800; }
+.tab.active { color: #111; background: var(--yellow); box-shadow: inset 0 0 0 var(--bw) var(--edge); }
+.count { background: var(--pink); color: #111; border: 2px solid var(--edge); font-family: var(--f-body); font-weight: 800; }
+
+.mode-switch { border: var(--bw) solid var(--edge); box-shadow: var(--pop-sm); border-radius: 12px; }
+.mode-btn { border-radius: 9px; }
+.mode-btn[aria-pressed="true"] { background: var(--pink); color: #111; box-shadow: inset 0 0 0 2px var(--edge); }
+.row-arrow { border: var(--bw) solid var(--edge) !important; box-shadow: var(--pop-sm); border-radius: 12px !important; background: var(--panel); color: var(--text); }
+/* El carrusel recorta lo que se sale: hueco para que se vea la sombra */
+.news-track { border-radius: 0; padding: 0 6px 6px 0; }
+
+/* ---------- Cartas de Descubrir ---------- */
+.card { border: 3px solid var(--edge); box-shadow: 6px 6px 0 var(--edge); border-radius: 20px; }
+.card[data-depth="1"], .card[data-depth="2"] { box-shadow: 4px 4px 0 var(--edge); }
+.card .chip { background: #fff; color: #111; border: 2px solid #111; border-radius: 8px; }
+.card-why { color: var(--yellow); }
+.stamp { font-family: var(--f-display); font-weight: 900; border-radius: 10px; border-width: 4px; background: #111; }
+.ctl { background: var(--panel); }
+.ctl-undo, .ctl-info, .ctl-seen { color: var(--text); }
+.ctl-info { background: var(--info); color: #111; }
+.ctl-seen { background: var(--lime); color: #111; }
+.ctl-nope { background: var(--panel); color: var(--text); }
+.ctl-like { background: var(--yellow); color: #111; }
+.ctl-nope, .ctl-like { box-shadow: var(--pop) !important; }
+
+/* Chips sueltos (géneros en fichas y listas) */
+.chip { border-radius: 8px; font-weight: 800; background: var(--panel-2); border: 2px solid var(--edge); color: var(--text); }
+.chip-provider { background: var(--yellow); color: #111; }
+.match-steps li { border: 2px solid var(--edge); border-radius: 8px; background: var(--panel); color: var(--text); }
+
+/* ---------- Ficha ---------- */
+.sheet { border: 3px solid var(--edge); border-bottom: 0; border-radius: 22px 22px 0 0; }
+.sheet-close { background: var(--panel); color: var(--text); border: var(--bw) solid var(--edge); border-radius: 12px; box-shadow: var(--pop-sm); }
+.link-card { background: var(--panel); }
+.link-icon { border: 2px solid var(--edge); border-radius: 10px; }
+.link-icon.play { background: var(--pink); color: #111; }
+.link-icon.where { background: var(--yellow); }
+.link-icon.share { background: var(--info); }
+.release-box, .prov { background: var(--panel); }
+.prov img { border: 2px solid var(--edge); }
+.review { background: var(--panel); }
+.review.own { outline: 0; background: var(--panel-2); }
+.stars, .star-btn { color: #f5a400; }
+html:not([data-theme="light"]) .stars, html:not([data-theme="light"]) .star-btn { color: var(--yellow); }
+.reviews { border-top: var(--bw) solid var(--edge); }
+.fact { background: var(--panel); }
+
+/* ---------- Bloques de Para ti, Caja y Biblioteca ---------- */
+.match-intro { background: var(--yellow); color: #111; }
+.match-intro p, .match-intro .match-steps li { color: #111; }
+.match-intro .match-steps li { background: #fff; }
+.weekly { background: var(--peach); color: #111; }
+.weekly .result-label, .weekly-why, .weekly .tile-meta, .weekly .tile-name { color: #111; }
+.welcome { background: var(--panel); }
+.q-progress { height: 10px; border: 2px solid var(--edge); border-radius: 8px; background: var(--panel); }
+.q-progress span { background: var(--pink); }
+.reel-wrap { background: var(--panel-2); border-block: var(--bw) solid var(--edge); }
+.reel-marker { background: var(--pink); box-shadow: none; }
+.reel-marker::before { border-top-color: var(--pink); }
+.reel-marker::after { border-bottom-color: var(--pink); }
+.reel-item.won { box-shadow: 0 0 0 3px var(--yellow), 4px 4px 0 var(--edge) !important; }
+.tile.watched .tile-btn::after { background: var(--lime); color: #111; border: 2px solid #111; font-weight: 800; font-family: var(--f-body); }
+.tile-name { font-weight: 800; }
+
+/* Listas propias como carpetas: una pestaña de color arriba */
+.list-cards { gap: 22px 14px; padding-top: 12px; }
+.list-cards > li { position: relative; }
+.list-card { background: var(--panel); position: relative; }
+.list-cards > li::before {
+  content: ""; position: absolute; top: -12px; left: 10px; width: 46%; height: 16px; z-index: 0;
+  background: var(--tab, var(--yellow)); border: var(--bw) solid var(--edge); border-bottom: 0; border-radius: 8px 8px 0 0;
+}
+.list-cards > li > * { position: relative; z-index: 1; }
+.list-cards > li:nth-child(5n+1) { --tab: var(--green); }
+.list-cards > li:nth-child(5n+2) { --tab: var(--peach); }
+.list-cards > li:nth-child(5n+3) { --tab: var(--lime); }
+.list-cards > li:nth-child(5n+4) { --tab: var(--pink); }
+.list-cards > li:nth-child(5n+5) { --tab: var(--purple); }
+.list-card-new { background: var(--panel-2); }
+.list-stack { color: var(--text); }
+.list-stack-item { border: 2px solid var(--edge); box-shadow: 2px 2px 0 var(--edge); }
+
+/* ---------- Novedades ---------- */
+.news-hero { border-radius: 20px; }
+.news-item { background: var(--panel); }
+.news-item img { border: 2px solid var(--edge); border-radius: 10px; }
+.news-dot { border: 2px solid var(--edge); }
+.news-dot.on { background: var(--yellow); }
+.news-section-title svg { color: var(--pink); }
+.news-date { font-weight: 800; }
+
+/* ---------- Cuenta ---------- */
+.account-card, .account-section { background: var(--panel); }
+.avatar { border: var(--bw) solid var(--edge); }
+.verify-banner { background: var(--yellow); color: #111; }
+.account-form input, .account-form textarea, .account-form select, .at-input { border-radius: 12px; background: var(--panel); color: var(--text); }
+.at-input input { border: 0 !important; box-shadow: none !important; }
+
+/* ---------- Cines ---------- */
+.cine { background: var(--panel); padding-bottom: 0; }
+.cines-field input { border-radius: 12px; background: var(--panel); color: var(--text); }
+.cines-suggest { background: var(--panel); border-radius: 12px; }
+.cine-day-btn { border: 2px solid var(--edge) !important; border-radius: 10px !important; font-weight: 800; }
+.cine-day-btn.on { background: var(--yellow) !important; color: #111 !important; }
+.cine-time { border: 2px solid var(--edge) !important; border-radius: 8px !important; font-weight: 800; }
+
+/* ---------- Series: temporadas y capítulos ---------- */
+.season-n, .ep-title small, .ep-rate { color: var(--text); }
+.ep-n { border: 2px solid var(--edge); }
+
+/* ---------- Avisos, tutorial ---------- */
+.toast { background: var(--yellow); color: #111; }
+.toast button { color: #111; }
+.tour-hole { box-shadow: 0 0 0 9999px rgba(10,8,20,.72), 0 0 0 3px var(--yellow); }
+.tour-card { background: var(--panel); }
+.tour-count { color: var(--pink); }
+.update-card { background: var(--panel); }
+.thinking-dot { border-color: var(--panel-2); border-top-color: var(--pink); }
+
+/* Claro: ajustes del estilo claro de antes que ya no encajan */
+html[data-theme="light"] .tabbar { background: #fff; }
+html[data-theme="light"] .sheet { box-shadow: none; }
+html[data-theme="light"] .sheet-backdrop { background: rgba(17,17,17,.45); }
+
+/* Escritorio: barra lateral con borde y pestañas en bloque */
+@media (min-width: 1024px) {
+  .tabbar { margin-inline: 0; border: var(--bw) solid var(--edge); border-radius: 16px; box-shadow: var(--pop); align-self: start; padding: 10px; }
+  .tab:hover { background: var(--panel-2); color: var(--text); }
+  .tab.active, .tab.active:hover { background: var(--yellow); color: #111; }
+  .sheet { border-bottom: 3px solid var(--edge); border-radius: 22px; box-shadow: 8px 8px 0 var(--edge); }
+  .filter:hover, .btn:hover, .link-card:hover, .news-item:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--edge) !important; }
+}
